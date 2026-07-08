@@ -115,7 +115,7 @@ const COUNTRIES_LIST = [
   { name: "États-Unis", flag: "🇺🇸", code: "+1", currency: "USD", methods: ["Carte Bancaire", "Virement Bancaire"] }
 ];
 
-const yaamaaLogo = "/src/assets/images/yaamaa_logo_updated_1783116905472.jpg";
+const yaamaaLogo = "/logo.jpg";
 
 export default function App() {
   // Navigation State

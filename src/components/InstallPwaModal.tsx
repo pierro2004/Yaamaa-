@@ -43,29 +43,54 @@ export default function InstallPwaModal({ isOpen, onClose }: InstallPwaModalProp
 
   if (!isOpen) return null;
 
-  // Trigger direct native installation prompt
-  const handleNativeInstall = async () => {
+  // Trigger direct native installation prompt or fallback guidance
+  const handleInstallClick = async () => {
     const promptEvent = (window as any).deferredPrompt;
-    if (!promptEvent) return;
+    if (promptEvent) {
+      try {
+        // Show the install prompt
+        promptEvent.prompt();
 
-    // Show the install prompt
-    promptEvent.prompt();
+        // Wait for the user to respond to the prompt
+        const { outcome } = await promptEvent.userChoice;
+        console.log(`User response to install prompt: ${outcome}`);
 
-    // Wait for the user to respond to the prompt
-    const { outcome } = await promptEvent.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
-
-    if (outcome === "accepted") {
-      setInstallSuccess(true);
-      (window as any).deferredPrompt = null;
-      setCanPrompt(false);
-      
-      // Auto-close after success screen
-      setTimeout(() => {
-        onClose();
-        setInstallSuccess(false);
-      }, 3000);
+        if (outcome === "accepted") {
+          setInstallSuccess(true);
+          (window as any).deferredPrompt = null;
+          setCanPrompt(false);
+          
+          // Auto-close after success screen
+          setTimeout(() => {
+            onClose();
+            setInstallSuccess(false);
+          }, 3000);
+          return;
+        }
+      } catch (err) {
+        console.error("Install prompt error:", err);
+      }
     }
+
+    // Fallback: If share API is available, trigger share sheet (often includes Add to Home Screen on mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Yaamaa Social & Tasks",
+          text: "Installez l'application Yaamaa sur votre écran d'accueil !",
+          url: window.location.href,
+        });
+        return;
+      } catch (err) {
+        // User cancelled or not supported
+      }
+    }
+
+    // Show success feedback simulation / highlight instructions
+    setInstallSuccess(true);
+    setTimeout(() => {
+      setInstallSuccess(false);
+    }, 4000);
   };
 
   return (
@@ -129,137 +154,132 @@ export default function InstallPwaModal({ isOpen, onClose }: InstallPwaModalProp
               </p>
             </div>
           ) : (
-            <>
-              {/* Option 1: Direct native installation if supported and prompt event is active */}
-              {canPrompt ? (
-                <div className="space-y-3.5">
-                  <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
-                    <span className="block text-[10.5px] font-black text-indigo-950">
-                      ⚡ Installation instantanée disponible !
-                    </span>
-                    <p className="text-[10px] text-indigo-700 font-mono mt-0.5 leading-relaxed">
-                      Votre navigateur supporte l'installation directe. Cliquez ci-dessous pour l'installer en 2 secondes.
-                    </p>
-                  </div>
+            <div className="space-y-4">
+              {/* Always available install action button */}
+              <div className="space-y-2">
+                <button
+                  onClick={handleInstallClick}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs py-3.5 rounded-2xl transition shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Download className="h-4.5 w-4.5 animate-bounce" /> Installer l'application sur l'appareil 📲
+                </button>
+                <p className="text-[10px] text-center text-slate-400 font-mono">
+                  {canPrompt ? "⚡ Installation instantanée prête" : "💡 Si le bouton ne s'ouvre pas automatiquement, suivez les instructions ci-dessous"}
+                </p>
+              </div>
+
+              {/* Step-by-step instructions based on device/browser type */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                  Ou suivez le guide selon votre appareil :
+                </span>
                   
+                {/* Selector tabs for instructions */}
+                <div className="flex bg-slate-50 rounded-xl p-1 border border-slate-200">
                   <button
-                    onClick={handleNativeInstall}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black text-xs py-3 rounded-2xl transition shadow-md shadow-emerald-100 cursor-pointer flex items-center justify-center gap-2"
+                    onClick={() => setDeviceType("android")}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                      deviceType === "android" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
+                    }`}
                   >
-                    <Download className="h-4 w-4" /> Installer l'application maintenant
+                    Android
+                  </button>
+                  <button
+                    onClick={() => setDeviceType("ios")}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                      deviceType === "ios" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    iPhone / iPad
+                  </button>
+                  <button
+                    onClick={() => setDeviceType("desktop")}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
+                      deviceType === "desktop" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Ordinateur
                   </button>
                 </div>
-              ) : (
-                /* Option 2: Step-by-step instructions based on device/browser type */
-                <div className="space-y-4 pt-1">
-                  
-                  {/* Selector tabs for instructions */}
-                  <div className="flex bg-slate-50 rounded-xl p-1 border border-slate-200">
-                    <button
-                      onClick={() => setDeviceType("android")}
-                      className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
-                        deviceType === "android" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      Android
-                    </button>
-                    <button
-                      onClick={() => setDeviceType("ios")}
-                      className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
-                        deviceType === "ios" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      iPhone / iPad
-                    </button>
-                    <button
-                      onClick={() => setDeviceType("desktop")}
-                      className={`flex-1 py-1.5 text-center text-[10px] font-black rounded-lg transition-all cursor-pointer ${
-                        deviceType === "desktop" ? "bg-white text-slate-800 shadow-sm font-bold" : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      Ordinateur
-                    </button>
+
+                {/* Android Guide */}
+                {deviceType === "android" && (
+                  <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
+                      <p>
+                        Ouvrez l'application dans <strong>Google Chrome</strong> ou <strong>Samsung Internet</strong>.
+                      </p>
+                    </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
+                      <p className="flex items-center flex-wrap gap-1">
+                        Appuyez sur le bouton de menu <Menu className="h-3.5 w-3.5 inline inline-block" /> (les trois points verticaux en haut à droite).
+                      </p>
+                    </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
+                      <p>
+                        Sélectionnez <strong>"Installer l'application"</strong> ou <strong>"Ajouter à l'écran d'accueil"</strong>.
+                      </p>
+                    </div>
                   </div>
+                )}
 
-                  {/* Android Guide */}
-                  {deviceType === "android" && (
-                    <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
-                        <p>
-                          Ouvrez l'application dans <strong>Google Chrome</strong> ou <strong>Samsung Internet</strong>.
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
-                        <p className="flex items-center flex-wrap gap-1">
-                          Appuyez sur le bouton de menu <Menu className="h-3.5 w-3.5 inline inline-block" /> (les trois points verticaux en haut à droite).
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
-                        <p>
-                          Sélectionnez <strong>"Installer l'application"</strong> ou <strong>"Ajouter à l'écran d'accueil"</strong>.
-                        </p>
-                      </div>
+                {/* iOS/Safari Guide */}
+                {deviceType === "ios" && (
+                  <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
+                      <p>
+                        Assurez-vous d'être dans le navigateur <strong>Safari</strong> d'Apple.
+                      </p>
                     </div>
-                  )}
-
-                  {/* iOS/Safari Guide */}
-                  {deviceType === "ios" && (
-                    <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
-                        <p>
-                          Assurez-vous d'être dans le navigateur <strong>Safari</strong> d'Apple.
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
-                        <p className="flex items-center flex-wrap gap-1">
-                          Appuyez sur le bouton <strong>Partager</strong> <Share className="h-3.5 w-3.5 inline text-blue-500 mx-1" /> au bas de l'écran.
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
-                        <p className="flex items-center flex-wrap gap-1">
-                          Faites défiler vers le bas et sélectionnez <strong>"Sur l'écran d'accueil"</strong> <PlusSquare className="h-3.5 w-3.5 inline text-slate-700 mx-1" />.
-                        </p>
-                      </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
+                      <p className="flex items-center flex-wrap gap-1">
+                        Appuyez sur le bouton <strong>Partager</strong> <Share className="h-3.5 w-3.5 inline text-blue-500 mx-1" /> au bas de l'écran.
+                      </p>
                     </div>
-                  )}
-
-                  {/* Desktop Guide */}
-                  {deviceType === "desktop" && (
-                    <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
-                        <p>
-                          Sur Chrome ou Edge, regardez la <strong>barre d'adresse URL</strong> en haut à droite.
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
-                        <p>
-                          Cliquez sur l'icône d'<strong>installation</strong> (ordinateur avec une flèche ou petit écran "+") située à droite de l'adresse URL.
-                        </p>
-                      </div>
-                      <div className="flex gap-2.5 items-start">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
-                        <p>
-                          Ou ouvrez le menu Chrome/Edge (trois points), puis allez dans <strong>"Enregistrer et partager"</strong> → <strong>"Installer la page en tant qu'application"</strong>.
-                        </p>
-                      </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
+                      <p className="flex items-center flex-wrap gap-1">
+                        Faites défiler vers le bas et sélectionnez <strong>"Sur l'écran d'accueil"</strong> <PlusSquare className="h-3.5 w-3.5 inline text-slate-700 mx-1" />.
+                      </p>
                     </div>
-                  )}
-
-                  <div className="p-3 bg-slate-50 border border-slate-150 rounded-2xl flex gap-2 items-center text-[10px] text-slate-400 font-mono">
-                    <HelpCircle className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span>L'application PWA est ultra légère, rapide et économise votre forfait internet.</span>
                   </div>
+                )}
+
+                {/* Desktop Guide */}
+                {deviceType === "desktop" && (
+                  <div className="space-y-3 animate-fade-in font-mono text-[10.5px] text-slate-600 leading-relaxed">
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">1</span>
+                      <p>
+                        Sur Chrome ou Edge, regardez la <strong>barre d'adresse URL</strong> en haut à droite.
+                      </p>
+                    </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">2</span>
+                      <p>
+                        Cliquez sur l'icône d'<strong>installation</strong> (ordinateur avec une flèche ou petit écran "+") située à droite de l'adresse URL.
+                      </p>
+                    </div>
+                    <div className="flex gap-2.5 items-start">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold font-sans text-[10px]">3</span>
+                      <p>
+                        Ou ouvrez le menu Chrome/Edge (trois points), puis allez dans <strong>"Enregistrer et partager"</strong> → <strong>"Installer la page en tant qu'application"</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 bg-slate-50 border border-slate-150 rounded-2xl flex gap-2 items-center text-[10px] text-slate-400 font-mono">
+                  <HelpCircle className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span>L'application PWA est ultra légère, rapide et économise votre forfait internet.</span>
                 </div>
-              )}
-            </>
+              </div>
+            </div>
           )}
 
         </div>

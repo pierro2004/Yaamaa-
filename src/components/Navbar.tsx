@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { User, UserRole } from "../types";
 import { Language, getTranslation } from "../i18n";
 
-const yaamaaLogo = "/src/assets/images/yaamaa_logo_updated_1783116905472.jpg";
+const yaamaaLogo = "/logo.jpg";
 
 import { 
   Coins, 

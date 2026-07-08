@@ -62,18 +62,21 @@ export default function PwaInstallBanner() {
   const handleAction = async () => {
     const promptEvent = (window as any).deferredPrompt;
     if (promptEvent) {
-      // Trigger native installation directly
-      promptEvent.prompt();
-      const { outcome } = await promptEvent.userChoice;
-      if (outcome === "accepted") {
-        (window as any).deferredPrompt = null;
-        setCanPrompt(false);
-        setIsVisible(false);
+      try {
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === "accepted") {
+          (window as any).deferredPrompt = null;
+          setCanPrompt(false);
+          setIsVisible(false);
+          return;
+        }
+      } catch (err) {
+        console.error(err);
       }
-    } else {
-      // Show step-by-step instructions modal
-      setShowModal(true);
     }
+    // Open install modal with install button & step-by-step instructions
+    setShowModal(true);
   };
 
   if (!isVisible) return null;
