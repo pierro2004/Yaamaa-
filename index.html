@@ -3,15 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Taskora Social & Tasks</title>
+    <title>Yaamaa Social & Tasks</title>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#10b981" />
     
     <!-- iOS / Safari App support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Taskora" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" />
+    <meta name="apple-mobile-web-app-title" content="Yaamaa" />
+    <link rel="apple-touch-icon" href="/logo.jpg" />
+    <link rel="icon" type="image/jpg" href="/logo.jpg" />
     
     <script>
       if ("serviceWorker" in navigator) {
@@ -21,6 +22,20 @@
             .catch(err => console.error("PWA Service Worker registration failed:", err));
         });
       }
+
+      // Capture PWA installation event
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        window.dispatchEvent(new CustomEvent("pwa-install-available"));
+        console.log("PWA installation prompt is available!");
+      });
+
+      // Track when app is installed successfully
+      window.addEventListener("appinstalled", () => {
+        window.deferredPrompt = null;
+        console.log("PWA was installed successfully!");
+      });
     </script>
   </head>
   <body>

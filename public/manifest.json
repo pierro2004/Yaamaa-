@@ -1,6 +1,6 @@
 {
-  "short_name": "Taskora",
-  "name": "Taskora Social & Tasks",
+  "short_name": "Yaamaa",
+  "name": "Yaamaa Social & Tasks",
   "description": "Plateforme collaborative de gestion de tâches et de communication en temps réel.",
   "start_url": "/",
   "background_color": "#020617",
@@ -9,16 +9,28 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-      "type": "image/png",
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
       "sizes": "192x192",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ]
 }

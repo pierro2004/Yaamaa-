@@ -23,8 +23,19 @@ import {
   SocialMessage,
   Community,
   FriendRequest,
-  CallSession
+  CallSession,
+  BroadcastCampaign,
+  SupplierDelivererProfile,
+  SupplierDelivererReview,
+  MissionRequest,
+  SubscriptionPlan,
+  UserSubscription,
+  SubscriptionNotification,
+  BadgeTier,
+  SupervisionIncident,
+  SupervisionReport
 } from "./src/types";
+import { ALL_COUNTRIES } from "./src/countries";
 
 // Initialize Gemini Client
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -59,6 +70,15 @@ interface AppState {
   socialMessages?: SocialMessage[];
   friendRequests?: FriendRequest[];
   callSessions?: CallSession[];
+  broadcastCampaigns: BroadcastCampaign[];
+  suppliersDeliverers?: SupplierDelivererProfile[];
+  supplierReviews?: SupplierDelivererReview[];
+  missionRequests?: MissionRequest[];
+  subscriptionPlans?: SubscriptionPlan[];
+  userSubscriptions?: UserSubscription[];
+  subscriptionNotifications?: SubscriptionNotification[];
+  supervisionIncidents?: SupervisionIncident[];
+  supervisionReports?: SupervisionReport[];
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -70,14 +90,103 @@ const DEFAULT_SETTINGS: SystemSettings = {
   totalUsersCount: 15420,
   minWithdrawalAmount: 10.0,
   baseReward: 0.20,
-  defaultCommission: 10
+  defaultCommission: 10,
+  merchantNumberPrice: 5000,
+  merchantPremiumPrice: 5000,
+  merchantGoldPrice: 15000,
+  merchantDiamondPrice: 35000,
+  giftPointsConversionRate: 0.01,
+  autoSenderName: "Yama Assistance",
+  autoSenderPhone: "+221701234567",
+  autoSenderAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
+  virtualGifts: [
+    { id: "gift_rose", name: "Rose Éternelle", emoji: "🌹", pointsPrice: 10, description: "Un classique pour exprimer de l'affection", rarity: "Commun", category: "Amour", animation: "petals", soundEffect: "love_chime", duration: 5, isActive: true, pointsValue: 10 },
+    { id: "gift_heart", name: "Cœur Pulsant", emoji: "💖", pointsPrice: 20, description: "Un cœur vibrant d'énergie positive", rarity: "Commun", category: "Amour", animation: "light", soundEffect: "heartbeat", duration: 4, isActive: true, pointsValue: 20 },
+    { id: "gift_fire", name: "Flamme Fun", emoji: "🔥", pointsPrice: 30, description: "Pour enflammer la conversation !", rarity: "Commun", category: "Fête", animation: "lightning", soundEffect: "fire_crackle", duration: 5, isActive: true, pointsValue: 30 },
+    { id: "gift_beer", name: "Bière Fraîche", emoji: "🍺", pointsPrice: 50, description: "Santé à notre amitié !", rarity: "Rare", category: "Fête", animation: "confetti", soundEffect: "cheers", duration: 6, isActive: true, pointsValue: 50 },
+    { id: "gift_unicorn", name: "Licorne Magique", emoji: "🦄", pointsPrice: 100, description: "Une créature mystique et enchantée", rarity: "Épique", category: "Exclusif", animation: "galaxy", soundEffect: "sparkle_magic", duration: 8, isActive: true, pointsValue: 100 },
+    { id: "gift_crown", name: "Couronne Royale", emoji: "👑", pointsPrice: 200, description: "Pour les rois et reines de Yaamaa", rarity: "Épique", category: "Royale", animation: "light", soundEffect: "royal_fanfare", duration: 7, isActive: true, pointsValue: 200 },
+    { id: "gift_diamond", name: "Diamant Brillant", emoji: "💎", pointsPrice: 500, description: "La brillance absolue d'un diamant éternel", rarity: "Légendaire", category: "Richesse", animation: "diamonds", soundEffect: "diamond_cling", duration: 8, isActive: true, pointsValue: 500 },
+    { id: "gift_rocket", name: "Fusée Spatiale", emoji: "🚀", pointsPrice: 1000, description: "Vers l'infini et au-delà !", rarity: "Légendaire", category: "Gaming", animation: "rocket", soundEffect: "rocket_blast", duration: 10, isActive: true, pointsValue: 1000 },
+    { id: "gift_castle", name: "Château de Rêve", emoji: "🏰", pointsPrice: 2000, description: "Un empire digne de votre soutien", rarity: "Mythique", category: "Royale", animation: "castle", soundEffect: "epic_orchestra", duration: 12, isActive: true, pointsValue: 2000 },
+    { id: "gift_lion", name: "Lion de la Teranga", emoji: "🦁", pointsPrice: 1500, description: "Le rugissement majestueux de l'Afrique", rarity: "Mythique", category: "Afrique", animation: "lion", soundEffect: "lion_roar", duration: 9, isActive: true, pointsValue: 1500 },
+    { id: "gift_dragon", name: "Dragon Impérial", emoji: "🐉", pointsPrice: 3000, description: "Le souffle ardent de la fortune", rarity: "Mythique", category: "Légendaire", animation: "dragon", soundEffect: "dragon_breath", duration: 11, isActive: true, pointsValue: 3000 },
+    { id: "gift_phoenix", name: "Phénix Flamboyant", emoji: "🐦", pointsPrice: 5000, description: "Renaissance de gloire et de puissance", rarity: "Mythique", category: "Afrique", animation: "phoenix", soundEffect: "phoenix_cry", duration: 13, isActive: true, pointsValue: 5000 },
+    { id: "gift_lamborghini", name: "Supercar Or", emoji: "🏎️", pointsPrice: 4000, description: "Vitesse, luxe et domination absolue", rarity: "Mythique", category: "Richesse", animation: "car", soundEffect: "car_engine", duration: 10, isActive: true, pointsValue: 4000 }
+  ],
+  rechargePacks: [
+    { id: "pack_100", pieces: 100, price: 1.0, currency: "USD", title: "Pack 100 Pièces", isActive: true },
+    { id: "pack_200", pieces: 200, price: 2.0, currency: "USD", title: "Pack 200 Pièces", isActive: true },
+    { id: "pack_500", pieces: 500, price: 5.0, currency: "USD", title: "Pack 500 Pièces", isActive: true },
+    { id: "pack_1000", pieces: 1000, price: 10.0, currency: "USD", title: "Pack 1000 Pièces", isActive: true },
+    { id: "pack_5000", pieces: 5000, price: 50.0, currency: "USD", title: "Pack 5000 Pièces", isActive: true },
+    { id: "pack_10000", pieces: 10000, price: 100.0, currency: "USD", title: "Pack 10,000 Pièces", isActive: true }
+  ],
+  withdrawalPacks: [
+    { id: "w_100", pieces: 100, value: 1.0, label: "Retrait / Conversion 100 Pièces", isActive: true },
+    { id: "w_200", pieces: 200, value: 2.0, label: "Retrait / Conversion 200 Pièces", isActive: true },
+    { id: "w_500", pieces: 500, value: 5.0, label: "Retrait / Conversion 500 Pièces", isActive: true },
+    { id: "w_1000", pieces: 1000, value: 10.0, label: "Retrait / Conversion 1000 Pièces", isActive: true },
+    { id: "w_5000", pieces: 5000, value: 50.0, label: "Retrait / Conversion 5000 Pièces", isActive: true },
+    { id: "w_10000", pieces: 10000, value: 100.0, label: "Retrait / Conversion 10,000 Pièces", isActive: true }
+  ],
+  apiKeys: [
+    {
+      id: "key_payment_1",
+      name: "Kkiapay Production Gateway",
+      keyValue: "kk_live_9384729384728934759",
+      providerType: "payment",
+      recognizedRole: "Passerelle de Paiement Mobile (Bénin / WAEMU)",
+      scope: "paiements, dépôts, retraits automatiques",
+      status: "active",
+      createdAt: "2026-01-01T00:00:00Z",
+      operatorId: "user_founder"
+    },
+    {
+      id: "key_enterprise_1",
+      name: "Enterprise ERP Sync Key",
+      keyValue: "enterprise_live_773829102834758",
+      providerType: "enterprise",
+      recognizedRole: "Intégration ERP & Commandes Marchandes",
+      scope: "commandes, stock boutique, synchronisation",
+      status: "active",
+      createdAt: "2026-01-05T00:00:00Z",
+      operatorId: "user_founder"
+    },
+    {
+      id: "key_ai_1",
+      name: "Google Gemini AI Core Key",
+      keyValue: "AIzaSy_mock_gemini_production_key_2026",
+      providerType: "ai",
+      recognizedRole: "Intelligence Artificielle & Assistant Yaamaa AI",
+      scope: "génération intelligente, recommandations, modération",
+      status: "active",
+      createdAt: "2026-01-10T00:00:00Z",
+      operatorId: "user_founder"
+    }
+  ]
 };
 
 // Seed initial data
+function ensureAdminMerchantNumber(u: User) {
+  if (u && (u.role === "admin" || u.role === "founder")) {
+    if (!u.merchantNumber) {
+      u.merchantNumber = u.role === "founder" ? "DIAMOND-FOUNDER-001" : "ADMIN-VIP-001";
+    }
+    if (!u.merchantPackType) {
+      u.merchantPackType = "diamond";
+    }
+    u.merchantNumberEligible = true;
+    if (!u.merchantNumberPurchasedAt) {
+      u.merchantNumberPurchasedAt = "2026-01-01T00:00:00Z";
+    }
+  }
+}
+
 const SEED_USERS: User[] = [
   {
     id: "user_founder",
-    email: "founder@taskora.com",
+    email: "founder@yaamaa.com",
     password: "password123",
     phone: "+33612345678",
     name: "Pierre Le Fondateur",
@@ -90,12 +199,16 @@ const SEED_USERS: User[] = [
     country: "France",
     currency: "EUR",
     referralCode: "BOSS2026",
+    merchantNumber: "DIAMOND-FOUNDER-001",
+    merchantPackType: "diamond",
+    merchantNumberEligible: true,
+    merchantNumberPurchasedAt: "2026-01-01T00:00:00Z",
     is2faEnabled: true,
     isSuspended: false
   },
   {
     id: "user_admin",
-    email: "celine@taskora.com",
+    email: "celine@yaamaa.com",
     password: "password123",
     phone: "+33687654321",
     name: "Celine Admin",
@@ -108,12 +221,16 @@ const SEED_USERS: User[] = [
     country: "France",
     currency: "EUR",
     referralCode: "CELINE_A",
+    merchantNumber: "ADMIN-VIP-001",
+    merchantPackType: "diamond",
+    merchantNumberEligible: true,
+    merchantNumberPurchasedAt: "2026-01-01T00:00:00Z",
     is2faEnabled: false,
     isSuspended: false
   },
   {
     id: "user_participant_1",
-    email: "mamadou@taskora.com",
+    email: "mamadou@yaamaa.com",
     password: "password123",
     phone: "+221771234567",
     name: "Mamadou Diop",
@@ -132,7 +249,7 @@ const SEED_USERS: User[] = [
   },
   {
     id: "user_participant_2",
-    email: "amelie@taskora.com",
+    email: "amelie@yaamaa.com",
     password: "password123",
     phone: "+15149999999",
     name: "Amélie Tremblay",
@@ -308,7 +425,7 @@ const SEED_TRANSACTIONS: WalletTransaction[] = [
     amount: 130, // EUR equivalent in XOF
     currency: "XOF",
     status: "completed",
-    method: "Taskora Balance",
+    method: "Yaamaa Balance",
     details: "Rémunération de la tâche 'Abonnement YouTube'",
     createdAt: "2026-06-19T10:15:00Z"
   },
@@ -343,7 +460,7 @@ const SEED_AUDIT_LOGS: AuditLog[] = [
     username: "FounderPierre",
     role: "founder",
     action: "Système démarré",
-    details: "Initialisation globale de la plateforme Taskora v1.0.0",
+    details: "Initialisation globale de la plateforme Yaamaa v1.0.0",
     timestamp: "2026-06-18T08:00:00Z",
     ip: "192.168.1.1"
   },
@@ -368,7 +485,7 @@ const SEED_SHOPS: Shop[] = [
     logo: "https://images.unsplash.com/photo-1546054454-aa26e2b734c7?q=80&w=150&auto=format&fit=crop",
     description: "Gadgets électroniques, supports digitaux et formations de qualité pour réussir en Afrique.",
     country: "Sénégal",
-    contactInfo: "+221771234567, mamadou@taskora.com",
+    contactInfo: "+221771234567, mamadou@yaamaa.com",
     createdAt: "2026-06-20T10:00:00Z"
   }
 ];
@@ -442,8 +559,8 @@ const SEED_ORDERS: Order[] = [
     currency: "XOF",
     shippingAddress: "Villa 142, Sacré-Cœur, Dakar, Sénégal",
     phoneNumber: "+221774567890",
-    email: "founder@taskora.com",
-    paymentMethod: "Wallet Taskora",
+    email: "founder@yaamaa.com",
+    paymentMethod: "Wallet Yaamaa",
     trackingNumber: "TRK-DK-94827",
     status: "completed",
     createdAt: "2026-06-21T14:20:00Z"
@@ -463,7 +580,7 @@ const SEED_ORDERS: Order[] = [
     currency: "XOF",
     shippingAddress: "Numérique via E-mail, Québec, Canada",
     phoneNumber: "+15149999999",
-    email: "amelie@taskora.com",
+    email: "amelie@yaamaa.com",
     paymentMethod: "Cartes bancaires",
     status: "completed",
     createdAt: "2026-06-22T08:00:00Z"
@@ -505,38 +622,431 @@ const SEED_PROMO_CAMPAIGNS: PromoCampaign[] = [
   }
 ];
 
+const SEED_SUPPLIERS_DELIVERERS: SupplierDelivererProfile[] = [
+  {
+    id: "sup_1",
+    userId: "user_participant_1",
+    type: "supplier",
+    fullName: "Aissatou Diallo",
+    profilePhoto: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=200&auto=format&fit=crop",
+    companyLogo: "https://images.unsplash.com/photo-1578574577315-3fbeb0ce4ef2?q=80&w=200&auto=format&fit=crop",
+    phone: "+221773456789",
+    email: "aissatou.agro@yaamaa.com",
+    country: "Sénégal",
+    city: "Dakar",
+    interventionZone: "Dakar Plateau, Almadies, Mermoz",
+    professionalAddress: "Rue 10 x Angle Avenue Bourguiba, Dakar",
+    activityType: "Agro-alimentaire & Produits Locaux Bio",
+    servicesDescription: "Fourniture en gros et détail de céréales locales (mil, fonio), jus naturels artisanaux et épices de Teranga de qualité supérieure.",
+    idDocumentUrl: "https://example.com/id_aissatou.pdf",
+    companyDocumentUrl: "https://example.com/rccm_aissatou.pdf",
+    availabilityHours: "Lundi au Samedi : 08h00 - 19h00",
+    rates: "Devis sur mesure selon volume",
+    spokenLanguages: ["Français", "Wolof", "Anglais"],
+    status: "approved",
+    isVerified: true,
+    rating: 4.9,
+    reviewsCount: 34,
+    missionsCompletedCount: 142,
+    successRate: 99,
+    createdAt: "2026-05-10T10:00:00Z"
+  },
+  {
+    id: "del_1",
+    userId: "user_participant_2",
+    type: "deliverer",
+    fullName: "Moussa Konaté",
+    profilePhoto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
+    phone: "+221765432109",
+    email: "moussa.express@yaamaa.com",
+    country: "Sénégal",
+    city: "Dakar",
+    interventionZone: "Grand Dakar, Pikine, Guédiawaye, Dakar Plateau",
+    professionalAddress: "Cité Keur Gorgui, Immeuble A, Dakar",
+    activityType: "Livraison Express Colis & Repas",
+    servicesDescription: "Service de livraison rapide à moto pour documents, colis e-commerce, repas chauds et courses urgentes dans tout Dakar et sa banlieue.",
+    idDocumentUrl: "https://example.com/id_moussa.pdf",
+    drivingLicenseUrl: "https://example.com/permis_moussa.pdf",
+    transportMethod: "Moto Yamaha 125cc",
+    vehiclePhotos: ["https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=300&auto=format&fit=crop"],
+    insuranceDocumentUrl: "https://example.com/assurance_moussa.pdf",
+    availabilityHours: "7j/7 : 07h00 - 23h00",
+    rates: "À partir de 1 000 XOF la course",
+    spokenLanguages: ["Français", "Wolof"],
+    status: "approved",
+    isVerified: true,
+    rating: 4.8,
+    reviewsCount: 68,
+    missionsCompletedCount: 310,
+    successRate: 98,
+    createdAt: "2026-05-12T14:00:00Z"
+  }
+];
+
+const SEED_SUPPLIER_REVIEWS: SupplierDelivererReview[] = [
+  {
+    id: "rev_1",
+    profileId: "sup_1",
+    userId: "user_participant_2",
+    username: "Lili_QC",
+    userAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop",
+    rating: 5,
+    comment: "Produits locaux d'une fraîcheur incroyable ! Livraison rapide et service très professionnel.",
+    createdAt: "2026-06-01T10:00:00Z"
+  }
+];
+
+const SEED_MISSION_REQUESTS: MissionRequest[] = [];
+
+const SEED_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: "plan_blue",
+    name: "Plan Basic",
+    tier: "blue",
+    badgeLabel: "Bleu Basic",
+    colorTheme: {
+      bg: "bg-blue-500/10",
+      border: "border-blue-500/30",
+      text: "text-blue-400",
+      gradient: "from-blue-600 to-sky-400"
+    },
+    description: "Badge bleu officiel pour les marchands débutants sur la plateforme Yama.",
+    benefits: ["Badge Bleu vérifié", "Numéro marchand unique à vie", "Support standard 24/7", "Jusqu'à 20 filleuls"],
+    initialPrice: 5000,
+    renewalPrice: 3000,
+    durationValue: 30,
+    durationUnit: "days",
+    maxReferrals: 20,
+    referralCommission: 2500,
+    isActive: true,
+    createdAt: "2026-01-01T00:00:00Z"
+  },
+  {
+    id: "plan_bronze",
+    name: "Plan Argent",
+    tier: "bronze",
+    badgeLabel: "Bronze Doré",
+    colorTheme: {
+      bg: "bg-amber-700/10",
+      border: "border-amber-700/30",
+      text: "text-amber-600",
+      gradient: "from-amber-700 to-yellow-600"
+    },
+    description: "Badge Bronze Doré pour les marchands en expansion avec des avantages accrus.",
+    benefits: ["Badge Bronze Doré exclusif", "Numéro marchand prioritaire", "Jusqu'à 50 filleuls", "Visibilité accrue dans l'annuaire"],
+    initialPrice: 10000,
+    renewalPrice: 6000,
+    durationValue: 30,
+    durationUnit: "days",
+    maxReferrals: 50,
+    referralCommission: 5000,
+    isActive: true,
+    createdAt: "2026-01-01T00:00:00Z"
+  },
+  {
+    id: "plan_gold",
+    name: "Plan Or",
+    tier: "gold",
+    badgeLabel: "Or Premium",
+    colorTheme: {
+      bg: "bg-amber-400/10",
+      border: "border-amber-400/30",
+      text: "text-amber-400",
+      gradient: "from-amber-500 to-yellow-300"
+    },
+    description: "Badge Or prestigieux pour les marchands professionnels confirmés.",
+    benefits: ["Badge Or étincelant", "Jusqu'à 500 filleuls", "Priorité maximale sur les missions", "Support VIP dédié"],
+    initialPrice: 15000,
+    renewalPrice: 10000,
+    durationValue: 30,
+    durationUnit: "days",
+    maxReferrals: 500,
+    referralCommission: 7500,
+    isActive: true,
+    createdAt: "2026-01-01T00:00:00Z"
+  },
+  {
+    id: "plan_diamond",
+    name: "Plan Diamant",
+    tier: "diamond",
+    badgeLabel: "Diamant Élite",
+    colorTheme: {
+      bg: "bg-cyan-400/10",
+      border: "border-cyan-400/30",
+      text: "text-cyan-300",
+      gradient: "from-cyan-400 via-sky-300 to-indigo-400"
+    },
+    description: "Le badge le plus prestigieux et luxueux de l'écosystème Yama pour les élites.",
+    benefits: ["Badge Diamant haute distinction", "Jusqu'à 2 000 filleuls", "Zéro commission sur les parrainages", "Concierge et assistance 24/7 VIP"],
+    initialPrice: 35000,
+    renewalPrice: 25000,
+    durationValue: 30,
+    durationUnit: "days",
+    maxReferrals: 2000,
+    referralCommission: 17500,
+    isActive: true,
+    createdAt: "2026-01-01T00:00:00Z"
+  }
+];
+
+const SEED_USER_SUBSCRIPTIONS: UserSubscription[] = [];
+
+const SEED_SUPERVISION_INCIDENTS: SupervisionIncident[] = [
+  {
+    id: "inc_1",
+    component: "Serveur Principal (Cluster A)",
+    componentKey: "server",
+    timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
+    severity: "high",
+    title: "Pic de charge CPU > 92%",
+    description: "Le cluster de serveurs principaux a subi une forte augmentation des requêtes simultanées suite à une campagne virale.",
+    consequences: "Ralentissement temporaire de l'affichage des pages de parrainage et file d'attente API accrue de 45ms.",
+    logs: [
+      "[INFO] 2026-07-07 04:12:01 - CPU usage normal: 28%",
+      "[WARN] 2026-07-07 04:15:22 - Spike detected: Active threads reached 1,024",
+      "[CRITICAL] 2026-07-07 04:16:05 - CPU load average over 5m: 4.82 (threshold: 3.50)",
+      "[AUTO] 2026-07-07 04:17:00 - Auto-scaling triggered: Spun up 2 additional worker containers."
+    ],
+    impactedUsersCount: 342,
+    probableCauses: "Afflux massif de trafic sur les liens de parrainage WhatsApp & Telegram.",
+    recommendations: "Augmenter la capacité de mise à l'échelle automatique (autoscale max workers à 8).",
+    correctionSteps: ["Activer le cache Redis sur les redirections de parrainage", "Redistribuer la charge sur la région alternative"],
+    isAutoCorrectable: true,
+    status: "auto_corrected",
+    resolvedAt: new Date(Date.now() - 3600000 * 3.8).toISOString()
+  },
+  {
+    id: "inc_2",
+    component: "Passerelle de Paiement Mobile Money",
+    componentKey: "payments",
+    timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
+    severity: "critical",
+    title: "Latence API Orange Money / Wave",
+    description: "Délai de réponse de la passerelle partenaire supérieur à 8 secondes provoquant des timeouts sur l'achat de numéros marchands.",
+    consequences: "Échec temporaire de 18 transactions de recharge et blocage de la validation automatique.",
+    logs: [
+      "[ERROR] 2026-07-06 20:30:10 - HTTP 504 Gateway Timeout from gateway.orange-money.api",
+      "[WARN] 2026-07-06 20:31:00 - Retry attempt 1/3 failed after 8000ms",
+      "[INFO] 2026-07-06 20:32:15 - Fallback gateway secondary routing activated successfully."
+    ],
+    impactedUsersCount: 18,
+    probableCauses: "Maintenance technique inopinée de l'opérateur télécom partenaire.",
+    recommendations: "Basculer systématiquement sur le routage de secours Wave en cas de timeout > 3000ms.",
+    correctionSteps: ["Vérifier le statut webhook", "Rejouer manuellement les transactions en attente depuis le panneau admin finance"],
+    isAutoCorrectable: false,
+    status: "resolved",
+    resolvedAt: new Date(Date.now() - 3600000 * 11.5).toISOString()
+  },
+  {
+    id: "inc_3",
+    component: "Service de Messagerie WebSocket & Chat",
+    componentKey: "messaging",
+    timestamp: new Date(Date.now() - 600000).toISOString(),
+    severity: "medium",
+    title: "Déconnexions intermittentes du socket temps réel",
+    description: "Quelques clients connectés en zone rurale ont subi une reconnexion WebSocket en boucle due à des fluctuations de signal 4G.",
+    consequences: "Retard de 2 à 4 secondes dans la réception des messages de chat communautaire.",
+    logs: [
+      "[WARN] 2026-07-07 08:30:15 - WebSocket heartbeat timeout for client conn_9981",
+      "[INFO] 2026-07-07 08:30:18 - Automatic reconnection initiated with exponential backoff."
+    ],
+    impactedUsersCount: 24,
+    probableCauses: "Qualité de signal réseau mobile instable.",
+    recommendations: "Optimiser le protocole de battement de cœur (heartbeat interval à 15s).",
+    correctionSteps: ["Aucune action humaine requise, le mécanisme de reconnexion gère l'état."],
+    isAutoCorrectable: true,
+    status: "active"
+  }
+];
+
+const SEED_SUPERVISION_REPORTS: SupervisionReport[] = [
+  {
+    id: "rep_daily_01",
+    type: "daily",
+    date: "2026-07-06",
+    title: "Rapport de Performance Quotidien - 06/07/2026",
+    performanceSummary: "Excellente stabilité globale. Uptime de 99.94%. Temps de réponse moyen de l'API de 38ms.",
+    incidentsCount: 2,
+    resolvedCount: 2,
+    activeUsersCount: 4210,
+    growthRate: +4.8,
+    details: "Volume total de transactions : 1,450,000 XOF. Aucun incident de sécurité signalé. Taux d'engagement de la communauté en hausse de 12%."
+  },
+  {
+    id: "rep_weekly_01",
+    type: "weekly",
+    date: "Semaine 27 (01/07 - 07/07/2026)",
+    title: "Rapport Hebdomadaire de Supervision & Croissance",
+    performanceSummary: "Croissance soutenue des inscriptions marchandes (+240 nouveaux numéros). Stabilité parfaite des bases de données répliquées.",
+    incidentsCount: 5,
+    resolvedCount: 5,
+    activeUsersCount: 15420,
+    growthRate: +15.2,
+    details: "Les services de cadeaux virtuels et l'assistant IA Yaamaa représentent 45% des interactions de la semaine."
+  }
+];
+
+function getUserMaxReferrals(user: User): number {
+  if (!appState.subscriptionPlans) {
+    appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+  }
+  const activeSub = (appState.userSubscriptions || []).find(s => s.userId === user.id && s.status === "active" && new Date(s.expirationDate) > new Date());
+  if (activeSub) {
+    const plan = appState.subscriptionPlans.find(p => p.id === activeSub.planId);
+    if (plan && plan.maxReferrals !== undefined) {
+      return plan.maxReferrals;
+    }
+  }
+  const tier = activeSub?.tier || user.merchantPackType || "blue";
+  const planByTier = appState.subscriptionPlans.find(p => p.tier === tier);
+  if (planByTier && planByTier.maxReferrals !== undefined) {
+    return planByTier.maxReferrals;
+  }
+  if (tier === "diamond") return 2000;
+  if (tier === "gold") return 500;
+  if (tier === "bronze") return 50;
+  return 20;
+}
+
+
+
 // Helper to load state
 function loadState(): AppState {
+  const isProduction = process.env.NODE_ENV === "production";
+  const enableDemoSeed = process.env.ENABLE_DEMO_SEED === "true";
+  const useDemoSeed = !isProduction || enableDemoSeed;
+
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = fs.readFileSync(STATE_FILE, "utf-8");
       const state: AppState = JSON.parse(raw);
       let updated = false;
+
+      // In production, if demo seed is explicitly disabled, filter out seed users to ensure clean slate
+      if (isProduction && !enableDemoSeed) {
+        const hasSeedUsers = state.users.some(u => ["user_founder", "user_admin", "user_participant_1", "user_participant_2", "user_advertiser_1"].includes(u.id));
+        if (hasSeedUsers) {
+          state.users = [];
+          state.campaigns = [];
+          state.submissions = [];
+          state.transactions = [];
+          state.auditLogs = [];
+          state.shops = [];
+          state.products = [];
+          state.orders = [];
+          state.disputes = [];
+          state.promoCampaigns = [];
+          state.communities = [];
+          state.socialMessages = [];
+          state.friendRequests = [];
+          updated = true;
+        }
+      }
+
       state.users.forEach(u => {
+        ensureAdminMerchantNumber(u);
         if (!u.password) {
           u.password = "password123";
           updated = true;
         }
+        if (!u.createdAt) {
+          u.createdAt = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+          updated = true;
+        }
+        if (u.giftPoints === undefined) {
+          u.giftPoints = 1000;
+          updated = true;
+        }
+        if (u.giftPointsEarned === undefined) {
+          u.giftPointsEarned = 0;
+          updated = true;
+        }
+        if (!u.language) {
+          const frenchCountries = ["CI", "FR", "BE", "CA", "SN", "BF", "BJ", "CM", "CF", "CG", "CD", "DJ", "GA", "GN", "HT", "MC", "NE", "RW", "TG", "TD", "VU", "Côte d'Ivoire", "France", "Bénin", "Burkina Faso", "Cameroun", "Centrafrique", "Congo-Brazzaville", "Congo-Kinshasa (RDC)", "Djibouti", "Gabon", "Guinée", "Haïti", "Monaco", "Niger", "Rwanda", "Sénégal", "Togo", "Tchad", "Vanuatu"];
+          u.language = frenchCountries.includes(u.country) ? "fr" : "en";
+          updated = true;
+        }
       });
+
+      if (state.settings) {
+        if (state.settings.merchantNumberPrice === undefined) {
+          state.settings.merchantNumberPrice = 5000;
+          updated = true;
+        }
+        if (state.settings.merchantPremiumPrice === undefined) {
+          state.settings.merchantPremiumPrice = 5000;
+          updated = true;
+        }
+        if (state.settings.merchantGoldPrice === undefined) {
+          state.settings.merchantGoldPrice = 15000;
+          updated = true;
+        }
+        if (state.settings.merchantDiamondPrice === undefined) {
+          state.settings.merchantDiamondPrice = 35000;
+          updated = true;
+        }
+        if (state.settings.giftPointsConversionRate === undefined) {
+          state.settings.giftPointsConversionRate = 0.01;
+          updated = true;
+        }
+        if (state.settings.virtualGifts === undefined || state.settings.virtualGifts.length === 0 || !state.settings.virtualGifts[0].category) {
+          state.settings.virtualGifts = DEFAULT_SETTINGS.virtualGifts;
+          updated = true;
+        }
+        if (state.settings.autoSenderName === undefined) {
+          state.settings.autoSenderName = DEFAULT_SETTINGS.autoSenderName || "Yama Assistance";
+          updated = true;
+        }
+        if (state.settings.autoSenderPhone === undefined) {
+          state.settings.autoSenderPhone = DEFAULT_SETTINGS.autoSenderPhone || "+221701234567";
+          updated = true;
+        }
+        if (state.settings.autoSenderAvatar === undefined) {
+          state.settings.autoSenderAvatar = DEFAULT_SETTINGS.autoSenderAvatar || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop";
+          updated = true;
+        }
+
+        // Sync user_admin account with current autoSender settings
+        const uAdmin = state.users.find(u => u.id === "user_admin");
+        if (uAdmin) {
+          const expectedName = state.settings.autoSenderName || "Yama Assistance";
+          const expectedPhone = state.settings.autoSenderPhone || "+221701234567";
+          const expectedAvatar = state.settings.autoSenderAvatar || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop";
+          
+          if (uAdmin.name !== expectedName) {
+            uAdmin.name = expectedName;
+            uAdmin.username = expectedName.replace(/\s+/g, "");
+            updated = true;
+          }
+          if (uAdmin.phone !== expectedPhone) {
+            uAdmin.phone = expectedPhone;
+            updated = true;
+          }
+          if (uAdmin.avatar !== expectedAvatar) {
+            uAdmin.avatar = expectedAvatar;
+            updated = true;
+          }
+        }
+      }
       
       if (!state.shops) {
-        state.shops = SEED_SHOPS;
+        state.shops = useDemoSeed ? SEED_SHOPS : [];
         updated = true;
       }
       if (!state.products) {
-        state.products = SEED_PRODUCTS;
+        state.products = useDemoSeed ? SEED_PRODUCTS : [];
         updated = true;
       }
       if (!state.orders) {
-        state.orders = SEED_ORDERS;
+        state.orders = useDemoSeed ? SEED_ORDERS : [];
         updated = true;
       }
       if (!state.disputes) {
-        state.disputes = SEED_DISPUTES;
+        state.disputes = useDemoSeed ? SEED_DISPUTES : [];
         updated = true;
       }
       if (!state.promoCampaigns) {
-        state.promoCampaigns = SEED_PROMO_CAMPAIGNS;
+        state.promoCampaigns = useDemoSeed ? SEED_PROMO_CAMPAIGNS : [];
         updated = true;
       }
       if (!state.communities) {
@@ -551,6 +1061,42 @@ function loadState(): AppState {
         state.friendRequests = [];
         updated = true;
       }
+      if (!state.broadcastCampaigns) {
+        state.broadcastCampaigns = [];
+        updated = true;
+      }
+      if (!state.suppliersDeliverers) {
+        state.suppliersDeliverers = useDemoSeed ? SEED_SUPPLIERS_DELIVERERS : [];
+        updated = true;
+      }
+      if (!state.supplierReviews) {
+        state.supplierReviews = useDemoSeed ? SEED_SUPPLIER_REVIEWS : [];
+        updated = true;
+      }
+      if (!state.missionRequests) {
+        state.missionRequests = useDemoSeed ? SEED_MISSION_REQUESTS : [];
+        updated = true;
+      }
+      if (!state.subscriptionPlans) {
+        state.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+        updated = true;
+      }
+      if (!state.userSubscriptions) {
+        state.userSubscriptions = SEED_USER_SUBSCRIPTIONS;
+        updated = true;
+      }
+      if (!state.subscriptionNotifications) {
+        state.subscriptionNotifications = [];
+        updated = true;
+      }
+      if (!state.supervisionIncidents) {
+        state.supervisionIncidents = SEED_SUPERVISION_INCIDENTS;
+        updated = true;
+      }
+      if (!state.supervisionReports) {
+        state.supervisionReports = SEED_SUPERVISION_REPORTS;
+        updated = true;
+      }
 
       if (updated) {
         fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
@@ -563,20 +1109,29 @@ function loadState(): AppState {
 
   // If no file exists, initialize and save
   const freshState: AppState = {
-    users: SEED_USERS,
-    campaigns: SEED_CAMPAIGNS,
-    submissions: SEED_SUBMISSIONS,
-    transactions: SEED_TRANSACTIONS,
-    auditLogs: SEED_AUDIT_LOGS,
+    users: useDemoSeed ? SEED_USERS : [],
+    campaigns: useDemoSeed ? SEED_CAMPAIGNS : [],
+    submissions: useDemoSeed ? SEED_SUBMISSIONS : [],
+    transactions: useDemoSeed ? SEED_TRANSACTIONS : [],
+    auditLogs: useDemoSeed ? SEED_AUDIT_LOGS : [],
     settings: DEFAULT_SETTINGS,
-    shops: SEED_SHOPS,
-    products: SEED_PRODUCTS,
-    orders: SEED_ORDERS,
-    disputes: SEED_DISPUTES,
-    promoCampaigns: SEED_PROMO_CAMPAIGNS,
+    shops: useDemoSeed ? SEED_SHOPS : [],
+    products: useDemoSeed ? SEED_PRODUCTS : [],
+    orders: useDemoSeed ? SEED_ORDERS : [],
+    disputes: useDemoSeed ? SEED_DISPUTES : [],
+    promoCampaigns: useDemoSeed ? SEED_PROMO_CAMPAIGNS : [],
     communities: [],
     socialMessages: [],
-    friendRequests: []
+    friendRequests: [],
+    broadcastCampaigns: [],
+    suppliersDeliverers: useDemoSeed ? SEED_SUPPLIERS_DELIVERERS : [],
+    supplierReviews: useDemoSeed ? SEED_SUPPLIER_REVIEWS : [],
+    missionRequests: useDemoSeed ? SEED_MISSION_REQUESTS : [],
+    subscriptionPlans: SEED_SUBSCRIPTION_PLANS,
+    userSubscriptions: SEED_USER_SUBSCRIPTIONS,
+    subscriptionNotifications: [],
+    supervisionIncidents: SEED_SUPERVISION_INCIDENTS,
+    supervisionReports: SEED_SUPERVISION_REPORTS
   };
   saveState(freshState);
   return freshState;
@@ -645,6 +1200,7 @@ app.get("/api/settings", (req, res) => {
 
 // 2. AUTH & USER SIMULATION SETTINGS
 app.get("/api/users", (req, res) => {
+  appState.users.forEach(u => ensureAdminMerchantNumber(u));
   res.json(appState.users);
 });
 
@@ -654,6 +1210,7 @@ app.post("/api/users/current", (req, res) => {
   if (!user) {
     return res.status(404).json({ error: "Utilisateur introuvable" });
   }
+  ensureAdminMerchantNumber(user);
   res.json(user);
 });
 
@@ -676,6 +1233,7 @@ app.post("/api/users/login", (req, res) => {
     return res.status(401).json({ error: "Le mot de passe saisi est incorrect." });
   }
 
+  ensureAdminMerchantNumber(user);
   createAuditLog(user.id, user.username, user.role, "Connexion réussie", `L'utilisateur @${user.username} s'est connecté.`, req);
   res.json(user);
 });
@@ -687,6 +1245,9 @@ app.post("/api/users/register", (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Veuillez renseigner votre Nom, votre E-mail et votre Mot de passe." });
   }
+
+  // Default to founder promo code BOSS2026 if not specified (Google search / direct download default)
+  const defaultReferredBy = referredBy || "BOSS2026";
 
   // Ensure unique email
   const emailExists = appState.users.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -706,6 +1267,7 @@ app.post("/api/users/register", (req, res) => {
   }
 
   const referralCode = "REF_" + username.substring(0, 4).toUpperCase() + Math.floor(100+Math.random()*900);
+  const isFirstUser = appState.users.length === 0;
   const newUser: User = {
     id: "user_" + Date.now(),
     email,
@@ -713,44 +1275,64 @@ app.post("/api/users/register", (req, res) => {
     phone: phone || "",
     name,
     username,
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
-    role: role || "participant",
-    level: 1,
-    xp: 0,
-    wallet: { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 },
+    avatar: isFirstUser 
+      ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop"
+      : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+    role: isFirstUser ? "founder" : (role || "participant"),
+    level: isFirstUser ? 50 : 1,
+    xp: isFirstUser ? 95000 : 0,
+    wallet: isFirstUser
+      ? { available: 5000, pending: 0, totalEarned: 5000, referralEarned: 0 }
+      : { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 },
     country: country || "France",
     currency: currency || "EUR",
     referralCode,
-    referredBy: referredBy || undefined,
+    referredBy: defaultReferredBy,
     is2faEnabled: false,
-    isSuspended: false
+    isSuspended: false,
+    createdAt: new Date().toISOString()
   };
+
+  ensureAdminMerchantNumber(newUser);
 
   appState.users.push(newUser);
   appState.settings.totalUsersCount += 1;
 
   // Process Referral commission
-  if (referredBy) {
-    const inviter = appState.users.find(u => u.referralCode === referredBy || u.id === referredBy);
+  if (defaultReferredBy) {
+    const inviter = appState.users.find(u => u.referralCode === defaultReferredBy || u.id === defaultReferredBy);
     if (inviter) {
-      newUser.referredBy = inviter.id;
-      // Small invitation bonus
-      inviter.wallet.available += 1.0; 
-      inviter.wallet.totalEarned += 1.0;
-      inviter.wallet.referralEarned += 1.0;
-      
-      const newTx: WalletTransaction = {
-        id: "tx_" + Date.now() + "_ref",
-        userId: inviter.id,
-        type: "referral_bonus",
-        amount: 1.0,
-        currency: inviter.currency,
-        status: "completed",
-        method: "Taskora Referral",
-        details: `Bonus d'inscription pour avoir parrainé ${username}`,
-        createdAt: new Date().toISOString()
-      };
-      appState.transactions.unshift(newTx);
+      // 1. Verify that the inviter has a merchant number active. "Without a merchant number, they cannot earn money"
+      if (!inviter.merchantNumber) {
+        newUser.referredBy = undefined;
+      } else {
+        // 2. Verify that the inviter has not reached their sponsorship limit
+        const currentReferrals = appState.users.filter(u => u.referredBy === inviter.id).length;
+        const limit = getUserMaxReferrals(inviter);
+
+        if (currentReferrals >= limit) {
+          newUser.referredBy = undefined;
+        } else {
+          newUser.referredBy = inviter.id;
+          // Small invitation bonus
+          inviter.wallet.available += 1.0; 
+          inviter.wallet.totalEarned += 1.0;
+          inviter.wallet.referralEarned += 1.0;
+          
+          const newTx: WalletTransaction = {
+            id: "tx_" + Date.now() + "_ref",
+            userId: inviter.id,
+            type: "referral_bonus",
+            amount: 1.0,
+            currency: inviter.currency,
+            status: "completed",
+            method: "Yaamaa Referral",
+            details: `Bonus d'inscription pour avoir parrainé ${username}`,
+            createdAt: new Date().toISOString()
+          };
+          appState.transactions.unshift(newTx);
+        }
+      }
     }
   }
 
@@ -759,12 +1341,242 @@ app.post("/api/users/register", (req, res) => {
   res.json(newUser);
 });
 
+// Achat de numéro marchand unique et commissions de parrainage associées
+app.post("/api/users/purchase-merchant-number", (req, res) => {
+  const { userId, paymentMethod, paymentPhone, paymentName, packType } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "Identifiant de l'utilisateur requis." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur non trouvé." });
+  }
+
+  if (user.merchantNumber) {
+    return res.status(400).json({ error: `Vous possédez déjà un numéro marchand unique : ${user.merchantNumber}` });
+  }
+
+  const selectedPack = packType || "premium";
+
+  if (!appState.subscriptionPlans) {
+    appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+  }
+  const matchingPlan = appState.subscriptionPlans.find(p => p.id === selectedPack || p.tier === selectedPack);
+  let purchasePrice = 5000;
+  let planTier: BadgeTier = "blue";
+  let planId = "";
+  let planName = "Niveau de Base (Basic)";
+
+  if (matchingPlan) {
+    purchasePrice = matchingPlan.initialPrice;
+    planTier = matchingPlan.tier;
+    planId = matchingPlan.id;
+    planName = matchingPlan.name;
+  } else {
+    if (selectedPack === "gold") {
+      purchasePrice = appState.settings.merchantGoldPrice || 15000;
+      planTier = "gold";
+      planName = "Niveau Motivation (Gold)";
+    } else if (selectedPack === "diamond") {
+      purchasePrice = appState.settings.merchantDiamondPrice || 35000;
+      planTier = "diamond";
+      planName = "Niveau Diamant (Diamond)";
+    } else {
+      purchasePrice = appState.settings.merchantPremiumPrice || 5000;
+      planTier = "blue";
+      planName = "Niveau de Base (Basic)";
+    }
+    const foundByTier = appState.subscriptionPlans.find(p => p.tier === planTier);
+    if (foundByTier) {
+      planId = foundByTier.id;
+      planName = foundByTier.name;
+    }
+  }
+
+  const regDate = user.createdAt ? new Date(user.createdAt) : new Date();
+  const currentDate = new Date();
+  const diffTime = Math.abs(currentDate.getTime() - regDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const within30Days = diffDays <= 30;
+
+  // Find country code abbreviation (e.g., Bénin -> BJ, Togo -> TG)
+  const countryData = ALL_COUNTRIES.find(
+    c => c.name.trim().toLowerCase() === (user.country || "").trim().toLowerCase()
+  );
+  const countryCode = countryData ? countryData.code.toUpperCase() : "BJ";
+
+  // Génération d'un numéro marchand unique de format 10 chiffres + code pays (ex: 1234567890BJ)
+  let generatedNumber = "";
+  let isUnique = false;
+  let attempts = 0;
+  while (!isUnique && attempts < 200) {
+    let digits = "";
+    for (let i = 0; i < 10; i++) {
+      digits += Math.floor(Math.random() * 10).toString();
+    }
+    const candidate = `${digits}${countryCode}`;
+    const duplicate = appState.users.some(u => u.merchantNumber === candidate);
+    if (!duplicate) {
+      generatedNumber = candidate;
+      isUnique = true;
+    }
+    attempts++;
+  }
+
+  if (!generatedNumber) {
+    let fallbackDigits = "";
+    for (let i = 0; i < 10; i++) {
+      fallbackDigits += Math.floor(Math.random() * 10).toString();
+    }
+    generatedNumber = `${fallbackDigits}${countryCode}`;
+  }
+
+  user.merchantNumber = generatedNumber;
+  user.merchantNumberPurchasedAt = currentDate.toISOString();
+  user.merchantPackType = (planTier === "diamond" ? "diamond" : planTier === "gold" ? "gold" : "premium");
+  // L'éligibilité de cet utilisateur à gagner des commissions à l'avenir dépend de s'il a acheté dans les 30 jours requis
+  user.merchantNumberEligible = within30Days;
+
+  // Create active user subscription entry
+  if (!appState.userSubscriptions) appState.userSubscriptions = [];
+  const durationDays = matchingPlan ? (matchingPlan.durationUnit === "years" ? matchingPlan.durationValue * 365 : matchingPlan.durationUnit === "months" ? matchingPlan.durationValue * 30 : matchingPlan.durationUnit === "weeks" ? matchingPlan.durationValue * 7 : matchingPlan.durationValue) : 30;
+  const expDate = new Date(currentDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+  const newSub: UserSubscription = {
+    id: "sub_" + Date.now(),
+    userId: user.id,
+    planId: planId || (matchingPlan ? matchingPlan.id : "plan_basic"),
+    planName: planName,
+    tier: planTier,
+    merchantNumber: generatedNumber,
+    startDate: currentDate.toISOString(),
+    expirationDate: expDate.toISOString(),
+    status: "active",
+    isAutoRenew: true,
+    createdAt: currentDate.toISOString()
+  };
+  appState.userSubscriptions.push(newSub);
+
+  const newTx: WalletTransaction = {
+    id: "tx_" + Date.now() + "_merchant",
+    userId: user.id,
+    type: "deposit",
+    amount: purchasePrice,
+    currency: user.currency || "XOF",
+    status: "completed",
+    method: paymentMethod || "Mobile Money",
+    details: `Achat du numéro marchand unique (${selectedPack.toUpperCase()}) : ${generatedNumber}`,
+    createdAt: currentDate.toISOString()
+  };
+  appState.transactions.unshift(newTx);
+
+  let commissionPaid = false;
+  let commissionAmount = 0;
+  let referrerUsername = "";
+
+  if (user.referredBy) {
+    const inviter = appState.users.find(u => u.id === user.referredBy || u.referralCode === user.referredBy);
+    if (inviter) {
+      referrerUsername = inviter.username;
+      
+      let referrerEligible = false;
+      if (inviter.merchantNumber && inviter.merchantNumberPurchasedAt && inviter.createdAt) {
+        const invRegDate = new Date(inviter.createdAt);
+        const invPurDate = new Date(inviter.merchantNumberPurchasedAt);
+        const invDiffTime = Math.abs(invPurDate.getTime() - invRegDate.getTime());
+        const invDiffDays = Math.ceil(invDiffTime / (1000 * 60 * 60 * 24));
+        if (invDiffDays <= 30) {
+          // Check that the limit of parrainages is not exceeded for their current merchant tier
+          const currentReferrals = appState.users.filter(u => u.referredBy === inviter.id).length;
+          const limit = getUserMaxReferrals(inviter);
+          if (currentReferrals <= limit) {
+            referrerEligible = true;
+          }
+        }
+      }
+
+      if (referrerEligible) {
+        commissionAmount = matchingPlan && matchingPlan.referralCommission !== undefined ? parseFloat(String(matchingPlan.referralCommission)) : parseFloat((purchasePrice * 0.50).toFixed(2));
+        inviter.wallet.available = parseFloat((inviter.wallet.available + commissionAmount).toFixed(2));
+        inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + commissionAmount).toFixed(2));
+        inviter.wallet.referralEarned = parseFloat((inviter.wallet.referralEarned + commissionAmount).toFixed(2));
+
+        const refTx: WalletTransaction = {
+          id: "tx_" + Date.now() + "_ref_comm",
+          userId: inviter.id,
+          type: "referral_bonus",
+          amount: commissionAmount,
+          currency: inviter.currency || "XOF",
+          status: "completed",
+          method: "Yaamaa Referral",
+          details: `Commission de parrainage (Achat numéro marchand par @${user.username})`,
+          createdAt: currentDate.toISOString()
+        };
+        appState.transactions.unshift(refTx);
+
+        const refNotif: SubscriptionNotification = {
+          id: "notif_comm_" + Date.now(),
+          userId: inviter.id,
+          title: "Gain de Parrainage 🎁",
+          message: `Vous venez de gagner ${commissionAmount} ${inviter.currency || 'XOF'} suite à l'abonnement de ${user.name || user.username} (@${user.username}).`,
+          type: "renewal",
+          createdAt: currentDate.toISOString(),
+          isRead: false
+        };
+        if (!appState.subscriptionNotifications) appState.subscriptionNotifications = [];
+        appState.subscriptionNotifications.unshift(refNotif);
+
+        commissionPaid = true;
+
+        createAuditLog(
+          inviter.id,
+          inviter.username,
+          inviter.role,
+          "Commission Parrainage",
+          `Commission de parrainage de ${commissionAmount} ${inviter.currency} reçue suite à l'achat du numéro marchand par @${user.username}`,
+          req
+        );
+      } else {
+        createAuditLog(
+          inviter.id,
+          inviter.username,
+          inviter.role,
+          "Commission Perdue",
+          `Commission perdue pour l'achat de @${user.username} car le parrain n'a pas activé son propre numéro marchand dans les 30 jours requis.`,
+          req
+        );
+      }
+    }
+  }
+
+  saveState(appState);
+  createAuditLog(
+    user.id,
+    user.username,
+    user.role,
+    "Achat Numéro Marchand",
+    `Numéro marchand ${generatedNumber} acheté avec succès par @${user.username}`,
+    req
+  );
+
+  res.json({
+    success: true,
+    user,
+    merchantNumber: generatedNumber,
+    within30Days,
+    commissionPaid,
+    commissionAmount,
+    referrerUsername
+  });
+});
+
 // Update Profile Custom Props
 app.put("/api/users/:id", (req, res) => {
   const { id } = req.params;
   const { 
     is2faEnabled, isSuspended, wallet, level, xp, country, currency, role,
-    username, name, email, avatar, phone, address, password
+    username, name, email, avatar, phone, address, password, language
   } = req.body;
   
   const user = appState.users.find(u => u.id === id);
@@ -786,6 +1598,7 @@ app.put("/api/users/:id", (req, res) => {
   if (level !== undefined) user.level = level;
   if (xp !== undefined) user.xp = xp;
   if (role !== undefined) user.role = role;
+  if (language !== undefined) user.language = language;
   
   // New profile fields
   if (name !== undefined) user.name = name.trim();
@@ -890,7 +1703,7 @@ app.post("/api/campaigns", (req, res) => {
     amount: totalToPay,
     currency: advertiser.currency,
     status: "completed",
-    method: "Taskora Wallet",
+    method: "Yaamaa Wallet",
     details: `Financement de la campagne "${title}" (+frais ${commission})`,
     createdAt: new Date().toISOString()
   };
@@ -941,9 +1754,15 @@ app.post("/api/submissions", async (req, res) => {
   if (!camp) return res.status(404).json({ error: "Campagne introuvable." });
 
   // Check if participant already submitted proof
-  const hasSubmitted = appState.submissions.some(s => s.campaignId === campaignId && s.participantId === participantId);
-  if (hasSubmitted) {
-    return res.status(400).json({ error: "Vous avez déjà soumis une preuve pour cette mission." });
+  const existingSubIndex = appState.submissions.findIndex(s => s.campaignId === campaignId && s.participantId === participantId);
+  let isUpdatingDisputed = false;
+  if (existingSubIndex !== -1) {
+    const existingSub = appState.submissions[existingSubIndex];
+    if (existingSub.status === "disputed") {
+      isUpdatingDisputed = true;
+    } else {
+      return res.status(400).json({ error: "Vous avez déjà soumis une preuve pour cette mission." });
+    }
   }
 
   // Pre-calculate fraud risk simulation
@@ -954,7 +1773,7 @@ app.post("/api/submissions", async (req, res) => {
 
   if (ai) {
     try {
-      const prompt = `Vous êtes Taskora AI, l'IA de filtrage anti-fraude d'une plateforme de micro-travaux.
+      const prompt = `Vous êtes Yaamaa AI, l'IA de filtrage anti-fraude d'une plateforme de micro-travaux.
 Analysez cette soumission de preuve pour la campagne suivante:
 Titre de la campagne: "${camp.title}"
 Énoncé / Consignes: "${camp.description}"
@@ -981,11 +1800,11 @@ Retournez STRICTEMENT un objet au format JSON doté des clés:
       if (aiResponse && aiResponse.text) {
         const result = JSON.parse(aiResponse.text.trim());
         fraudProbability = Number(result.probability) || 10;
-        aiReport = result.feedback || "Audité par Taskora AI.";
+        aiReport = result.feedback || "Audité par Yaamaa AI.";
         autoCheckedByAI = true;
       }
     } catch (e) {
-      console.error("Taskora AI audit exception:", e);
+      console.error("Yaamaa AI audit exception:", e);
     }
   } else {
     // If no AI key, simulate standard pattern scans
@@ -997,6 +1816,77 @@ Retournez STRICTEMENT un objet au format JSON doté des clés:
   }
 
   const status = (fraudProbability < 30) ? "approved" : "pending";
+
+  if (isUpdatingDisputed) {
+    const sub = appState.submissions[existingSubIndex];
+    sub.proofText = proofText;
+    sub.proofLink = proofLink;
+    sub.proofFileUrl = proofFileUrl;
+    sub.status = status;
+    sub.autoCheckedByAI = autoCheckedByAI;
+    sub.fraudProbability = fraudProbability;
+    sub.aiReport = aiReport;
+    sub.createdAt = new Date().toISOString();
+
+    if (status === "approved") {
+      // Transfer from pending to available
+      user.wallet.pending = Math.max(0, parseFloat((user.wallet.pending - sub.campaignReward).toFixed(2)));
+      user.wallet.available = parseFloat((user.wallet.available + sub.campaignReward).toFixed(2));
+      user.wallet.totalEarned = parseFloat((user.wallet.totalEarned + sub.campaignReward).toFixed(2));
+      
+      user.xp += 15;
+      user.level = Math.floor(user.xp / 100) + 1;
+
+      camp.completedCount += 1;
+      if (camp.completedCount >= camp.participantsCount) {
+        camp.status = "completed";
+      }
+
+      const newTx: WalletTransaction = {
+        id: "tx_" + Date.now() + "_earn",
+        userId: participantId,
+        type: "earn",
+        amount: camp.rewardPerUser,
+        currency: user.currency,
+        status: "completed",
+        method: "Yaamaa Balance",
+        details: `Gains pour la mission "${camp.title}" (Correction approuvée automatiquement)`,
+        createdAt: new Date().toISOString()
+      };
+      appState.transactions.unshift(newTx);
+      appState.settings.payoutsDistributed += camp.rewardPerUser;
+
+      // Referral Commission on Mission Completion (10%)
+      if (user.referredBy) {
+        const inviter = appState.users.find(u => u.id === user.referredBy || u.referralCode === user.referredBy);
+        if (inviter && inviter.merchantNumber) {
+          const refComm = parseFloat((camp.rewardPerUser * 0.10).toFixed(4)) || 0.01;
+          inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
+          inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
+          inviter.wallet.referralEarned = parseFloat((inviter.wallet.referralEarned + refComm).toFixed(2));
+
+          const refTx: WalletTransaction = {
+            id: "tx_" + Date.now() + "_ref_comm",
+            userId: inviter.id,
+            type: "referral_bonus",
+            amount: refComm,
+            currency: inviter.currency,
+            status: "completed",
+            method: "Yaamaa Referral",
+            details: `Commission Parrainage (10%) - Mission de @${user.username} : "${camp.title}"`,
+            createdAt: new Date().toISOString()
+          };
+          appState.transactions.unshift(refTx);
+        }
+      }
+    } else {
+      // Remains in pending, and was already counted in pending previously, so no duplicate addition
+    }
+
+    saveState(appState);
+    createAuditLog(participantId, user.username, "participant", "Correction Preuve", `Correction soumise pour "${camp.title}" (Aura-AI: ${status})`, req);
+    return res.json({ submission: sub, user });
+  }
 
   const newSubmission: TaskSubmission = {
     id: "sub_" + Date.now(),
@@ -1045,7 +1935,7 @@ Retournez STRICTEMENT un objet au format JSON doté des clés:
       amount: camp.rewardPerUser,
       currency: user.currency,
       status: "completed",
-      method: "Taskora Balance",
+      method: "Yaamaa Balance",
       details: `Gains pour la mission "${camp.title}" (Approuvée automatiquement)`,
       createdAt: new Date().toISOString()
     };
@@ -1055,7 +1945,7 @@ Retournez STRICTEMENT un objet au format JSON doté des clés:
     // Referral Commission on Mission Completion (10%)
     if (user.referredBy) {
       const inviter = appState.users.find(u => u.id === user.referredBy || u.referralCode === user.referredBy);
-      if (inviter) {
+      if (inviter && inviter.merchantNumber) {
         const refComm = parseFloat((camp.rewardPerUser * 0.10).toFixed(4)) || 0.01;
         inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
         inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
@@ -1068,7 +1958,7 @@ Retournez STRICTEMENT un objet au format JSON doté des clés:
           amount: refComm,
           currency: inviter.currency,
           status: "completed",
-          method: "Taskora Referral",
+          method: "Yaamaa Referral",
           details: `Commission Parrainage (10%) - Mission de @${user.username} : "${camp.title}"`,
           createdAt: new Date().toISOString()
         };
@@ -1108,7 +1998,7 @@ app.post("/api/admin/submissions/review", (req, res) => {
 
   const previousStatus = sub.status;
   sub.status = status;
-  sub.adminFeedback = feedback || `Vérifié et validé par l'équipe administrative de Taskora.`;
+  sub.adminFeedback = feedback || `Vérifié et validé par l'équipe administrative de Yaamaa.`;
 
   if (status === "approved" && participant) {
     // Transfer from pending to available
@@ -1144,7 +2034,7 @@ app.post("/api/admin/submissions/review", (req, res) => {
     // Referral Commission on Mission Completion (10%)
     if (participant.referredBy) {
       const inviter = appState.users.find(u => u.id === participant.referredBy || u.referralCode === participant.referredBy);
-      if (inviter) {
+      if (inviter && inviter.merchantNumber) {
         const refComm = parseFloat((sub.campaignReward * 0.10).toFixed(4)) || 0.01;
         inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
         inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
@@ -1157,7 +2047,7 @@ app.post("/api/admin/submissions/review", (req, res) => {
           amount: refComm,
           currency: inviter.currency,
           status: "completed",
-          method: "Taskora Referral",
+          method: "Yaamaa Referral",
           details: `Commission Parrainage (10%) - Mission de @${participant.username} : "${sub.campaignTitle}"`,
           createdAt: new Date().toISOString()
         };
@@ -1196,6 +2086,10 @@ app.post("/api/wallet/withdraw", (req, res) => {
 
   const user = appState.users.find(u => u.id === userId);
   if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  if (!user.merchantNumber) {
+    return res.status(403).json({ error: "Retrait bloqué. Vous devez obligatoirement posséder un Numéro Marchand actif pour effectuer des retraits et percevoir vos commissions." });
+  }
 
   const activeCurrencies = appState.settings.suspendedCurrencies;
   if (activeCurrencies.includes(user.currency.toUpperCase())) {
@@ -1980,8 +2874,119 @@ app.post("/api/social/messages/mark-read", (req, res) => {
   res.json({ success: true });
 });
 
+// Typing state store: records who is currently typing
+const typingStateStore: Record<string, { otherId?: string; communityId?: string; timestamp: number }> = {};
+
+// Post typing status
+app.post("/api/social/typing", (req, res) => {
+  const { userId, otherId, communityId, isTyping } = req.body;
+  if (!userId) return res.status(400).json({ error: "Missing userId" });
+  if (isTyping) {
+    typingStateStore[userId] = { otherId, communityId, timestamp: Date.now() };
+  } else {
+    delete typingStateStore[userId];
+  }
+  res.json({ success: true });
+});
+
+// Get typing status
+app.get("/api/social/typing", (req, res) => {
+  const { userId, otherId, communityId } = req.query;
+  const now = Date.now();
+  // Clean up stale typing notifications (older than 4 seconds)
+  Object.keys(typingStateStore).forEach(uid => {
+    if (now - typingStateStore[uid].timestamp > 4000) {
+      delete typingStateStore[uid];
+    }
+  });
+
+  const typers = Object.keys(typingStateStore).filter(uid => {
+    if (uid === userId) return false;
+    const state = typingStateStore[uid];
+    if (otherId && state.otherId === userId && uid === otherId) {
+      return true;
+    }
+    if (communityId && state.communityId === communityId) {
+      return true;
+    }
+    return false;
+  });
+
+  const typerUsers = typers.map(uid => {
+    const u = appState.users.find(usr => usr.id === uid);
+    return u ? { id: u.id, name: u.name, username: u.username } : null;
+  }).filter(Boolean);
+
+  res.json({ typers: typerUsers });
+});
+
+// Helper to translate text using Gemini (or fallback)
+async function translateText(text: string, fromLang: string, toLang: string): Promise<string> {
+  if (!text || text.trim() === "") return "";
+  if (fromLang === toLang) return text;
+  
+  if (ai) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `You are a professional real-time chat translator. Translate the following message from ${fromLang === "fr" ? "French" : "English"} to ${toLang === "fr" ? "French" : "English"}. Do not add any introduction, explanations, or quotes. Output ONLY the raw translated text.\n\nMessage: "${text}"`,
+      });
+      const translated = response.text?.trim() || "";
+      if (translated.startsWith('"') && translated.endsWith('"')) {
+        return translated.substring(1, translated.length - 1);
+      }
+      return translated;
+    } catch (err) {
+      console.error("Gemini translation error, using basic fallback:", err);
+    }
+  }
+
+  // Fallback translation
+  const basicTranslations: Record<string, Record<string, string>> = {
+    fr: {
+      "hello": "bonjour",
+      "hi": "salut",
+      "how are you?": "comment ça va ?",
+      "how are you": "comment ça va",
+      "good morning": "bonjour",
+      "good night": "bonne nuit",
+      "thank you": "merci",
+      "thanks": "merci",
+      "yes": "oui",
+      "no": "non",
+      "please": "s'il vous plaît",
+      "goodbye": "au revoir",
+      "bye": "salut",
+      "ok": "d'accord",
+      "i love you": "je t'aime"
+    },
+    en: {
+      "bonjour": "hello",
+      "salut": "hi",
+      "comment ça va ?": "how are you?",
+      "comment ça va": "how are you",
+      "bonne nuit": "good night",
+      "merci": "thank you",
+      "oui": "yes",
+      "non": "no",
+      "s'il vous plaît": "please",
+      "au revoir": "goodbye",
+      "d'accord": "ok",
+      "je t'aime": "i love you"
+    }
+  };
+
+  const lowerText = text.toLowerCase().trim();
+  const dict = basicTranslations[toLang];
+  if (dict && dict[lowerText]) {
+    return dict[lowerText];
+  }
+
+  return text;
+}
+
 // Send a chat message
-app.post("/api/social/messages", (req, res) => {
+app.post("/api/social/messages", async (req, res) => {
   const { 
     senderId, 
     text, 
@@ -2000,7 +3005,10 @@ app.post("/api/social/messages", (req, res) => {
     customOfferPrice,
     customOfferDescription,
     customOfferStatus,
-    customOfferOrderId
+    customOfferOrderId,
+    replyToId,
+    replyToText,
+    replyToSenderUsername
   } = req.body;
 
   if (!senderId) {
@@ -2010,6 +3018,29 @@ app.post("/api/social/messages", (req, res) => {
   const sender = appState.users.find(u => u.id === senderId);
   if (!sender) {
     return res.status(404).json({ error: "Sender not found." });
+  }
+
+  // Automatic translation logic
+  let translationText: string | undefined = undefined;
+  let translatedFrom: string | undefined = undefined;
+  let translatedTo: string | undefined = undefined;
+
+  if (recipientId && text && text.trim() !== "") {
+    const recipient = appState.users.find(u => u.id === recipientId);
+    if (recipient) {
+      const senderLang = sender.language || "fr";
+      const recipientLang = recipient.language || "fr";
+      
+      if (senderLang !== recipientLang) {
+        try {
+          translationText = await translateText(text, senderLang, recipientLang);
+          translatedFrom = senderLang;
+          translatedTo = recipientLang;
+        } catch (e) {
+          console.error("Async translation failed in messages endpoint:", e);
+        }
+      }
+    }
   }
 
   const newMessage: SocialMessage = {
@@ -2035,15 +3066,630 @@ app.post("/api/social/messages", (req, res) => {
     customOfferDescription: customOfferDescription || undefined,
     customOfferStatus: customOfferStatus || undefined,
     customOfferOrderId: customOfferOrderId || undefined,
-    readBy: [senderId]
+    readBy: [senderId],
+    replyToId: replyToId || undefined,
+    replyToText: replyToText || undefined,
+    replyToSenderUsername: replyToSenderUsername || undefined,
+    reactions: {},
+    translation: translationText,
+    translatedFrom,
+    translatedTo
   };
 
   if (!appState.socialMessages) appState.socialMessages = [];
   appState.socialMessages.push(newMessage);
   saveState(appState);
 
+  // Trigger Yaamaa AI Agent if recipient is offline or unavailable
+  if (recipientId) {
+    setTimeout(() => {
+      triggerYaamaaAiAgent(senderId, recipientId, newMessage).catch(err => {
+        console.error("Yaamaa AI Agent background trigger error:", err);
+      });
+    }, 1500);
+  }
+
   res.json(newMessage);
 });
+
+// Buy Gift Points
+app.post("/api/gifts/buy-points", (req, res) => {
+  const { userId, packType } = req.body;
+  if (!userId || !packType) {
+    return res.status(400).json({ error: "userId and packType are required." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur non trouvé." });
+  }
+
+  let price = 0;
+  let points = 0;
+  const packs = appState.settings?.rechargePacks || [
+    { id: "pack_100", pieces: 100, price: 1.0 },
+    { id: "pack_200", pieces: 200, price: 2.0 },
+    { id: "pack_500", pieces: 500, price: 5.0 },
+    { id: "pack_1000", pieces: 1000, price: 10.0 },
+    { id: "pack_5000", pieces: 5000, price: 50.0 },
+    { id: "pack_10000", pieces: 10000, price: 100.0 }
+  ];
+
+  const matchedPack = packs.find(p => p.id === packType);
+  if (matchedPack) {
+    price = matchedPack.price;
+    points = matchedPack.pieces;
+  } else if (packType === "small") {
+    price = 1.0;
+    points = 100;
+  } else if (packType === "medium") {
+    price = 5.0;
+    points = 500;
+  } else if (packType === "large") {
+    price = 10.0;
+    points = 1200;
+  } else {
+    return res.status(400).json({ error: "Pack de recharge invalide." });
+  }
+
+  // Deduct from wallet if possible, otherwise allow free buy in Test Mode if low balance
+  if (!user.wallet) {
+    user.wallet = { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 };
+  }
+
+  if (user.wallet.available >= price) {
+    user.wallet.available -= price;
+  } else {
+    // Simulated mock transaction in test mode
+    console.log(`User ${user.username} bought points via Test Card Simulator (Low wallet balance)`);
+  }
+
+  if (user.giftPoints === undefined) user.giftPoints = 0;
+  user.giftPoints += points;
+
+  // Log transaction
+  const transactionId = "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  const newTx = {
+    id: transactionId,
+    userId: user.id,
+    type: "deposit" as any,
+    amount: price,
+    currency: user.currency || "EUR",
+    status: "completed" as any,
+    method: "Achat Points Cadeaux",
+    details: `Achat de ${points} points pour envoyer des cadeaux virtuels`,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!appState.transactions) appState.transactions = [];
+  appState.transactions.push(newTx);
+
+  saveState(appState);
+  res.json({
+    success: true,
+    pointsAdded: points,
+    newPointsBalance: user.giftPoints,
+    newWalletBalance: user.wallet.available
+  });
+});
+
+// Send a virtual gift to a friend
+app.post("/api/gifts/send", (req, res) => {
+  const { senderId, recipientId, giftId } = req.body;
+  if (!senderId || !recipientId || !giftId) {
+    return res.status(400).json({ error: "Champs requis manquants" });
+  }
+
+  const sender = appState.users.find(u => u.id === senderId);
+  const recipient = appState.users.find(u => u.id === recipientId);
+  if (!sender || !recipient) {
+    return res.status(404).json({ error: "Expéditeur ou destinataire non trouvé" });
+  }
+
+  const gifts = appState.settings.virtualGifts || DEFAULT_SETTINGS.virtualGifts || [];
+  const gift = gifts.find(g => g.id === giftId);
+  if (!gift) {
+    return res.status(404).json({ error: "Cadeau non trouvé" });
+  }
+
+  if (sender.giftPoints === undefined) sender.giftPoints = 1000;
+  if (sender.giftPoints < gift.pointsPrice) {
+    return res.status(400).json({ error: "Points insuffisants pour envoyer ce cadeau. Veuillez en acheter." });
+  }
+
+  // Deduct points
+  sender.giftPoints -= gift.pointsPrice;
+
+  // Add points to recipient using pointsValue (if defined) or pointsPrice as fallback
+  if (recipient.giftPointsEarned === undefined) recipient.giftPointsEarned = 0;
+  const earnedVal = gift.pointsValue !== undefined ? gift.pointsValue : gift.pointsPrice;
+  recipient.giftPointsEarned += earnedVal;
+
+  // Create message
+  const newMessage: SocialMessage = {
+    id: "msg_gift_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+    senderId,
+    senderUsername: sender.username,
+    senderAvatar: sender.avatar,
+    text: `🎁 Cadeau virtuel envoyé : ${gift.emoji} ${gift.name}`,
+    createdAt: new Date().toISOString(),
+    recipientId,
+    isGift: true,
+    giftId,
+    giftName: gift.name,
+    giftPoints: gift.pointsPrice,
+    giftImage: gift.emoji,
+    readBy: [senderId],
+    reactions: {}
+  };
+
+  if (!appState.socialMessages) appState.socialMessages = [];
+  appState.socialMessages.push(newMessage);
+  saveState(appState);
+
+  res.json({
+    success: true,
+    gift,
+    message: newMessage,
+    senderPoints: sender.giftPoints,
+    recipientPointsEarned: recipient.giftPointsEarned
+  });
+});
+
+// Convert Earned Points back into Wallet cash
+app.post("/api/gifts/convert-points", (req, res) => {
+  const { userId, pointsToConvert } = req.body;
+  if (!userId || !pointsToConvert) {
+    return res.status(400).json({ error: "Champs requis manquants" });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur non trouvé" });
+  }
+
+  const pts = parseInt(pointsToConvert);
+  if (user.giftPointsEarned === undefined) user.giftPointsEarned = 0;
+  if (user.giftPointsEarned < pts) {
+    return res.status(400).json({ error: "Points gagnés insuffisants" });
+  }
+
+  const rate = appState.settings.giftPointsConversionRate || 0.01;
+  const convertedAmount = pts * rate;
+
+  // Deduct points
+  user.giftPointsEarned -= pts;
+
+  // Add cash
+  if (!user.wallet) {
+    user.wallet = { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 };
+  }
+  user.wallet.available += convertedAmount;
+  user.wallet.totalEarned += convertedAmount;
+
+  // Log transaction
+  const transactionId = "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  const newTx = {
+    id: transactionId,
+    userId: user.id,
+    type: "earn" as any,
+    amount: convertedAmount,
+    currency: user.currency || "EUR",
+    status: "completed" as any,
+    method: "Conversion Cadeaux",
+    details: `Conversion de ${pts} points cadeaux reçus`,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!appState.transactions) appState.transactions = [];
+  appState.transactions.push(newTx);
+  
+  saveState(appState);
+
+  res.json({
+    success: true,
+    convertedAmount,
+    newPointsEarned: user.giftPointsEarned,
+    newWalletBalance: user.wallet.available
+  });
+});
+
+// React to a message with an emoji
+app.post("/api/social/messages/:id/react", (req, res) => {
+  const { id } = req.params;
+  const { emoji, userId } = req.body;
+  
+  if (!appState.socialMessages) appState.socialMessages = [];
+  const msg = appState.socialMessages.find(m => m.id === id);
+  if (!msg) {
+    return res.status(404).json({ error: "Message not found." });
+  }
+
+  if (!msg.reactions) {
+    msg.reactions = {};
+  }
+
+  const userList = msg.reactions[emoji] || [];
+  if (userList.includes(userId)) {
+    // Toggle reaction off
+    msg.reactions[emoji] = userList.filter(uid => uid !== userId);
+    if (msg.reactions[emoji].length === 0) {
+      delete msg.reactions[emoji];
+    }
+  } else {
+    // Add reaction
+    msg.reactions[emoji] = [...userList, userId];
+  }
+
+  saveState(appState);
+  res.json(msg);
+});
+
+// Delete a message (WhatsApp style - we remove it, or can replace with deleted marker)
+app.delete("/api/social/messages/:id", (req, res) => {
+  const { id } = req.params;
+  
+  if (!appState.socialMessages) appState.socialMessages = [];
+  const msgIndex = appState.socialMessages.findIndex(m => m.id === id);
+  if (msgIndex === -1) {
+    return res.status(404).json({ error: "Message not found." });
+  }
+
+  // We can delete it from the list
+  appState.socialMessages.splice(msgIndex, 1);
+  saveState(appState);
+
+  res.json({ success: true, id });
+});
+
+// Helper to check admin permission
+function checkAdminPermission(userId: string): boolean {
+  if (!userId) return false;
+  const user = appState.users.find(u => u.id === userId);
+  return user ? (user.role === "admin" || user.role === "founder") : false;
+}
+
+// Target evaluation function for broadcast campaigns
+function getTargetUsersForBroadcast(targeting: any): any[] {
+  let list = appState.users || [];
+  
+  // Filter out admins/founders to avoid spamming admin accounts unless targeted
+  list = list.filter(u => u.role !== "admin" && u.role !== "founder");
+
+  const { targetGroup, countries, region, city } = targeting;
+
+  if (targetGroup === "all") {
+    return list;
+  }
+
+  if (targetGroup === "countries" && Array.isArray(countries) && countries.length > 0) {
+    return list.filter(u => countries.includes(u.country));
+  }
+
+  if (targetGroup === "region_city") {
+    return list.filter(u => {
+      const addressLower = (u.address || "").toLowerCase();
+      const matchRegion = region ? addressLower.includes(region.toLowerCase()) : true;
+      const matchCity = city ? addressLower.includes(city.toLowerCase()) : true;
+      return matchRegion && matchCity;
+    });
+  }
+
+  if (targetGroup === "premium") {
+    return list.filter(u => !!u.merchantNumber);
+  }
+
+  if (targetGroup === "free") {
+    return list.filter(u => !u.merchantNumber);
+  }
+
+  if (targetGroup === "shop_owners") {
+    const shopOwners = new Set((appState.shops || []).map(s => s.ownerId));
+    return list.filter(u => shopOwners.has(u.id));
+  }
+
+  if (targetGroup === "suppliers") {
+    const physSellers = new Set((appState.products || []).filter(p => p.category === "physical").map(p => p.ownerId));
+    return list.filter(u => physSellers.has(u.id) || (u.bio || "").toLowerCase().includes("fournisseur") || (u.name || "").toLowerCase().includes("fournisseur"));
+  }
+
+  if (targetGroup === "delivery") {
+    return list.filter(u => (u.bio || "").toLowerCase().includes("livreur") || (u.username || "").toLowerCase().includes("livre") || (u.name || "").toLowerCase().includes("livreur"));
+  }
+
+  if (targetGroup === "creators") {
+    return list.filter(u => u.level >= 10 || (u.bio || "").toLowerCase().includes("créateur") || (u.bio || "").toLowerCase().includes("creator"));
+  }
+
+  if (targetGroup === "verified") {
+    return list.filter(u => u.is2faEnabled || !!u.merchantNumber || u.level >= 5);
+  }
+
+  if (targetGroup === "new") {
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return list.filter(u => u.createdAt ? new Date(u.createdAt).getTime() > oneWeekAgo : false);
+  }
+
+  if (targetGroup === "active") {
+    const activeUserIds = new Set([
+      ...(appState.transactions || []).map(t => t.userId),
+      ...(appState.submissions || []).map(s => s.participantId)
+    ]);
+    return list.filter(u => activeUserIds.has(u.id));
+  }
+
+  if (targetGroup === "inactive") {
+    const activeUserIds = new Set([
+      ...(appState.transactions || []).map(t => t.userId),
+      ...(appState.submissions || []).map(s => s.participantId)
+    ]);
+    return list.filter(u => !activeUserIds.has(u.id));
+  }
+
+  return list;
+}
+
+// Function to broadcast messages from admin official
+function executeBroadcastCampaign(campaign: any, req: any) {
+  const targetUsers = getTargetUsersForBroadcast(campaign.targeting);
+  
+  if (!appState.socialMessages) appState.socialMessages = [];
+
+  targetUsers.forEach(user => {
+    const autoName = appState.settings.autoSenderName || "Yama Assistance";
+    const autoAvatar = appState.settings.autoSenderAvatar || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop";
+    
+    const newMessage = {
+      id: "msg_broadcast_" + campaign.id + "_" + user.id + "_" + Date.now(),
+      senderId: "user_admin",
+      senderUsername: autoName,
+      senderAvatar: autoAvatar,
+      text: `📢 MESSAGE OFFICIEL : ${campaign.title}\n\n${campaign.text}`,
+      createdAt: new Date().toISOString(),
+      recipientId: user.id,
+      readBy: [],
+      reactions: {},
+      isAdminOfficial: true,
+      adminCampaignId: campaign.id,
+      imageUrl: campaign.mediaType === "image" ? campaign.mediaUrl : undefined,
+      voiceUrl: campaign.mediaType === "video" ? campaign.mediaUrl : undefined,
+      documentUrl: (campaign.mediaType === "document" || campaign.mediaType === "link") ? campaign.mediaUrl : undefined,
+      documentName: campaign.mediaName || undefined,
+      documentType: campaign.mediaType === "document" ? "pdf" : undefined as any
+    };
+
+    appState.socialMessages!.push(newMessage);
+  });
+
+  campaign.status = "sent";
+  campaign.sentAt = new Date().toISOString();
+  campaign.recipientCount = targetUsers.length;
+  campaign.distributedCount = targetUsers.length;
+
+  const adminUser = appState.users.find(u => u.id === campaign.senderId) || { username: campaign.senderUsername, role: "admin" };
+  createAuditLog(
+    campaign.senderId,
+    adminUser.username,
+    adminUser.role as any,
+    "Diffusion Campagne Admin",
+    `Campagne de diffusion "${campaign.title}" envoyée à ${targetUsers.length} utilisateurs (${campaign.targeting.targetGroup}).`,
+    req
+  );
+
+  saveState(appState);
+}
+
+// GET all broadcast campaigns
+app.get("/api/broadcast-campaigns", (req, res) => {
+  if (!appState.broadcastCampaigns) appState.broadcastCampaigns = [];
+
+  const msgs = appState.socialMessages || [];
+  const updatedCampaigns = appState.broadcastCampaigns.map(camp => {
+    if (camp.status === "sent") {
+      const campaignMsgs = msgs.filter(m => m.adminCampaignId === camp.id);
+      camp.distributedCount = campaignMsgs.length;
+      camp.readCount = campaignMsgs.filter(m => m.readBy && m.readBy.includes(m.recipientId)).length;
+    }
+    return camp;
+  });
+
+  res.json(updatedCampaigns);
+});
+
+// POST to create / save draft or schedule campaign
+app.post("/api/broadcast-campaigns", (req, res) => {
+  const { 
+    id, title, text, mediaUrl, mediaType, mediaName,
+    scheduleType, scheduledAt, status, targeting, senderId 
+  } = req.body;
+
+  if (!senderId || !checkAdminPermission(senderId)) {
+    return res.status(403).json({ error: "Autorisation administrative requise." });
+  }
+
+  if (!title || !text) {
+    return res.status(400).json({ error: "Le titre et le contenu du message sont obligatoires." });
+  }
+
+  const sender = appState.users.find(u => u.id === senderId);
+  if (!sender) {
+    return res.status(404).json({ error: "Administrateur introuvable." });
+  }
+
+  if (!appState.broadcastCampaigns) appState.broadcastCampaigns = [];
+
+  let campaign = appState.broadcastCampaigns.find(c => c.id === id);
+
+  if (campaign) {
+    if (campaign.status === "sent") {
+      return res.status(400).json({ error: "Impossible de modifier une campagne déjà envoyée." });
+    }
+    campaign.title = title;
+    campaign.text = text;
+    campaign.mediaUrl = mediaUrl;
+    campaign.mediaType = mediaType;
+    campaign.mediaName = mediaName;
+    campaign.scheduleType = scheduleType;
+    campaign.scheduledAt = scheduledAt;
+    campaign.status = status;
+    campaign.targeting = targeting;
+    campaign.senderId = senderId;
+    campaign.senderUsername = sender.username;
+    campaign.senderAvatar = sender.avatar;
+  } else {
+    campaign = {
+      id: id || "camp_bc_" + Date.now(),
+      title,
+      text,
+      mediaUrl,
+      mediaType,
+      mediaName,
+      scheduleType,
+      scheduledAt,
+      status: status || "draft",
+      targeting,
+      senderId,
+      senderUsername: sender.username,
+      senderAvatar: sender.avatar,
+      createdAt: new Date().toISOString(),
+      recipientCount: 0,
+      distributedCount: 0,
+      readCount: 0
+    };
+    appState.broadcastCampaigns.push(campaign);
+  }
+
+  const targets = getTargetUsersForBroadcast(campaign.targeting);
+  campaign.recipientCount = targets.length;
+
+  if (campaign.status === "sent") {
+    executeBroadcastCampaign(campaign, req);
+  } else {
+    createAuditLog(
+      senderId,
+      sender.username,
+      sender.role as any,
+      campaign.status === "draft" ? "Enregistrement Brouillon Message" : "Planification Message Admin",
+      `Campagne de diffusion "${campaign.title}" enregistrée en statut ${campaign.status} (cible: ${campaign.targeting.targetGroup}, destinataires potentiels: ${targets.length}).`,
+      req
+    );
+  }
+
+  saveState(appState);
+  res.json(campaign);
+});
+
+// POST to immediately send a saved campaign
+app.post("/api/broadcast-campaigns/:id/send", (req, res) => {
+  const { id } = req.params;
+  const { operatorId } = req.body;
+
+  if (!operatorId || !checkAdminPermission(operatorId)) {
+    return res.status(403).json({ error: "Autorisation administrative requise." });
+  }
+
+  if (!appState.broadcastCampaigns) appState.broadcastCampaigns = [];
+  const campaign = appState.broadcastCampaigns.find(c => c.id === id);
+  if (!campaign) {
+    return res.status(404).json({ error: "Campagne introuvable." });
+  }
+
+  if (campaign.status === "sent") {
+    return res.status(400).json({ error: "Cette campagne a déjà été envoyée." });
+  }
+
+  executeBroadcastCampaign(campaign, req);
+  res.json(campaign);
+});
+
+// DELETE a campaign
+app.delete("/api/broadcast-campaigns/:id", (req, res) => {
+  const { id } = req.params;
+  const { operatorId } = req.query as { operatorId?: string };
+
+  if (!operatorId || !checkAdminPermission(operatorId)) {
+    return res.status(403).json({ error: "Autorisation administrative requise." });
+  }
+
+  if (!appState.broadcastCampaigns) appState.broadcastCampaigns = [];
+  const index = appState.broadcastCampaigns.findIndex(c => c.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Campagne introuvable." });
+  }
+
+  const campaign = appState.broadcastCampaigns[index];
+  if (campaign.status === "sent") {
+    return res.status(400).json({ error: "Impossible de supprimer une campagne déjà envoyée." });
+  }
+
+  appState.broadcastCampaigns.splice(index, 1);
+  
+  const adminUser = appState.users.find(u => u.id === operatorId) || { username: "Admin", role: "admin" };
+  createAuditLog(
+    operatorId,
+    adminUser.username,
+    adminUser.role as any,
+    "Suppression Campagne Admin",
+    `Campagne de diffusion "${campaign.title}" supprimée.`,
+    req
+  );
+
+  saveState(appState);
+  res.json({ success: true, id });
+});
+
+// POST to toggle read state of a single message manually
+app.post("/api/social/messages/:id/toggle-read", (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  if (!appState.socialMessages) appState.socialMessages = [];
+  const msg = appState.socialMessages.find(m => m.id === id);
+  if (!msg) {
+    return res.status(404).json({ error: "Message non trouvé." });
+  }
+
+  if (!msg.readBy) msg.readBy = [];
+  const index = msg.readBy.indexOf(userId);
+  if (index > -1) {
+    msg.readBy.splice(index, 1);
+  } else {
+    msg.readBy.push(userId);
+  }
+
+  saveState(appState);
+  res.json({ success: true, readBy: msg.readBy });
+});
+
+// Interval scheduler checking for scheduled broadcast campaigns to send them automatically
+setInterval(() => {
+  try {
+    if (appState && appState.broadcastCampaigns) {
+      const now = new Date();
+      let stateChanged = false;
+      appState.broadcastCampaigns.forEach((campaign: any) => {
+        if (campaign.status === "scheduled" && campaign.scheduledAt) {
+          const schedTime = new Date(campaign.scheduledAt);
+          if (schedTime <= now) {
+            const mockReq = { ip: "127.0.0.1" } as any;
+            executeBroadcastCampaign(campaign, mockReq);
+            stateChanged = true;
+            console.log(`[Scheduler] Automatically sent scheduled campaign: "${campaign.title}"`);
+          }
+        }
+      });
+      if (stateChanged) {
+        saveState(appState);
+      }
+    }
+  } catch (err) {
+    console.error("Error in background scheduled broadcast campaigns interval:", err);
+  }
+}, 20000); // Check every 20 seconds
 
 // Action on custom offer inside chat
 app.post("/api/social/messages/:id/offer-action", (req, res) => {
@@ -2078,7 +3724,7 @@ app.post("/api/social/messages/:id/offer-action", (req, res) => {
     }
 
     // Pay with Wallet or card
-    if (paymentMethod === "Wallet Taskora") {
+    if (paymentMethod === "Wallet Yaamaa" || paymentMethod === "Wallet Yaamaa") {
       if (buyer.wallet.available < price) {
         return res.status(400).json({ error: "Solde Wallet insuffisant." });
       }
@@ -2112,7 +3758,7 @@ app.post("/api/social/messages/:id/offer-action", (req, res) => {
       shippingAddress: shippingAddress || "Livraison de service par Discussion Chat",
       phoneNumber: phoneNumber || buyer.phone || "",
       email: email || buyer.email || "",
-      paymentMethod: paymentMethod || "Wallet Taskora",
+      paymentMethod: paymentMethod || "Wallet Yaamaa",
       status: "paid_escrow",
       createdAt: new Date().toISOString()
     };
@@ -2128,7 +3774,7 @@ app.post("/api/social/messages/:id/offer-action", (req, res) => {
       amount: price,
       currency: buyer.currency || "XOF",
       status: "completed",
-      method: paymentMethod || "Wallet Taskora",
+      method: paymentMethod || "Wallet Yaamaa",
       details: `Achat Offre Direct Chat - #${orderId} - Bloqué en Escrow`,
       createdAt: new Date().toISOString()
     };
@@ -2190,7 +3836,7 @@ app.post("/api/social/messages/:id/offer-action", (req, res) => {
       amount: sellerPayout,
       currency: order?.currency || buyer.currency || "XOF",
       status: "completed",
-      method: "Wallet Taskora",
+      method: "Wallet Yaamaa",
       details: `Vente Offre Direct Chat - Libération Escrow Commande #${msg.customOfferOrderId}`,
       createdAt: new Date().toISOString()
     };
@@ -2357,7 +4003,26 @@ app.post("/api/admin/deposits/review", (req, res) => {
 
 // 5.3 ADMIN CONFIGURES SYSTEM WIDE VALUES (TARIFFS AND COMMISSIONS)
 app.post("/api/admin/settings", (req, res) => {
-  const { isWithdrawalFrozen, platformFeePercentage, minWithdrawalAmount, baseReward, defaultCommission, operatorId } = req.body;
+  const { 
+    isWithdrawalFrozen, 
+    platformFeePercentage, 
+    minWithdrawalAmount, 
+    baseReward, 
+    defaultCommission, 
+    merchantNumberPrice, 
+    merchantPremiumPrice,
+    merchantGoldPrice,
+    merchantDiamondPrice,
+    giftPointsConversionRate,
+    virtualGifts,
+    rechargePacks,
+    withdrawalPacks,
+    autoSenderName,
+    autoSenderPhone,
+    autoSenderAvatar,
+    apiKeys,
+    operatorId 
+  } = req.body;
 
   const adminUser = appState.users.find(u => u.id === operatorId);
   if (!adminUser || (adminUser.role !== "admin" && adminUser.role !== "founder")) {
@@ -2369,10 +4034,59 @@ app.post("/api/admin/settings", (req, res) => {
   if (minWithdrawalAmount !== undefined) appState.settings.minWithdrawalAmount = parseFloat(minWithdrawalAmount);
   if (baseReward !== undefined) appState.settings.baseReward = parseFloat(baseReward);
   if (defaultCommission !== undefined) appState.settings.defaultCommission = parseFloat(defaultCommission);
+  if (merchantNumberPrice !== undefined) appState.settings.merchantNumberPrice = parseFloat(merchantNumberPrice);
+  if (merchantPremiumPrice !== undefined) appState.settings.merchantPremiumPrice = parseFloat(merchantPremiumPrice);
+  if (merchantGoldPrice !== undefined) appState.settings.merchantGoldPrice = parseFloat(merchantGoldPrice);
+  if (merchantDiamondPrice !== undefined) appState.settings.merchantDiamondPrice = parseFloat(merchantDiamondPrice);
+  if (giftPointsConversionRate !== undefined) appState.settings.giftPointsConversionRate = parseFloat(giftPointsConversionRate);
+  if (virtualGifts !== undefined) appState.settings.virtualGifts = virtualGifts;
+  if (rechargePacks !== undefined) appState.settings.rechargePacks = rechargePacks;
+  if (withdrawalPacks !== undefined) appState.settings.withdrawalPacks = withdrawalPacks;
+  if (autoSenderName !== undefined) appState.settings.autoSenderName = autoSenderName;
+  if (autoSenderPhone !== undefined) appState.settings.autoSenderPhone = autoSenderPhone;
+  if (autoSenderAvatar !== undefined) appState.settings.autoSenderAvatar = autoSenderAvatar;
+  if (apiKeys !== undefined) appState.settings.apiKeys = apiKeys;
+
+  // Synchronize user_admin profile with autoSender details for real-time contact rendering
+  const userAdmin = appState.users.find(u => u.id === "user_admin");
+  if (userAdmin) {
+    if (autoSenderName !== undefined) {
+      userAdmin.name = autoSenderName;
+      userAdmin.username = autoSenderName.replace(/\s+/g, "");
+    }
+    if (autoSenderPhone !== undefined) {
+      userAdmin.phone = autoSenderPhone;
+    }
+    if (autoSenderAvatar !== undefined) {
+      userAdmin.avatar = autoSenderAvatar;
+    }
+  }
 
   saveState(appState);
   createAuditLog(operatorId, adminUser.username, adminUser.role, "Ajustement Tarifs", `Tarifs et Commissions mis à jour par @${adminUser.username}`, req);
   res.json(appState.settings);
+});
+
+// GET Admin Virtual Gifts statistics
+app.get("/api/admin/gifts/stats", (req, res) => {
+  const messages = appState.socialMessages || [];
+  const giftMessages = messages.filter(m => m.isGift === true);
+  
+  const popularityMap: { [key: string]: number } = {};
+  giftMessages.forEach(m => {
+    if (m.giftId) {
+      popularityMap[m.giftId] = (popularityMap[m.giftId] || 0) + 1;
+    }
+  });
+  
+  const totalSent = giftMessages.length;
+  const totalPointsSpent = giftMessages.reduce((sum, m) => sum + (m.giftPoints || 0), 0);
+  
+  res.json({
+    totalSent,
+    totalPointsSpent,
+    popularityMap
+  });
 });
 
 // 5.3.1 ADMIN CUSTOMIZES HOME PAGE CONTENT
@@ -2439,7 +4153,7 @@ app.post("/api/founder/admin/manage", (req, res) => {
 
   const founder = appState.users.find(u => u.id === operatorId);
   if (!founder || founder.role !== "founder") {
-    return res.status(403).json({ error: "Accès refusé. Seul le Fondateur suprême de Taskora peut ajuster les rôles critiques." });
+    return res.status(403).json({ error: "Accès refusé. Seul le Fondateur suprême de Yaamaa peut ajuster les rôles critiques." });
   }
 
   const target = appState.users.find(u => u.id === targetUserId);
@@ -2462,7 +4176,7 @@ app.post("/api/founder/admin/manage", (req, res) => {
 
 // Critical System Switches
 app.post("/api/founder/settings/critical", (req, res) => {
-  const { isWithdrawalFrozen, suspendedCountries, suspendedCurrencies, platformFeePercentage, operatorId } = req.body;
+  const { isWithdrawalFrozen, suspendedCountries, suspendedCurrencies, platformFeePercentage, merchantNumberPrice, operatorId } = req.body;
 
   const founder = appState.users.find(u => u.id === operatorId);
   if (!founder || founder.role !== "founder") {
@@ -2473,6 +4187,7 @@ app.post("/api/founder/settings/critical", (req, res) => {
   if (suspendedCountries !== undefined) appState.settings.suspendedCountries = suspendedCountries;
   if (suspendedCurrencies !== undefined) appState.settings.suspendedCurrencies = suspendedCurrencies;
   if (platformFeePercentage !== undefined) appState.settings.platformFeePercentage = platformFeePercentage;
+  if (merchantNumberPrice !== undefined) appState.settings.merchantNumberPrice = parseFloat(merchantNumberPrice);
 
   saveState(appState);
   createAuditLog(operatorId, founder.username, "founder", "Ajustement Paramètres", "Mise à jour des règles globales du système", req);
@@ -2499,25 +4214,25 @@ app.post("/api/founder/backup/restore", (req, res) => {
       return res.status(404).json({ error: "Fichier de sauvegarde introuvable." });
     }
   } catch (err) {
-    return res.status(500).json({ error: "Échec de la restauration de la base de données de Taskora." });
+    return res.status(500).json({ error: "Échec de la restauration de la base de données de Yaamaa." });
   }
 });
 
 
-// 7. TASKORA AI (GEMINI ENGINE BACKEND SERVICE)
+// 7. YAAMAA AI (GEMINI ENGINE BACKEND SERVICE)
 app.post("/api/ai/guidance", async (req, res) => {
   const { type, payload } = req.body;
   
   if (!ai) {
     return res.json({ 
-      guide: "Taskora AI Mode Simulation : Veuillez renseigner le secret GEMINI_API_KEY dans le menu de gauche pour intégrer notre moteur neuronal d'IA en temps réel. En attendant, optimisez votre campagne en choisissant une formulation claire, une récompense incitative d'au moins 0.15€, et en demandant des pseudonymes précis en guise de preuve."
+      guide: "Yaamaa AI Mode Simulation : Veuillez renseigner le secret GEMINI_API_KEY dans le menu de gauche pour intégrer notre moteur neuronal d'IA en temps réel. En attendant, optimisez votre campagne en choisissant une formulation claire, une récompense incitative d'au moins 0.15€, et en demandant des pseudonymes précis en guise de preuve."
     });
   }
 
   try {
     let prompt = "";
     if (type === "advertiser_create") {
-      prompt = `Vous êtes un expert en marketing digital sur Taskora.
+      prompt = `Vous êtes un expert en marketing digital sur Yaamaa.
 L'annonceur souhaite créer la campagne suivante:
 Titre: "${payload.title}"
 Description: "${payload.description}"
@@ -2527,7 +4242,7 @@ Catégorie: "${payload.category}"
 Optimisez le titre pour qu'il soit extrêmement captivant, réécrivez la description sous forme de liste d'étapes claires, déterminez le meilleur appel à l'action (CTA) pour maximiser les taux d'engagement, et proposez d'autres intérêts ou critères de ciblage optimaux d'audience.
 Rédigez votre réponse en français professionnel, chaleureux et bien structuré au format Markdown.`;
     } else if (type === "participant_recommend") {
-      prompt = `Vous êtes le recommandateur intelligent de Taskora AI pour les participants et créateurs de gains.
+      prompt = `Vous êtes le recommandateur intelligent de Yaamaa AI pour les participants et créateurs de gains.
 Le participant possède le profil suivant:
 Pseudo: "@${payload.username}"
 Niveau: ${payload.level}
@@ -2539,7 +4254,7 @@ ${JSON.stringify(appState.campaigns.filter(c => c.status === "active"))}
 
 Proposez-lui les 2 meilleures missions adaptées à son pays, estimez les gains totaux potentiels et donnez des astuces claires pour réussir rapidement et éviter d'être pénalisé. Rédigez en français dynamique, motivant et clair en Markdown.`;
     } else if (type === "admin_fraud_report") {
-      prompt = `Vous êtes l'architecte de sécurité Taskora AI.
+      prompt = `Vous êtes l'architecte de sécurité Yaamaa AI.
 Générez un court rapport d'audit de sécurité de l'activité récente de la plateforme.
 Nombre d'utilisateurs: ${appState.users.length}
 Nombre de campagnes actives: ${appState.campaigns.filter(c => c.status === "active").length}
@@ -2548,7 +4263,7 @@ Historique récent des soumissions: ${JSON.stringify(appState.submissions.slice(
 
 Analysez la liste des soumissions récentes pour identifier d'éventuels comportements anormaux, robots de spam, ou multi-comptes VPN. Rédigez votre synthèse globale et vos recommandations de sécurité pour les administrateurs en français sous format Markdown. Un ton technique et pragmatique de haut niveau est attendu.`;
     } else {
-      prompt = `Répondez gentiment à ce message à propos de Taskora: "${payload.message}". Taskora est une plateforme de micro-travaux (Gagnez de l'argent en accomplissant des petites tâches. Les annonceurs y créent des campagnes ciblées de likes, follow, téléchargement d'app, sondages, avis, visibilité). Répondez en français de manière concise et accueillante.`;
+      prompt = `Répondez gentiment à ce message à propos de Yaamaa: "${payload.message}". Yaamaa est une plateforme de micro-travaux (Gagnez de l'argent en accomplissant des petites tâches. Les annonceurs y créent des campagnes ciblées de likes, follow, téléchargement d'app, sondages, avis, visibilité). Répondez en français de manière concise et accueillante.`;
     }
 
     const response = await ai.models.generateContent({
@@ -2560,8 +4275,402 @@ Analysez la liste des soumissions récentes pour identifier d'éventuels comport
     res.json({ guide: text });
   } catch (err: any) {
     console.error("AI Assistant general failed:", err);
-    res.status(500).json({ error: "L'assistant intelligent de Taskora a subi une exception momentanée: " + err.message });
+    res.status(500).json({ error: "L'assistant intelligent de Yaamaa a subi une exception momentanée: " + err.message });
   }
+});
+
+
+// ==========================================
+// 🤖 YAAMAA AI PERSONAL AGENT BACKEND API
+// ==========================================
+
+// Helper function to trigger Yaamaa AI Agent automatic response
+async function triggerYaamaaAiAgent(senderId: string, recipientId: string, incomingMsg: any) {
+  try {
+    const sender = appState.users.find(u => u.id === senderId);
+    const recipient = appState.users.find(u => u.id === recipientId);
+
+    if (!sender || !recipient) return;
+
+    // Check if recipient has Yaamaa AI active & enabled
+    if (!recipient.yaamaaAiActive || !recipient.yaamaaAiSettings || !recipient.yaamaaAiSettings.autoReplyOn) {
+      return;
+    }
+
+    // Verify online status. If explicit 'online', do not trigger. Otherwise, trigger.
+    if (recipient.status === "online") {
+      return;
+    }
+
+    // Verify schedule
+    const settings = recipient.yaamaaAiSettings;
+    if (settings.activationSchedule === "custom") {
+      const currentHour = new Date().getHours();
+      const start = settings.activationStartHour ?? 20;
+      const end = settings.activationEndHour ?? 8;
+      
+      let isWithinSchedule = false;
+      if (start <= end) {
+        isWithinSchedule = currentHour >= start && currentHour <= end;
+      } else {
+        // Overrides midnight (e.g. 20h to 8h)
+        isWithinSchedule = currentHour >= start || currentHour <= end;
+      }
+      
+      if (!isWithinSchedule) return;
+    }
+
+    // Load recipient's shops and products
+    const recipientShops = appState.shops?.filter(s => s.ownerId === recipient.id) || [];
+    const shopProducts = appState.products?.filter(p => p.ownerId === recipient.id) || [];
+
+    // Filter stock info if not authorized
+    const cleanProducts = shopProducts.map(p => {
+      const prod: any = {
+        name: p.name,
+        category: p.category,
+        description: p.description,
+        price: p.price,
+        currency: p.currency,
+        shippingTime: p.shippingTime,
+        termsOfSale: p.termsOfSale
+      };
+      if (settings.authorizesStock) {
+        prod.quantityAvailable = p.quantityAvailable;
+      }
+      return prod;
+    });
+
+    // Conversation history if authorized
+    let conversationContext = "Non partagé par l'utilisateur.";
+    if (settings.authorizesHistory && appState.socialMessages) {
+      const recentMessages = appState.socialMessages
+        .filter(m => 
+          (m.senderId === senderId && m.recipientId === recipientId) || 
+          (m.senderId === recipientId && m.recipientId === senderId)
+        )
+        .slice(-10)
+        .map(m => `[${m.senderUsername} à ${new Date(m.createdAt).toLocaleTimeString()}]: ${m.text}`);
+      conversationContext = recentMessages.join("\n");
+    }
+
+    // Formulate prompt
+    const prompt = `Vous êtes l'Agent Yaamaa AI, l'assistant virtuel intelligent personnel de ${recipient.name} (nom d'utilisateur: @${recipient.username}). Votre rôle de confiance est de répondre à la place de votre propriétaire car il est actuellement hors ligne ou indisponible.
+
+Voici les consignes d'identité et de communication définies par votre propriétaire :
+- Style de personnalité / Ton requis : ${settings.personality}
+- Connaissances spécifiques à utiliser pour répondre : ${settings.customKnowledge || "Aucune"}
+- Sujets autorisés : ${settings.authorizedTopics || "Tous les sujets polis et constructifs"}
+- Sujets interdits (si le message porte sur l'un de ces sujets, refusez poliment de répondre) : ${settings.forbiddenTopics || "Aucun"}
+
+Voici les informations sur les activités commerciales / la boutique de votre propriétaire :
+${recipientShops.length > 0 ? JSON.stringify(recipientShops.map(s => ({ name: s.name, description: s.description, contact: s.contactInfo, country: s.country, region: s.region }))) : "Le propriétaire n'a pas encore configuré de boutique."}
+Produits et prix autorisés en vitrine :
+${cleanProducts.length > 0 ? JSON.stringify(cleanProducts) : "Aucun produit en vente."}
+
+Voici l'historique récent des 10 derniers échanges avec ce correspondant (pour le contexte) :
+${conversationContext}
+
+Message entrant de @${sender.username} auquel vous devez répondre :
+"${incomingMsg.text}"
+
+RÈGLES ABSOLUES À RESPECTER :
+1. Répondez de manière naturelle, fluide, polie et personnalisée, parfaitement adaptée au style de communication choisi.
+2. Adaptez AUTOMATIQUEMENT la langue de votre réponse à celle de l'interlocuteur (s'il écrit en français, répondez en français, s'il écrit en anglais, répondez en anglais, etc.).
+3. Ne divulguez pas de fausses informations. Si vous ne connaissez pas la réponse ou si les détails ne figurent pas dans vos consignes, proposez poliment d'attendre le retour de ${recipient.name}.
+4. Indiquez impérativement qu'il s'agit d'une réponse automatique générée par l'IA. À la toute fin de votre message, ajoutez la signature exacte suivante sur une nouvelle ligne :
+"[Réponse automatique de Yaamaa AI]"
+5. Restez bref, chaleureux et professionnel.`;
+
+    let aiText = "";
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+      });
+      aiText = response.text || "";
+    }
+
+    // If Gemini fails or isn't configured, fall back to a beautiful smart simulation reply!
+    if (!aiText) {
+      const txt = incomingMsg.text.toLowerCase();
+      const shopName = recipientShops[0]?.name || "ma boutique";
+      const contactInfo = recipientShops[0]?.contactInfo || recipient.phone || "mon profil";
+
+      if (txt.includes("prix") || txt.includes("combien") || txt.includes("tarif") || txt.includes("acheter")) {
+        if (cleanProducts.length > 0) {
+          const list = cleanProducts.map(p => `- ${p.name} : ${p.price} ${p.currency}`).join("\n");
+          aiText = `Bonjour ! Je suis l'assistant Yaamaa AI de ${recipient.name}. Voici les tarifs de nos produits disponibles sur ${shopName} :\n${list}\n\nN'hésitez pas à passer commande directement sur la boutique. Je reste à votre écoute !`;
+        } else {
+          aiText = `Bonjour ! Je suis l'assistant Yaamaa AI de ${recipient.name}. Je n'ai pas de liste de tarifs disponible pour le moment, mais mon propriétaire vous répondra dès son retour !`;
+        }
+      } else if (txt.includes("produit") || txt.includes("article") || txt.includes("dispo")) {
+        if (cleanProducts.length > 0) {
+          const list = cleanProducts.map(p => `- ${p.name} (${p.description})`).join("\n");
+          aiText = `Bonjour ! Ravi de vous assister. Voici les articles actuellement disponibles dans ${shopName} :\n${list}\n\nVous pouvez les acheter directement via l'onglet Boutique de Yaamaa !`;
+        } else {
+          aiText = `Bonjour ! Je suis l'assistant Yaamaa AI de ${recipient.name}. Aucun produit n'est publié pour le moment, mais restez à l'écoute !`;
+        }
+      } else if (txt.includes("livraison") || txt.includes("delai") || txt.includes("délai")) {
+        if (cleanProducts.length > 0) {
+          const list = cleanProducts.map(p => `- ${p.name} : Livraison sous ${p.shippingTime}`).join("\n");
+          aiText = `Bonjour ! Pour la livraison, voici nos délais moyens :\n${list}\n\nWe will ship your products very fast!`;
+        } else {
+          aiText = `Bonjour ! Je suis l'assistant de ${recipient.name}. Concernant la livraison, mon propriétaire vous contactera dès son retour pour convenir des modalités.`;
+        }
+      } else if (txt.includes("contact") || txt.includes("telephone") || txt.includes("téléphone") || txt.includes("whatsapp")) {
+        aiText = `Bonjour ! Vous pouvez contacter directement mon propriétaire ${recipient.name} au numéro suivant : ${contactInfo}. Ils se feront un plaisir de vous répondre !`;
+      } else {
+        // General customized friendly fallback based on personality
+        const toneMsg = settings.personality === "amical" || settings.personality === "enthousiaste"
+          ? `Merveilleuse journée à vous ! Je suis l'assistant virtuel intelligent de ${recipient.name}. Mon propriétaire est indisponible pour le moment, mais j'ai bien enregistré votre message : "${incomingMsg.text}". Ils prendront le relais très rapidement ! ✨`
+          : `Bonjour. Je suis l'assistant virtuel Yaamaa AI de ${recipient.name}. Mon propriétaire est actuellement hors ligne. Votre message a été reçu et ils vous recontacteront dans les plus brefs délais.`;
+        aiText = toneMsg;
+      }
+      aiText += `\n\n[Réponse automatique de Yaamaa AI]`;
+    }
+
+    // Save AI message to state
+    const aiMessage = {
+      id: "msg_ai_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      senderId: recipient.id,
+      senderUsername: recipient.username,
+      senderAvatar: recipient.avatar,
+      text: aiText,
+      createdAt: new Date().toISOString(),
+      recipientId: sender.id,
+      readBy: [recipient.id],
+      isAiReply: true,
+      aiAgentOwnerId: recipient.id,
+      reactions: {}
+    };
+
+    if (!appState.socialMessages) appState.socialMessages = [];
+    appState.socialMessages.push(aiMessage);
+
+    // Update stats
+    if (!recipient.yaamaaAiStats) {
+      recipient.yaamaaAiStats = { conversationsCount: 0, satisfactionRate: 100, responseTime: 1.2 };
+    }
+    recipient.yaamaaAiStats.conversationsCount += 1;
+
+    // Add handled conversation
+    const handledConv = {
+      id: "handled_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      senderId: sender.id,
+      senderUsername: sender.username,
+      senderAvatar: sender.avatar,
+      messageId: incomingMsg.id,
+      messageText: incomingMsg.text,
+      aiResponseText: aiText,
+      timestamp: new Date().toISOString()
+    };
+    recipient.yaamaaAiHandledConversations = recipient.yaamaaAiHandledConversations || [];
+    recipient.yaamaaAiHandledConversations.unshift(handledConv);
+
+    // Add notification for the recipient
+    const notification = {
+      id: "notif_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      senderUsername: sender.username,
+      messageSnippet: incomingMsg.text.slice(0, 50) + (incomingMsg.text.length > 50 ? "..." : ""),
+      timestamp: new Date().toISOString()
+    };
+    recipient.yaamaaAiNotifications = recipient.yaamaaAiNotifications || [];
+    recipient.yaamaaAiNotifications.unshift(notification);
+
+    saveState(appState);
+  } catch (err) {
+    console.error("Yaamaa AI Agent automatic response failed:", err);
+  }
+}
+
+// Endpoint to retrieve AI configuration
+app.get("/api/yaamaa-ai/:userId", (req, res) => {
+  const { userId } = req.params;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  // Initialize if needed
+  if (!user.yaamaaAiSettings) {
+    user.yaamaaAiSettings = {
+      personality: "professionnelle",
+      customKnowledge: "",
+      authorizedTopics: "",
+      forbiddenTopics: "",
+      activationSchedule: "always",
+      activationStartHour: 20,
+      activationEndHour: 8,
+      autoReplyOn: true,
+      authorizesHistory: true,
+      authorizesStock: true
+    };
+  }
+  if (!user.yaamaaAiStats) {
+    user.yaamaaAiStats = {
+      conversationsCount: 0,
+      satisfactionRate: 100,
+      responseTime: 1.2
+    };
+  }
+  if (!user.yaamaaAiHandledConversations) {
+    user.yaamaaAiHandledConversations = [];
+  }
+  if (!user.yaamaaAiNotifications) {
+    user.yaamaaAiNotifications = [];
+  }
+  if (!user.status) {
+    user.status = "online";
+  }
+
+  res.json({
+    yaamaaAiActive: !!user.yaamaaAiActive,
+    yaamaaAiExpiresAt: user.yaamaaAiExpiresAt || null,
+    yaamaaAiSettings: user.yaamaaAiSettings,
+    yaamaaAiStats: user.yaamaaAiStats,
+    yaamaaAiHandledConversations: user.yaamaaAiHandledConversations,
+    yaamaaAiNotifications: user.yaamaaAiNotifications,
+    status: user.status
+  });
+});
+
+// Endpoint to purchase/rent or activate the AI agent (Mode Test supported too)
+app.post("/api/yaamaa-ai/purchase", (req, res) => {
+  const { userId, type } = req.body; // type can be "real" or "free_test"
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  const cost = 5000; // 5000 XOF or equivalent in local currency
+  const currency = user.currency || "XOF";
+
+  if (type === "real") {
+    if (user.wallet.available < cost) {
+      return res.status(400).json({ 
+        error: `Solde insuffisant. Le coût de location est de ${cost} ${currency}. Votre solde actuel est de ${user.wallet.available} ${currency}. Veuillez recharger ou utiliser l'activation Mode Test.` 
+      });
+    }
+    user.wallet.available = parseFloat((user.wallet.available - cost).toFixed(2));
+    
+    // Create transaction
+    const transaction = {
+      id: "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      userId: user.id,
+      type: "funded_campaign" as any, // purchase/funded campaign
+      amount: -cost,
+      currency: currency,
+      status: "completed" as any,
+      method: "Solde Portefeuille",
+      details: "Location de l'Assistant Intelligent Yaamaa AI (30 Jours)",
+      createdAt: new Date().toISOString()
+    };
+    if (!appState.transactions) appState.transactions = [];
+    appState.transactions.unshift(transaction);
+  }
+
+  // Activate agent
+  user.yaamaaAiActive = true;
+  user.yaamaaAiExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  
+  if (!user.yaamaaAiSettings) {
+    user.yaamaaAiSettings = {
+      personality: "professionnelle",
+      customKnowledge: "",
+      authorizedTopics: "",
+      forbiddenTopics: "",
+      activationSchedule: "always",
+      activationStartHour: 20,
+      activationEndHour: 8,
+      autoReplyOn: true,
+      authorizesHistory: true,
+      authorizesStock: true
+    };
+  }
+  if (!user.yaamaaAiStats) {
+    user.yaamaaAiStats = {
+      conversationsCount: 0,
+      satisfactionRate: 100,
+      responseTime: 1.2
+    };
+  }
+  if (!user.yaamaaAiHandledConversations) user.yaamaaAiHandledConversations = [];
+  if (!user.yaamaaAiNotifications) user.yaamaaAiNotifications = [];
+
+  createAuditLog(user.id, user.username, user.role, "Activation Yaamaa AI", `Agent Yaamaa AI activé (Méthode: ${type})`, req);
+  saveState(appState);
+
+  res.json({
+    success: true,
+    yaamaaAiActive: true,
+    yaamaaAiExpiresAt: user.yaamaaAiExpiresAt,
+    wallet: user.wallet,
+    yaamaaAiSettings: user.yaamaaAiSettings,
+    yaamaaAiStats: user.yaamaaAiStats
+  });
+});
+
+// Endpoint to update AI Settings and status
+app.put("/api/yaamaa-ai/:userId", (req, res) => {
+  const { userId } = req.params;
+  const { settings, status } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  if (settings) {
+    user.yaamaaAiSettings = {
+      ...user.yaamaaAiSettings,
+      ...settings
+    };
+  }
+  if (status !== undefined) {
+    user.status = status;
+  }
+
+  saveState(appState);
+  res.json({
+    success: true,
+    yaamaaAiSettings: user.yaamaaAiSettings,
+    status: user.status
+  });
+});
+
+// Endpoint to evaluate handled conversations
+app.post("/api/yaamaa-ai/:userId/evaluate", (req, res) => {
+  const { userId } = req.params;
+  const { conversationId, rating, feedback } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  const handled = user.yaamaaAiHandledConversations?.find(c => c.id === conversationId);
+  if (!handled) return res.status(404).json({ error: "Conversation introuvable" });
+
+  handled.rating = rating;
+  handled.feedback = feedback;
+
+  // Recalculate average satisfaction rate
+  const ratedConvs = user.yaamaaAiHandledConversations?.filter(c => c.rating !== undefined) || [];
+  if (ratedConvs.length > 0) {
+    const totalStars = ratedConvs.reduce((sum, c) => sum + (c.rating || 0), 0);
+    const avgStars = totalStars / ratedConvs.length;
+    user.yaamaaAiStats = user.yaamaaAiStats || { conversationsCount: 0, satisfactionRate: 100, responseTime: 1.2 };
+    user.yaamaaAiStats.satisfactionRate = Math.round((avgStars / 5) * 100);
+  }
+
+  saveState(appState);
+  res.json({
+    success: true,
+    yaamaaAiHandledConversations: user.yaamaaAiHandledConversations,
+    yaamaaAiStats: user.yaamaaAiStats
+  });
+});
+
+// Endpoint to clear AI notifications
+app.post("/api/yaamaa-ai/:userId/clear-notifications", (req, res) => {
+  const { userId } = req.params;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  user.yaamaaAiNotifications = [];
+  saveState(appState);
+  res.json({ success: true });
 });
 
 // ==========================================
@@ -2787,9 +4896,9 @@ app.post("/api/orders", (req, res) => {
   const totalPrice = product.price * quantity;
 
   // Escrow Wallet deduction logic
-  if (paymentMethod === "Wallet Taskora") {
+  if (paymentMethod === "Wallet Yaamaa" || paymentMethod === "Wallet Yaamaa") {
     if (buyer.wallet.available < totalPrice) {
-      return res.status(400).json({ error: "Le solde de votre Wallet Taskora est insuffisant pour finaliser cet achat." });
+      return res.status(400).json({ error: "Le solde de votre Wallet Yaamaa est insuffisant pour finaliser cet achat." });
     }
     buyer.wallet.available = parseFloat((buyer.wallet.available - totalPrice).toFixed(2));
   }
@@ -2908,7 +5017,7 @@ app.post("/api/orders/:id/confirm", (req, res) => {
     amount: sellerNetPayout,
     currency: order.currency,
     status: "completed",
-    method: "Wallet Taskora",
+    method: "Wallet Yaamaa",
     details: `Vente Boutique (Escrow Libéré) - Commande #${id} - Comm: ${commission} ${order.currency}`,
     createdAt: new Date().toISOString()
   };
@@ -2917,7 +5026,7 @@ app.post("/api/orders/:id/confirm", (req, res) => {
   // Referral Commission on Seller's Sale (5%)
   if (seller.referredBy) {
     const inviter = appState.users.find(u => u.id === seller.referredBy || u.referralCode === seller.referredBy);
-    if (inviter) {
+    if (inviter && inviter.merchantNumber) {
       const refComm = parseFloat((order.totalPrice * 0.05).toFixed(2)) || 0.1;
       inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
       inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
@@ -2930,7 +5039,7 @@ app.post("/api/orders/:id/confirm", (req, res) => {
         amount: refComm,
         currency: inviter.currency,
         status: "completed",
-        method: "Taskora Referral",
+        method: "Yaamaa Referral",
         details: `Commission Vente Boutique (5%) - Vente de votre filleul @${seller.username} : "${order.productName}"`,
         createdAt: new Date().toISOString()
       };
@@ -2941,7 +5050,7 @@ app.post("/api/orders/:id/confirm", (req, res) => {
   // Referral Commission on Buyer's Purchase (3%)
   if (buyer && buyer.referredBy) {
     const inviter = appState.users.find(u => u.id === buyer.referredBy || u.referralCode === buyer.referredBy);
-    if (inviter) {
+    if (inviter && inviter.merchantNumber) {
       const refComm = parseFloat((order.totalPrice * 0.03).toFixed(2)) || 0.05;
       inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
       inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
@@ -2954,7 +5063,7 @@ app.post("/api/orders/:id/confirm", (req, res) => {
         amount: refComm,
         currency: inviter.currency,
         status: "completed",
-        method: "Taskora Referral",
+        method: "Yaamaa Referral",
         details: `Commission Achat Boutique (3%) - Achat de votre filleul @${buyer.username} : "${order.productName}"`,
         createdAt: new Date().toISOString()
       };
@@ -3150,7 +5259,7 @@ app.post("/api/promotions", (req, res) => {
     amount: budgetPrice,
     currency: currency || "EUR",
     status: "completed",
-    method: "Wallet Taskora",
+    method: "Wallet Yaamaa",
     details: `Financement Campagne Pub 📢 Tier: ${budgetTier.toUpperCase()}`,
     createdAt: new Date().toISOString()
   };
@@ -3280,6 +5389,572 @@ app.post("/api/promotions/:id/track", (req, res) => {
   res.json({ success: true, impressions: promo.impressions, clicks: promo.clicks, ctr: promo.ctr });
 });
 
+// Track impressions, clicks, etc.
+app.post("/api/promotions/:id/track", (req, res) => {
+  const { id } = req.params;
+  const { trackType } = req.body; // "impression" | "view" | "click"
+
+  const promoList = appState.promoCampaigns || [];
+  const promo = promoList.find(p => p.id === id);
+  if (!promo) return res.status(404).json({ error: "Campagne introuvable" });
+
+  if (trackType === "impression") {
+    promo.impressions += 1;
+  } else if (trackType === "view") {
+    promo.views += 1;
+  } else if (trackType === "click") {
+    promo.clicks += 1;
+    // Simulate a minor conversion boost on tracking
+    if (Math.random() > 0.9) {
+      promo.revenueGenerated = parseFloat((promo.revenueGenerated + (promo.budgetPrice * 0.05)).toFixed(2));
+    }
+  }
+
+  // Re-calculate advertiser CTR
+  if (promo.impressions > 0) {
+    promo.ctr = parseFloat(((promo.clicks / promo.impressions) * 100).toFixed(2));
+  } else {
+    promo.ctr = 0;
+  }
+
+  saveState(appState);
+  res.json({ success: true, impressions: promo.impressions, clicks: promo.clicks, ctr: promo.ctr });
+});
+
+// ==========================================
+// 🤝 SUPPLIERS & DELIVERERS API ENDPOINTS
+// ==========================================
+
+app.get("/api/suppliers-deliverers", (req, res) => {
+  if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+  if (!appState.supplierReviews) appState.supplierReviews = [];
+  if (!appState.missionRequests) appState.missionRequests = [];
+  res.json({
+    suppliersDeliverers: appState.suppliersDeliverers,
+    reviews: appState.supplierReviews,
+    missions: appState.missionRequests
+  });
+});
+
+app.post("/api/suppliers-deliverers/register", (req, res) => {
+  const {
+    userId,
+    type,
+    fullName,
+    profilePhoto,
+    companyLogo,
+    phone,
+    email,
+    country,
+    city,
+    interventionZone,
+    professionalAddress,
+    activityType,
+    servicesDescription,
+    idDocumentUrl,
+    companyDocumentUrl,
+    drivingLicenseUrl,
+    transportMethod,
+    vehiclePhotos,
+    insuranceDocumentUrl,
+    certifications,
+    availabilityHours,
+    rates,
+    spokenLanguages
+  } = req.body;
+
+  if (!userId || !type || !fullName || !phone || !email || !country || !city) {
+    return res.status(400).json({ error: "Informations obligatoires manquantes pour l'inscription." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+
+  const newProfile: SupplierDelivererProfile = {
+    id: "sd_" + Date.now(),
+    userId,
+    type,
+    fullName,
+    profilePhoto: profilePhoto || user.avatar,
+    companyLogo,
+    phone,
+    email,
+    country,
+    city,
+    interventionZone: interventionZone || city,
+    professionalAddress: professionalAddress || "",
+    activityType: activityType || "Général",
+    servicesDescription: servicesDescription || "",
+    idDocumentUrl: idDocumentUrl || "https://example.com/id_doc.pdf",
+    companyDocumentUrl,
+    drivingLicenseUrl,
+    transportMethod,
+    vehiclePhotos: Array.isArray(vehiclePhotos) ? vehiclePhotos : [],
+    insuranceDocumentUrl,
+    certifications: Array.isArray(certifications) ? certifications : [],
+    availabilityHours: availabilityHours || "24h/24",
+    rates,
+    spokenLanguages: Array.isArray(spokenLanguages) ? spokenLanguages : ["Français"],
+    status: "pending",
+    isVerified: false,
+    rating: 5.0,
+    reviewsCount: 0,
+    missionsCompletedCount: 0,
+    successRate: 100,
+    createdAt: new Date().toISOString()
+  };
+
+  appState.suppliersDeliverers.unshift(newProfile);
+  saveState(appState);
+
+  createAuditLog(userId, user.username, user.role, "Inscription Fournisseur/Livreur", `Candidature ${type} soumise: ${fullName} (${city}, ${country})`, req);
+  res.json({ success: true, profile: newProfile });
+});
+
+app.post("/api/suppliers-deliverers/admin/status", (req, res) => {
+  const { profileId, status, adminFeedback, operatorId } = req.body;
+
+  if (!profileId || !status || !operatorId) {
+    return res.status(400).json({ error: "Paramètres de révision manquants." });
+  }
+
+  const admin = appState.users.find(u => u.id === operatorId);
+  if (!admin || (admin.role !== "admin" && admin.role !== "founder")) {
+    return res.status(403).json({ error: "Permissions administratives insuffisantes." });
+  }
+
+  if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+  const profile = appState.suppliersDeliverers.find(p => p.id === profileId);
+  if (!profile) return res.status(404).json({ error: "Profil introuvable." });
+
+  profile.status = status;
+  if (status === "approved") {
+    profile.isVerified = true;
+  } else if (status === "rejected" || status === "suspended") {
+    profile.isVerified = false;
+  }
+  if (adminFeedback !== undefined) {
+    profile.adminFeedback = adminFeedback;
+  }
+
+  saveState(appState);
+  createAuditLog(operatorId, admin.username, admin.role, "Gestion Fournisseur/Livreur", `Profil ID ${profileId} passé au statut: ${status}`, req);
+  res.json(profile);
+});
+
+app.post("/api/suppliers-deliverers/review", (req, res) => {
+  const { profileId, userId, rating, comment } = req.body;
+
+  if (!profileId || !userId || !rating) {
+    return res.status(400).json({ error: "Données d'évaluation incomplètes." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+  const profile = appState.suppliersDeliverers.find(p => p.id === profileId);
+  if (!profile) return res.status(404).json({ error: "Profil introuvable." });
+
+  if (!appState.supplierReviews) appState.supplierReviews = [];
+
+  const newReview: SupplierDelivererReview = {
+    id: "rev_" + Date.now(),
+    profileId,
+    userId,
+    username: user.username,
+    userAvatar: user.avatar,
+    rating: Number(rating),
+    comment: comment || "",
+    createdAt: new Date().toISOString()
+  };
+
+  appState.supplierReviews.unshift(newReview);
+
+  // Recalculate average rating
+  const profileReviews = appState.supplierReviews.filter(r => r.profileId === profileId);
+  const totalRating = profileReviews.reduce((sum, r) => sum + r.rating, 0);
+  profile.rating = parseFloat((totalRating / profileReviews.length).toFixed(1));
+  profile.reviewsCount = profileReviews.length;
+
+  saveState(appState);
+  res.json({ success: true, review: newReview, profile });
+});
+
+app.post("/api/suppliers-deliverers/mission", (req, res) => {
+  const { profileId, clientId, title, description, budgetOrRates } = req.body;
+
+  if (!profileId || !clientId || !title) {
+    return res.status(400).json({ error: "Informations de mission incomplètes." });
+  }
+
+  const client = appState.users.find(u => u.id === clientId);
+  if (!client) return res.status(404).json({ error: "Client introuvable." });
+
+  if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+  const profile = appState.suppliersDeliverers.find(p => p.id === profileId);
+  if (!profile) return res.status(404).json({ error: "Prestataire introuvable." });
+
+  if (!appState.missionRequests) appState.missionRequests = [];
+
+  const newMission: MissionRequest = {
+    id: "mission_" + Date.now(),
+    profileId,
+    profileName: profile.fullName,
+    profileType: profile.type,
+    clientId,
+    clientUsername: client.username,
+    clientAvatar: client.avatar,
+    title,
+    description: description || "",
+    budgetOrRates: budgetOrRates || "À négocier",
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+
+  appState.missionRequests.unshift(newMission);
+
+  if (!appState.socialMessages) appState.socialMessages = [];
+  const chatMsg: SocialMessage = {
+    id: "msg_mission_" + Date.now(),
+    senderId: clientId,
+    senderUsername: client.username,
+    senderAvatar: client.avatar,
+    recipientId: profile.userId,
+    text: `📋 [DEMANDE DE MISSION] "${title}"\n\nDescription: ${description || 'Aucune description'}\nBudget/Tarifs: ${budgetOrRates || 'À négocier'}\n\nVeuillez accepter ou refuser cette mission dans votre espace Fournisseur & Livreur.`,
+    createdAt: new Date().toISOString()
+  };
+  appState.socialMessages.push(chatMsg);
+
+  saveState(appState);
+  res.json({ success: true, mission: newMission });
+});
+
+app.post("/api/suppliers-deliverers/mission/status", (req, res) => {
+  const { missionId, status, operatorId } = req.body;
+
+  if (!missionId || !status || !operatorId) {
+    return res.status(400).json({ error: "Paramètres de mission invalides." });
+  }
+
+  if (!appState.missionRequests) appState.missionRequests = [];
+  const mission = appState.missionRequests.find(m => m.id === missionId);
+  if (!mission) return res.status(404).json({ error: "Mission introuvable." });
+
+  mission.status = status; // "accepted" | "rejected" | "completed"
+
+  if (status === "accepted" || status === "completed") {
+    if (!appState.suppliersDeliverers) appState.suppliersDeliverers = [];
+    const profile = appState.suppliersDeliverers.find(p => p.id === mission.profileId);
+    if (profile && status === "completed") {
+      profile.missionsCompletedCount += 1;
+    }
+  }
+
+  saveState(appState);
+  res.json(mission);
+});
+
+// SUBSCRIPTION PLANS & USER SUBSCRIPTIONS API
+app.get("/api/subscription-plans", (req, res) => {
+  if (!appState.subscriptionPlans) {
+    appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+    saveState(appState);
+  }
+  res.json(appState.subscriptionPlans);
+});
+
+app.post("/api/subscription-plans", (req, res) => {
+  if (!appState.subscriptionPlans) appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+  const { id, name, tier, badgeLabel, colorTheme, description, benefits, initialPrice, renewalPrice, durationValue, durationUnit, maxReferrals, referralCommission, isActive, operatorId } = req.body;
+  
+  if (id) {
+    const plan = appState.subscriptionPlans.find(p => p.id === id);
+    if (plan) {
+      if (name !== undefined) plan.name = name;
+      if (tier !== undefined) plan.tier = tier;
+      if (badgeLabel !== undefined) plan.badgeLabel = badgeLabel;
+      if (colorTheme !== undefined) plan.colorTheme = colorTheme;
+      if (description !== undefined) plan.description = description;
+      if (benefits !== undefined) plan.benefits = benefits;
+      if (initialPrice !== undefined) plan.initialPrice = parseFloat(initialPrice);
+      if (renewalPrice !== undefined) plan.renewalPrice = parseFloat(renewalPrice);
+      if (durationValue !== undefined) plan.durationValue = parseInt(durationValue);
+      if (durationUnit !== undefined) plan.durationUnit = durationUnit;
+      if (maxReferrals !== undefined) plan.maxReferrals = parseInt(maxReferrals);
+      if (referralCommission !== undefined) plan.referralCommission = parseFloat(referralCommission);
+      if (isActive !== undefined) plan.isActive = !!isActive;
+
+      appState.auditLogs.unshift({
+        id: "log_" + Date.now(),
+        userId: operatorId || "admin",
+        username: "Administrateur",
+        role: "admin",
+        action: "UPDATE_SUBSCRIPTION_PLAN",
+        details: `Plan mis à jour : ${plan.name} (${plan.tier})`,
+        timestamp: new Date().toISOString(),
+        ip: "127.0.0.1"
+      });
+      saveState(appState);
+      return res.json({ success: true, plan });
+    }
+  }
+
+  const newPlan: SubscriptionPlan = {
+    id: "plan_" + Date.now(),
+    name: name || "Nouveau Plan",
+    tier: tier || "blue",
+    badgeLabel: badgeLabel || "Badge",
+    colorTheme: colorTheme || { bg: "bg-blue-500/10", border: "border-blue-500/30", text: "text-blue-400", gradient: "from-blue-600 to-sky-400" },
+    description: description || "",
+    benefits: benefits || [],
+    initialPrice: parseFloat(initialPrice || "5000"),
+    renewalPrice: parseFloat(renewalPrice || "3000"),
+    durationValue: parseInt(durationValue || "30"),
+    durationUnit: durationUnit || "days",
+    maxReferrals: maxReferrals !== undefined ? parseInt(maxReferrals) : 20,
+    referralCommission: referralCommission !== undefined ? parseFloat(referralCommission) : 2500,
+    isActive: isActive !== false,
+    createdAt: new Date().toISOString()
+  };
+
+  appState.subscriptionPlans.push(newPlan);
+  appState.auditLogs.unshift({
+    id: "log_" + Date.now(),
+    userId: operatorId || "admin",
+    username: "Administrateur",
+    role: "admin",
+    action: "CREATE_SUBSCRIPTION_PLAN",
+    details: `Création du plan d'abonnement : ${newPlan.name} (${newPlan.tier})`,
+    timestamp: new Date().toISOString(),
+    ip: "127.0.0.1"
+  });
+  saveState(appState);
+  res.json({ success: true, plan: newPlan });
+});
+
+app.delete("/api/subscription-plans/:id", (req, res) => {
+  const { id } = req.params;
+  if (!appState.subscriptionPlans) appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+  appState.subscriptionPlans = appState.subscriptionPlans.filter(p => p.id !== id);
+  saveState(appState);
+  res.json({ success: true });
+});
+
+app.get("/api/user-subscriptions", (req, res) => {
+  if (!appState.userSubscriptions) appState.userSubscriptions = [];
+  res.json(appState.userSubscriptions);
+});
+
+app.post("/api/user-subscriptions/action", (req, res) => {
+  if (!appState.userSubscriptions) appState.userSubscriptions = [];
+  if (!appState.subscriptionPlans) appState.subscriptionPlans = SEED_SUBSCRIPTION_PLANS;
+  if (!appState.subscriptionNotifications) appState.subscriptionNotifications = [];
+
+  const { userId, planId, action, subscriptionId, durationOverrideDays, operatorId } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur introuvable." });
+  }
+
+  const now = new Date();
+
+  if (action === "assign" || action === "renew") {
+    const plan = appState.subscriptionPlans.find(p => p.id === planId);
+    if (!plan) return res.status(404).json({ error: "Plan introuvable." });
+
+    if (!user.merchantNumber) {
+      const randomNum = Math.floor(10000000 + Math.random() * 90000000).toString();
+      user.merchantNumber = `YM-${randomNum}`;
+      user.merchantNumberPurchasedAt = now.toISOString();
+    }
+    user.merchantPackType = plan.tier === "diamond" ? "diamond" : (plan.tier === "gold" ? "gold" : "premium");
+
+    const days = durationOverrideDays ? parseInt(durationOverrideDays) : (plan.durationUnit === "years" ? plan.durationValue * 365 : plan.durationUnit === "months" ? plan.durationValue * 30 : plan.durationUnit === "weeks" ? plan.durationValue * 7 : plan.durationValue);
+    const expDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    let sub = appState.userSubscriptions.find(s => s.userId === userId && s.status === "active");
+    if (sub) {
+      sub.planId = plan.id;
+      sub.planName = plan.name;
+      sub.tier = plan.tier;
+      sub.expirationDate = expDate.toISOString();
+      sub.lastRenewedAt = now.toISOString();
+    } else {
+      sub = {
+        id: "sub_" + Date.now(),
+        userId: user.id,
+        planId: plan.id,
+        planName: plan.name,
+        tier: plan.tier,
+        merchantNumber: user.merchantNumber,
+        startDate: now.toISOString(),
+        expirationDate: expDate.toISOString(),
+        status: "active",
+        isAutoRenew: true,
+        createdAt: now.toISOString()
+      };
+      appState.userSubscriptions.push(sub);
+    }
+
+    appState.subscriptionNotifications.unshift({
+      id: "notif_" + Date.now(),
+      userId: user.id,
+      title: "Abonnement Marchand Activé 🌟",
+      message: `Votre abonnement ${plan.name} (${plan.badgeLabel}) est désormais actif avec votre numéro marchand ${user.merchantNumber}.`,
+      type: "activation",
+      createdAt: now.toISOString(),
+      isRead: false
+    });
+
+    appState.auditLogs.unshift({
+      id: "log_" + Date.now(),
+      userId: operatorId || "admin",
+      username: "Administrateur",
+      role: "admin",
+      action: "ASSIGN_SUBSCRIPTION",
+      details: `Abonnement ${plan.name} attribué à l'utilisateur ${user.username} (${user.merchantNumber})`,
+      timestamp: now.toISOString(),
+      ip: "127.0.0.1"
+    });
+
+    saveState(appState);
+    return res.json({ success: true, subscription: sub, user });
+  }
+
+  if (action === "suspend") {
+    const sub = appState.userSubscriptions.find(s => s.id === subscriptionId);
+    if (sub) {
+      sub.status = "suspended";
+      appState.subscriptionNotifications.unshift({
+        id: "notif_" + Date.now(),
+        userId: sub.userId,
+        title: "Abonnement Suspendu ⚠️",
+        message: "Votre abonnement marchand a été temporairement suspendu par l'administration.",
+        type: "suspension",
+        createdAt: now.toISOString(),
+        isRead: false
+      });
+      saveState(appState);
+      return res.json({ success: true, subscription: sub });
+    }
+  }
+
+  if (action === "reactivate") {
+    const sub = appState.userSubscriptions.find(s => s.id === subscriptionId);
+    if (sub) {
+      sub.status = "active";
+      appState.subscriptionNotifications.unshift({
+        id: "notif_" + Date.now(),
+        userId: sub.userId,
+        title: "Abonnement Réactivé ✅",
+        message: "Votre abonnement marchand a été réactivé avec succès.",
+        type: "reactivation",
+        createdAt: now.toISOString(),
+        isRead: false
+      });
+      saveState(appState);
+      return res.json({ success: true, subscription: sub });
+    }
+  }
+
+  if (action === "cancel") {
+    const sub = appState.userSubscriptions.find(s => s.id === subscriptionId);
+    if (sub) {
+      sub.status = "cancelled";
+      saveState(appState);
+      return res.json({ success: true, subscription: sub });
+    }
+  }
+
+  res.status(400).json({ error: "Action non reconnue." });
+});
+
+// --- SUPERVISION API ENDPOINTS ---
+app.get("/api/supervision-incidents", (req, res) => {
+  if (!appState.supervisionIncidents) appState.supervisionIncidents = SEED_SUPERVISION_INCIDENTS;
+  res.json(appState.supervisionIncidents);
+});
+
+app.post("/api/supervision-incidents/simulate", (req, res) => {
+  if (!appState.supervisionIncidents) appState.supervisionIncidents = SEED_SUPERVISION_INCIDENTS;
+  const newInc: SupervisionIncident = {
+    id: "inc_" + Date.now(),
+    component: "API Externe & Passerelle SMS",
+    componentKey: "api_sms",
+    timestamp: new Date().toISOString(),
+    severity: "high",
+    title: "Surcharge temporaire de la file d'attente SMS OTP",
+    description: "Le fournisseur SMS a retourné un code de limitation de débit (Rate Limit 429) sur l'envoi des codes de vérification 2FA.",
+    consequences: "Retard de 45 secondes dans la réception des SMS de validation pour les nouveaux inscrits.",
+    logs: [
+      "[WARN] 2026-07-07 08:40:10 - Provider API rate limit hit (HTTP 429)",
+      "[INFO] 2026-07-07 08:40:12 - Routing to secondary backup SMS provider (Twilio US)."
+    ],
+    impactedUsersCount: 85,
+    probableCauses: "Pic simultané de demandes d'authentification à deux facteurs.",
+    recommendations: "Augmenter le quota mensuel auprès du fournisseur principal.",
+    correctionSteps: ["Bascule automatique effectuée vers le fournisseur secondaire."],
+    isAutoCorrectable: true,
+    status: "active"
+  };
+  appState.supervisionIncidents.unshift(newInc);
+  saveState(appState);
+  res.json(newInc);
+});
+
+app.post("/api/supervision-incidents/:id/resolve", (req, res) => {
+  if (!appState.supervisionIncidents) appState.supervisionIncidents = SEED_SUPERVISION_INCIDENTS;
+  const inc = appState.supervisionIncidents.find(i => i.id === req.params.id);
+  if (inc) {
+    inc.status = "resolved";
+    inc.resolvedAt = new Date().toISOString();
+    saveState(appState);
+    return res.json(inc);
+  }
+  res.status(404).json({ error: "Incident non trouvé." });
+});
+
+app.post("/api/supervision-incidents/:id/autocorrect", (req, res) => {
+  if (!appState.supervisionIncidents) appState.supervisionIncidents = SEED_SUPERVISION_INCIDENTS;
+  const inc = appState.supervisionIncidents.find(i => i.id === req.params.id);
+  if (inc) {
+    inc.status = "auto_corrected";
+    inc.resolvedAt = new Date().toISOString();
+    inc.logs.push(`[AUTO-FIX] 2026-07-07 - Script d'auto-réparation exécuté avec succès par l'agent Yama Core.`);
+    saveState(appState);
+    return res.json(inc);
+  }
+  res.status(404).json({ error: "Incident non trouvé." });
+});
+
+app.get("/api/supervision-reports", (req, res) => {
+  if (!appState.supervisionReports) appState.supervisionReports = SEED_SUPERVISION_REPORTS;
+  res.json(appState.supervisionReports);
+});
+
+app.post("/api/supervision-reports", (req, res) => {
+  if (!appState.supervisionReports) appState.supervisionReports = SEED_SUPERVISION_REPORTS;
+  const { type } = req.body;
+  const newRep: SupervisionReport = {
+    id: "rep_" + type + "_" + Date.now(),
+    type: type || "daily",
+    date: new Date().toISOString().split("T")[0],
+    title: `Rapport de Supervision ${type === "weekly" ? "Hebdomadaire" : type === "monthly" ? "Mensuel" : "Quotidien"} – ${new Date().toLocaleDateString()}`,
+    performanceSummary: "Surveillance complète effectuée. Aucune faille de sécurité détectée. Stabilité optimale des services.",
+    incidentsCount: appState.supervisionIncidents.length,
+    resolvedCount: appState.supervisionIncidents.filter(i => i.status !== "active").length,
+    activeUsersCount: appState.users.length,
+    growthRate: +6.5,
+    details: "Indicateurs de performance dans les normes d'excellence Yama. Évolutivité du système validée."
+  };
+  appState.supervisionReports.unshift(newRep);
+  saveState(appState);
+  res.json(newRep);
+});
+
 // Serve Vite setup for building client files / index.html
 async function startServer() {
   // Vite developer mode
@@ -3299,7 +5974,7 @@ async function startServer() {
 
   const PORT = 3000;
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Taskora Server] running on http://0.0.0.0:${PORT} - NODE_ENV=${process.env.NODE_ENV || 'development'}`);
+    console.log(`[Yaamaa Server] running on http://0.0.0.0:${PORT} - NODE_ENV=${process.env.NODE_ENV || 'development'}`);
   });
 }
 

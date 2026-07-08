@@ -6,12 +6,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { User, SocialMessage, Community, FriendRequest, CallSession } from "../types";
 import { Language, getTranslation } from "../i18n";
+import MerchantBadge from "./MerchantBadge";
 import {
   Users,
   UserPlus,
   UserCheck,
   UserMinus,
   MessageSquare,
+  Gift,
   Send,
   PlusCircle,
   Hash,
@@ -39,6 +41,7 @@ import {
   Info,
   Camera,
   ArrowLeft,
+  ArrowDown,
   ShoppingBag,
   CreditCard,
   Phone,
@@ -46,7 +49,13 @@ import {
   PhoneOff,
   RefreshCw,
   VolumeX,
-  MicOff
+  MicOff,
+  Loader2,
+  CornerUpLeft,
+  Copy,
+  Trash,
+  Mail,
+  MailOpen
 } from "lucide-react";
 
 interface SocialViewProps {
@@ -58,19 +67,24 @@ interface SocialViewProps {
   initialActiveFriendId?: string | null;
   initialActiveTab?: "dm" | "communities";
   onViewProfile?: (userId: string) => void;
+  onActiveConversationChange?: (hasActiveConv: boolean) => void;
+  initiallyOpenGiftsModal?: boolean;
+  onResetInitiallyOpenGiftsModal?: () => void;
+  systemMetrics?: any;
+  onNavigate?: (view: string, subTab?: any) => void;
 }
 
-// Preset photo assets for quick & premium messaging in Taskora
+// Preset photo assets for quick & premium messaging in Yaamaa
 const PRESET_PHOTOS = [
   {
     name: "Succès Mission",
     url: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=600",
-    caption: "🔥 Mission validée avec succès sur Taskora !"
+    caption: "🔥 Mission validée avec succès sur Yaamaa !"
   },
   {
     name: "Gains & Retrait",
     url: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&q=80&w=600",
-    caption: "💸 Preuve de paiement reçue, Taskora paye bien !"
+    caption: "💸 Preuve de paiement reçue, Yaamaa paye bien !"
   },
   {
     name: "Motivation",
@@ -84,6 +98,57 @@ const PRESET_PHOTOS = [
   }
 ];
 
+// Programmatically generate a playable WAV base64 audio containing a sweeping tone
+function generateSyntheticAudioBase64(durationSeconds: number): string {
+  const sampleRate = 4000;
+  const numSamples = sampleRate * durationSeconds;
+  const buffer = new ArrayBuffer(44 + numSamples);
+  const view = new DataView(buffer);
+
+  // RIFF identifier
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  // file length
+  view.setUint32(4, 36 + numSamples, true);
+  // RIFF type
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  // format chunk identifier
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw)
+  view.setUint16(20, 1, true); // PCM - Integer
+  // channel count
+  view.setUint16(22, 1, true); // Mono
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sample rate * block align)
+  view.setUint32(28, sampleRate, true);
+  // block align (channel count * bytes per sample)
+  view.setUint16(32, 1, true);
+  // bits per sample
+  view.setUint16(34, 8, true); // 8-bit audio
+  // data chunk identifier
+  view.setUint32(36, 0x64617461, false); // "data"
+  // data chunk length
+  view.setUint32(40, numSamples, true);
+
+  // Generate a sweeping/vibrating synth tone (330Hz base)
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const frequency = 330 + 60 * Math.sin(2 * Math.PI * 1.5 * t);
+    const sample = Math.sin(2 * Math.PI * frequency * t);
+    const val = Math.floor((sample + 1) * 127);
+    view.setUint8(44 + i, val);
+  }
+
+  const uint8 = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < uint8.length; i++) {
+    binary += String.fromCharCode(uint8[i]);
+  }
+  return "data:audio/wav;base64," + btoa(binary);
+}
+
 export default function SocialView({
   currentUser,
   usersList,
@@ -92,7 +157,12 @@ export default function SocialView({
   onOpenProfile,
   initialActiveFriendId,
   initialActiveTab,
-  onViewProfile
+  onViewProfile,
+  onActiveConversationChange,
+  initiallyOpenGiftsModal,
+  onResetInitiallyOpenGiftsModal,
+  systemMetrics,
+  onNavigate
 }: SocialViewProps) {
   const t = getTranslation(currentLanguage);
 
@@ -151,10 +221,193 @@ export default function SocialView({
     documentType?: "pdf" | "audio" | "text" | "photo" | "other";
   }
   const [stagedAttachment, setStagedAttachment] = useState<StagedAttachment | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<SocialMessage | null>(null);
+
+  // Long press / reactions popup states
+  const [longPressedMessageId, setLongPressedMessageId] = useState<string | null>(null);
+  const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Virtual Gifts System States
+  const [showGiftsModal, setShowGiftsModal] = useState(false);
+  const [giftPointsBalance, setGiftPointsBalance] = useState<number>(currentUser?.giftPoints !== undefined ? currentUser.giftPoints : 1000);
+  const [giftPointsEarnedBalance, setGiftPointsEarnedBalance] = useState<number>(currentUser?.giftPointsEarned !== undefined ? currentUser.giftPointsEarned : 0);
+  const [giftConversionRate, setGiftConversionRate] = useState<number>(0.01);
+  const [systemGifts, setSystemGifts] = useState<any[]>([]);
+  const [buyingPack, setBuyingPack] = useState<string | null>(null);
+  const [pointsToConvert, setPointsToConvert] = useState<string>("100");
+  const [isConverting, setIsConverting] = useState(false);
+
+  React.useEffect(() => {
+    if (initiallyOpenGiftsModal) {
+      const recipientId = activeFriendId || (activeCommunityId ? (communities.find((c: any) => c.id === activeCommunityId)?.creatorId || null) : null);
+      setGiftRecipientId(recipientId);
+      setGiftCatalogTab("send");
+      setShowGiftCatalogModal(true);
+      if (onResetInitiallyOpenGiftsModal) {
+        onResetInitiallyOpenGiftsModal();
+      }
+    }
+  }, [initiallyOpenGiftsModal, onResetInitiallyOpenGiftsModal, activeFriendId, activeCommunityId, communities]);
+
+  const DEFAULT_LOCAL_GIFTS = [
+    { id: "gift_rose", name: "Rose Éternelle", emoji: "🌹", pointsPrice: 10 },
+    { id: "gift_heart", name: "Cœur Pulsant", emoji: "💖", pointsPrice: 20 },
+    { id: "gift_fire", name: "Flamme Fun", emoji: "🔥", pointsPrice: 30 },
+    { id: "gift_beer", name: "Bière Fraîche", emoji: "🍺", pointsPrice: 50 },
+    { id: "gift_unicorn", name: "Licorne Magique", emoji: "🦄", pointsPrice: 100 },
+    { id: "gift_crown", name: "Couronne Royale", emoji: "👑", pointsPrice: 200 },
+    { id: "gift_diamond", name: "Diamant Brillant", emoji: "💎", pointsPrice: 500 },
+    { id: "gift_rocket", name: "Fusée Spatiale", emoji: "🚀", pointsPrice: 1000 },
+    { id: "gift_castle", name: "Château de Rêve", emoji: "🏰", pointsPrice: 2000 }
+  ];
+
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.giftPoints !== undefined) setGiftPointsBalance(currentUser.giftPoints);
+      if (currentUser.giftPointsEarned !== undefined) setGiftPointsEarnedBalance(currentUser.giftPointsEarned);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then(res => {
+        if (res.ok) return res.json();
+      })
+      .then(data => {
+        if (data && data.settings) {
+          if (data.settings.virtualGifts) setSystemGifts(data.settings.virtualGifts);
+          if (data.settings.giftPointsConversionRate !== undefined) setGiftConversionRate(data.settings.giftPointsConversionRate);
+        }
+      })
+      .catch(err => {
+        console.warn("Failed to load settings:", err);
+      });
+  }, []);
+
+  const handleBuyPoints = async (packType: string) => {
+    setBuyingPack(packType);
+    try {
+      const res = await fetch("/api/gifts/buy-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, packType })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGiftPointsBalance(data.newPointsBalance);
+        showToast(`Succès ! +${data.pointsAdded} points ajoutés à votre compte. 🎉`);
+        if (onRefreshUser) onRefreshUser();
+      } else {
+        const err = await res.json();
+        showErrorToast(err?.error || "Erreur lors de l'achat.");
+      }
+    } catch (err) {
+      showErrorToast("Erreur de connexion.");
+    } finally {
+      setBuyingPack(null);
+    }
+  };
+
+  const handleSendGift = async (giftId: string) => {
+    if (!activeFriendId) {
+      showErrorToast("Veuillez d'abord sélectionner un ami à qui envoyer le cadeau !");
+      return;
+    }
+    const targetGift = (systemGifts.length > 0 ? systemGifts : DEFAULT_LOCAL_GIFTS).find(g => g.id === giftId);
+    if (!targetGift) return;
+
+    if (giftPointsBalance < targetGift.pointsPrice) {
+      showErrorToast("Points insuffisants. Veuillez acheter des points d'abord !");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/gifts/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderId: currentUser.id,
+          recipientId: activeFriendId,
+          giftId: giftId
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGiftPointsBalance(data.senderPoints);
+        showToast(`Cadeau ${targetGift.name} envoyé avec succès ! 🎁`);
+        
+        // Append message locally so it appears in chat instantly
+        setMessages(prev => [...prev, data.message]);
+        if (onRefreshUser) onRefreshUser();
+        setShowGiftsModal(false);
+      } else {
+        const err = await res.json();
+        showErrorToast(err?.error || "Erreur d'envoi.");
+      }
+    } catch (err) {
+      showErrorToast("Erreur de connexion.");
+    }
+  };
+
+  const handleConvertPoints = async () => {
+    const pts = parseInt(pointsToConvert);
+    if (isNaN(pts) || pts <= 0) {
+      showErrorToast("Veuillez saisir un nombre valide de points.");
+      return;
+    }
+    if (giftPointsEarnedBalance < pts) {
+      showErrorToast("Vous ne possédez pas autant de points reçus.");
+      return;
+    }
+    setIsConverting(true);
+    try {
+      const res = await fetch("/api/gifts/convert-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          pointsToConvert: pts
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGiftPointsEarnedBalance(data.newPointsEarned);
+        showToast(`Conversion réussie ! +${data.convertedAmount.toLocaleString()} FCFA ajoutés à votre portefeuille. 💰`);
+        if (onRefreshUser) onRefreshUser();
+      } else {
+        const err = await res.json();
+        showErrorToast(err?.error || "Erreur lors de la conversion.");
+      }
+    } catch (err) {
+      showErrorToast("Erreur de connexion.");
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const handleStartLongPress = (msgId: string) => {
+    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
+    longPressTimeoutRef.current = setTimeout(() => {
+      setLongPressedMessageId(msgId);
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate(40);
+        } catch (e) {}
+      }
+    }, 500);
+  };
+
+  const handleCancelLongPress = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
 
   // Voice Message States
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isVirtualRecording, setIsVirtualRecording] = useState(false);
 
   // Custom Offer Form States
   const [showCustomOfferModal, setShowCustomOfferModal] = useState(false);
@@ -165,6 +418,69 @@ export default function SocialView({
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [coQuantity, setCoQuantity] = useState<number>(1);
   const [recordingIntervalId, setRecordingIntervalId] = useState<any>(null);
+
+  // Virtual Gifts & Full Screen Animations States
+  const [showGiftCatalogModal, setShowGiftCatalogModal] = useState(false);
+  const [giftSendingError, setGiftSendingError] = useState<string | null>(null);
+  const [giftSendingSuccess, setGiftSendingSuccess] = useState<string | null>(null);
+  const [giftCategoryFilter, setGiftCategoryFilter] = useState("all");
+  const [activeGiftAnimation, setActiveGiftAnimation] = useState<{ id: string; emoji: string; name: string; type: string; sound: string; duration: number } | null>(null);
+  const playedGiftIds = useRef<Set<string>>(new Set());
+  
+  // Custom interactive gift states
+  const [giftCatalogTab, setGiftCatalogTab] = useState<"send" | "buy" | "withdraw">("send");
+  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
+  const [purchasingPoints, setPurchasingPoints] = useState(false);
+  const [convertingPoints, setConvertingPoints] = useState(false);
+  const [conversionPointsAmount, setConversionPointsAmount] = useState("");
+
+  // Navigation & Modal History Sync (Support phone hardware & browser back buttons)
+  const previousChatStateRef = React.useRef(false);
+  const previousGiftStateRef = React.useRef(false);
+
+  const isChatOpen = !!(activeFriendId || activeCommunityId);
+
+  // Synchronize active chat with browser history
+  React.useEffect(() => {
+    if (isChatOpen && !previousChatStateRef.current) {
+      window.history.pushState({ inChat: true }, "", "");
+    } else if (!isChatOpen && previousChatStateRef.current) {
+      if (window.history.state?.inChat) {
+        window.history.back();
+      }
+    }
+    previousChatStateRef.current = isChatOpen;
+  }, [isChatOpen]);
+
+  // Synchronize gift catalog with browser history
+  React.useEffect(() => {
+    if (showGiftCatalogModal && !previousGiftStateRef.current) {
+      window.history.pushState({ inGiftCatalog: true }, "", "");
+    } else if (!showGiftCatalogModal && previousGiftStateRef.current) {
+      if (window.history.state?.inGiftCatalog) {
+        window.history.back();
+      }
+    }
+    previousGiftStateRef.current = showGiftCatalogModal;
+  }, [showGiftCatalogModal]);
+
+  // Listen to popstate to close chat or gift catalog
+  React.useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (showGiftCatalogModal) {
+        setShowGiftCatalogModal(false);
+        return;
+      }
+      if (activeFriendId || activeCommunityId) {
+        setActiveFriendId(null);
+        setActiveCommunityId(null);
+        return;
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [showGiftCatalogModal, activeFriendId, activeCommunityId]);
 
   // Fetch current user's products when custom offer modal is opened
   useEffect(() => {
@@ -180,6 +496,17 @@ export default function SocialView({
         .catch((err) => console.error("Error fetching my products for custom offer:", err));
     }
   }, [showCustomOfferModal, currentUser]);
+
+  // Automatic timeout dismissal for premium 4D gift animations
+  useEffect(() => {
+    if (activeGiftAnimation) {
+      const durationMs = (activeGiftAnimation.duration || 5) * 1000;
+      const timer = setTimeout(() => {
+        setActiveGiftAnimation(null);
+      }, durationMs);
+      return () => clearTimeout(timer);
+    }
+  }, [activeGiftAnimation]);
 
   // Voice playback emulation states
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
@@ -200,6 +527,15 @@ export default function SocialView({
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [showInviteListModal, setShowInviteListModal] = useState(false);
+
+  // Premium Chat Scrolling, Typing, and Call Indicators
+  const [showNewMessagesBtn, setShowNewMessagesBtn] = useState(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [callDuration, setCallDuration] = useState<number>(0);
+  const [callStatusMessage, setCallStatusMessage] = useState<string>("Connexion...");
+  const [isCallOnHold, setIsCallOnHold] = useState(false);
+  const [typers, setTypers] = useState<Array<{ id: string; name: string; username: string }>>([]);
+  const typingTimeoutRef = useRef<any>(null);
 
   // Call system refs
   const callVideoLocalRef = useRef<HTMLVideoElement | null>(null);
@@ -255,6 +591,11 @@ export default function SocialView({
 
   // Polling data
   useEffect(() => {
+    // Request notification permission if supported
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(err => console.log("Notification permission error:", err));
+    }
+
     fetchSocialData();
     fetchPendingFriendRequests();
     markActiveMessageAsRead();
@@ -297,9 +638,9 @@ export default function SocialView({
     const isLastMessageMine = lastMessage?.senderId === currentUser.id;
 
     if (isNewConversation) {
-      // Do not force scroll on conversation switch - user can scroll if they want
       prevActiveIdRef.current = activeConvId;
-      // Scroll the container to bottom initially quietly without window jumping
+      setNewMessagesCount(0);
+      setShowNewMessagesBtn(false);
       setTimeout(() => {
         const scroller = chatScrollerRef.current;
         if (scroller) {
@@ -314,12 +655,42 @@ export default function SocialView({
 
         if (isNearBottom || isLastMessageMine) {
           scroller.scrollTop = scroller.scrollHeight;
+          setNewMessagesCount(0);
+          setShowNewMessagesBtn(false);
+        } else {
+          // Increment unread count badge for the floating scroll bottom button
+          setNewMessagesCount(prev => prev + 1);
+          setShowNewMessagesBtn(true);
         }
       }
     }
 
     prevMessagesLengthRef.current = messages.length;
   }, [messages, activeFriendId, activeCommunityId, activeTab, currentUser.id]);
+
+  const handleChatScroll = () => {
+    const scroller = chatScrollerRef.current;
+    if (!scroller) return;
+
+    const threshold = 180;
+    const distanceFromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+
+    if (distanceFromBottom > threshold) {
+      setShowNewMessagesBtn(true);
+    } else {
+      setShowNewMessagesBtn(false);
+      setNewMessagesCount(0);
+    }
+  };
+
+  const handleScrollToBottom = () => {
+    const scroller = chatScrollerRef.current;
+    if (scroller) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    }
+    setNewMessagesCount(0);
+    setShowNewMessagesBtn(false);
+  };
 
   const showToast = (msg: string) => {
     setSuccessMsg(msg);
@@ -347,6 +718,7 @@ export default function SocialView({
         u.id !== currentUser.id && 
         (u.username.toLowerCase().includes(query.toLowerCase()) || 
          u.name.toLowerCase().includes(query.toLowerCase()) || 
+         (u.merchantNumber && u.merchantNumber.toLowerCase().includes(query.toLowerCase())) ||
          u.phone?.includes(query))
       );
       if (found.length > 0) {
@@ -406,7 +778,7 @@ export default function SocialView({
       const commRes = await fetch("/api/social/communities");
       if (commRes.ok) {
         const commData = await commRes.json();
-        setCommunities(commData);
+        setCommunities(Array.isArray(commData) ? commData : []);
       }
       await fetchMessagesOnly();
     } catch (err) {
@@ -419,7 +791,7 @@ export default function SocialView({
       const commRes = await fetch("/api/social/communities");
       if (commRes.ok) {
         const commData = await commRes.json();
-        setCommunities(commData);
+        setCommunities(Array.isArray(commData) ? commData : []);
       }
       await fetchMessagesOnly();
     } catch (err) {
@@ -441,6 +813,83 @@ export default function SocialView({
       clearInterval(callInterval);
     };
   }, [currentUser, activeCall, callStream]);
+
+  // Poll typing status of other users in the current discussion
+  useEffect(() => {
+    if (!currentUser) return;
+    const activeConvId = activeTab === "dm" ? activeFriendId : activeCommunityId;
+    if (!activeConvId) {
+      setTypers([]);
+      return;
+    }
+
+    const pollTyping = async () => {
+      try {
+        let url = `/api/social/typing?userId=${currentUser.id}`;
+        if (activeTab === "dm" && activeFriendId) {
+          url += `&otherId=${activeFriendId}`;
+        } else if (activeTab === "communities" && activeCommunityId) {
+          url += `&communityId=${activeCommunityId}`;
+        }
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setTypers(data.typers || []);
+        }
+      } catch (err) {
+        console.error("Error polling typing status:", err);
+      }
+    };
+
+    pollTyping();
+    const interval = setInterval(pollTyping, 1200);
+    return () => clearInterval(interval);
+  }, [currentUser, activeTab, activeFriendId, activeCommunityId]);
+
+  // Call duration counter
+  useEffect(() => {
+    let timer: any = null;
+    if (activeCall && activeCall.status === "active") {
+      setCallDuration(0);
+      timer = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeCall?.status]);
+
+  const [isTypingState, setIsTypingState] = useState(false);
+
+  const handleTextareaChange = (val: string) => {
+    setNewMsgText(val);
+    if (!currentUser) return;
+
+    const otherId = activeTab === "dm" ? activeFriendId || undefined : undefined;
+    const communityId = activeTab === "communities" ? activeCommunityId || undefined : undefined;
+
+    if (!isTypingState) {
+      setIsTypingState(true);
+      fetch("/api/social/typing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, otherId, communityId, isTyping: true })
+      }).catch(() => {});
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTypingState(false);
+      fetch("/api/social/typing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, otherId, communityId, isTyping: false })
+      }).catch(() => {});
+    }, 2500);
+  };
 
   const pollCallSessions = async () => {
     if (!currentUser) return;
@@ -1078,16 +1527,242 @@ export default function SocialView({
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
+
+        // Play and queue any unplayed virtual gifts in real-time
+        if (Array.isArray(data)) {
+          data.forEach((msg: any) => {
+            if (msg.isGift && !playedGiftIds.current.has(msg.id)) {
+              playedGiftIds.current.add(msg.id);
+              triggerGiftAnimationEffect(msg);
+            }
+          });
+        }
       }
     } else if (activeTab === "communities" && activeCommunityId) {
       const res = await fetch(`/api/social/messages?communityId=${activeCommunityId}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
+
+        // Play and queue any unplayed virtual gifts in real-time
+        if (Array.isArray(data)) {
+          data.forEach((msg: any) => {
+            if (msg.isGift && !playedGiftIds.current.has(msg.id)) {
+              playedGiftIds.current.add(msg.id);
+              triggerGiftAnimationEffect(msg);
+            }
+          });
+        }
       }
     } else {
       setMessages([]);
     }
+  };
+
+  const playGiftSynthesizedSound = (soundName: string) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const mainGain = ctx.createGain();
+      mainGain.gain.setValueAtTime(0.4, now);
+      mainGain.connect(ctx.destination);
+
+      if (soundName === "love_chime" || soundName === "diamond_cling") {
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(soundName === "love_chime" ? 880 : 1200, now);
+        osc2.type = "triangle";
+        osc2.frequency.setValueAtTime(soundName === "love_chime" ? 1100 : 1500, now);
+
+        const bellGain = ctx.createGain();
+        bellGain.gain.setValueAtTime(0.3, now);
+        bellGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+        osc1.connect(bellGain);
+        osc2.connect(bellGain);
+        bellGain.connect(mainGain);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 1.5);
+        osc2.stop(now + 1.5);
+      } else if (soundName === "heartbeat") {
+        [0, 0.4, 0.8].forEach((delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(60, now + delay);
+          osc.frequency.exponentialRampToValueAtTime(30, now + delay + 0.15);
+
+          gain.gain.setValueAtTime(0.6, now + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.2);
+
+          osc.connect(gain);
+          gain.connect(mainGain);
+          osc.start(now + delay);
+          osc.stop(now + delay + 0.25);
+        });
+      } else if (soundName === "royal_fanfare" || soundName === "epic_orchestra") {
+        const freqs = soundName === "royal_fanfare" ? [349.23, 440.00, 523.25, 698.46] : [261.63, 329.63, 392.00, 523.25];
+        freqs.forEach((f, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(f, now + idx * 0.15);
+          osc.frequency.linearRampToValueAtTime(f * 1.005, now + 1.5);
+
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(1000, now);
+
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.15, now + idx * 0.15 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(mainGain);
+
+          osc.start(now);
+          osc.stop(now + 2.0);
+        });
+      } else if (soundName === "sparkle_magic") {
+        for (let i = 0; i < 15; i++) {
+          const time = now + i * 0.08;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(400 + i * 120, time);
+
+          gain.gain.setValueAtTime(0.12, time);
+          gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+
+          osc.connect(gain);
+          gain.connect(mainGain);
+          osc.start(time);
+          osc.stop(time + 0.3);
+        }
+      } else if (soundName === "rocket_blast" || soundName === "dragon_breath") {
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noiseNode = ctx.createBufferSource();
+        noiseNode.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(soundName === "rocket_blast" ? 150 : 800, now);
+        filter.frequency.exponentialRampToValueAtTime(soundName === "rocket_blast" ? 1200 : 150, now + 1.5);
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.5, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+
+        noiseNode.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(mainGain);
+
+        noiseNode.start(now);
+        noiseNode.stop(now + 2.0);
+      } else if (soundName === "lion_roar") {
+        const osc = ctx.createOscillator();
+        const mod = ctx.createOscillator();
+        const modGain = ctx.createGain();
+        const gain = ctx.createGain();
+        
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.linearRampToValueAtTime(45, now + 1.5);
+        
+        mod.type = "sine";
+        mod.frequency.setValueAtTime(35, now);
+        modGain.gain.setValueAtTime(25, now);
+        
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+        
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(250, now);
+        
+        mod.connect(modGain);
+        modGain.connect(osc.frequency);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(mainGain);
+        
+        mod.start(now);
+        osc.start(now);
+        mod.stop(now + 1.7);
+        osc.stop(now + 1.7);
+      } else if (soundName === "car_engine") {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(80, now);
+        osc.frequency.linearRampToValueAtTime(320, now + 0.6);
+        osc.frequency.linearRampToValueAtTime(140, now + 1.0);
+        osc.frequency.linearRampToValueAtTime(450, now + 1.6);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 2.2);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(350, now);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(mainGain);
+
+        osc.start(now);
+        osc.stop(now + 2.5);
+      } else {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(mainGain);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    } catch (e) {
+      console.error("Web Audio API synthesis failed:", e);
+    }
+  };
+
+  const triggerGiftAnimationEffect = (msg: any) => {
+    const giftList = systemMetrics?.settings?.virtualGifts || [];
+    const giftConfig = giftList.find((g: any) => g.id === msg.giftId);
+    
+    const animType = giftConfig?.animation || "petals";
+    const soundName = giftConfig?.soundEffect || "love_chime";
+    const duration = giftConfig?.duration || 5;
+
+    setActiveGiftAnimation({
+      id: msg.id,
+      emoji: msg.giftImage || "🎁",
+      name: msg.giftName || "Cadeau",
+      type: animType,
+      sound: soundName,
+      duration: duration
+    });
+
+    playGiftSynthesizedSound(soundName);
   };
 
   const playNotificationSound = () => {
@@ -1114,8 +1789,187 @@ export default function SocialView({
     }
   };
 
+  const handleBuyPointsInteractive = async (packType: string, packPrice: number) => {
+    if (!currentUser) return;
+    setGiftSendingError(null);
+    setGiftSendingSuccess(null);
+    setPurchasingPoints(true);
+
+    const availableWallet = currentUser.wallet?.available || 0;
+    if (availableWallet < packPrice) {
+      setGiftSendingError(`Votre solde portefeuille (${availableWallet.toFixed(2)} ${currentUser.currency || "EUR"}) est insuffisant pour ce pack. Redirection vers la recharge...`);
+      setPurchasingPoints(false);
+      setTimeout(() => {
+        if (onNavigate) {
+          setShowGiftCatalogModal(false);
+          onNavigate("wallet", "deposit");
+        } else {
+          setGiftSendingError("Veuillez recharger votre portefeuille dans l'onglet Portefeuille.");
+        }
+      }, 2500);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/gifts/buy-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          packType: packType
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setGiftSendingError(data.error || "Une erreur est survenue lors de l'achat de pièces.");
+      } else {
+        setGiftSendingSuccess(`Succès ! +${data.pointsAdded} Pièces créditées.`);
+        if (onRefreshUser) {
+          onRefreshUser();
+        }
+        setTimeout(() => {
+          setGiftSendingSuccess(null);
+          setGiftCatalogTab("send");
+        }, 1500);
+      }
+    } catch (err) {
+      setGiftSendingError("Erreur réseau lors de l'achat de pièces.");
+    } finally {
+      setPurchasingPoints(false);
+    }
+  };
+
+  const handleConvertPointsInteractive = async () => {
+    if (!currentUser) return;
+    const pts = parseInt(conversionPointsAmount);
+    if (isNaN(pts) || pts <= 0) {
+      setGiftSendingError("Veuillez entrer un nombre de pièces valide.");
+      return;
+    }
+
+    const earned = currentUser.giftPointsEarned || 0;
+    if (earned < pts) {
+      setGiftSendingError(`Solde de pièces gagnées insuffisant. Vous n'avez que ${earned} pièces.`);
+      return;
+    }
+
+    setGiftSendingError(null);
+    setGiftSendingSuccess(null);
+    setConvertingPoints(true);
+
+    try {
+      const res = await fetch("/api/gifts/convert-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          pointsToConvert: pts
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setGiftSendingError(data.error || "Une erreur est survenue.");
+      } else {
+        setGiftSendingSuccess(`Félicitations ! Vos pièces ont été converties avec succès.`);
+        setConversionPointsAmount("");
+        if (onRefreshUser) {
+          onRefreshUser();
+        }
+        setTimeout(() => {
+          setGiftSendingSuccess(null);
+        }, 2000);
+      }
+    } catch (err) {
+      setGiftSendingError("Erreur réseau lors de la conversion.");
+    } finally {
+      setConvertingPoints(false);
+    }
+  };
+
+  const handleSendVirtualGift = async (giftId: string) => {
+    const targetRecipientId = giftRecipientId || (activeFriend ? activeFriend.id : null);
+    if (!currentUser || !targetRecipientId) {
+      setGiftSendingError("Veuillez sélectionner un destinataire.");
+      return;
+    }
+    setGiftSendingError(null);
+    setGiftSendingSuccess(null);
+
+    // Client-side quick points check to direct immediately to buy/recharge
+    const gifts = systemMetrics?.settings?.virtualGifts || [];
+    const gift = gifts.find((g: any) => g.id === giftId);
+    const userPoints = currentUser.giftPoints || 0;
+    
+    if (gift && userPoints < gift.pointsPrice) {
+      setGiftSendingError(`Points insuffisants (${userPoints} / ${gift.pointsPrice} Pièces). Veuillez acheter des pièces.`);
+      setGiftCatalogTab("buy");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/gifts/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderId: currentUser.id,
+          recipientId: targetRecipientId,
+          giftId: giftId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error && data.error.includes("insuffisants")) {
+          setGiftSendingError(`${data.error} Redirection vers l'achat de pièces...`);
+          setGiftCatalogTab("buy");
+        } else {
+          setGiftSendingError(data.error || "Une erreur est survenue lors de l'envoi du cadeau.");
+        }
+      } else {
+        setGiftSendingSuccess(`Excellent ! Cadeau ${data.gift?.emoji || "🎁"} ${data.gift?.name || ""} envoyé.`);
+        
+        if (onRefreshUser) {
+          onRefreshUser();
+        }
+
+        setTimeout(() => {
+          setShowGiftCatalogModal(false);
+          setGiftSendingSuccess(null);
+          setGiftRecipientId(null);
+        }, 1200);
+
+        await fetchMessagesOnly();
+      }
+    } catch (err) {
+      setGiftSendingError("Erreur réseau lors de l'envoi du cadeau.");
+    }
+  };
+
+  const lastMarkedChatRef = useRef<{ type: string; id: string | null }>({ type: "", id: null });
+
   const markActiveMessageAsRead = async () => {
     if (!currentUser) return;
+    
+    const currentChatId = activeTab === "dm" ? activeFriendId : activeCommunityId;
+    const isNewChat = lastMarkedChatRef.current.type !== activeTab || lastMarkedChatRef.current.id !== currentChatId;
+    
+    // Check if we actually have unread messages in the active chat using the ref
+    const refData = lastUnreadStatsRef.current;
+    let hasUnread = false;
+    
+    if (activeTab === "dm" && activeFriendId) {
+      hasUnread = (refData?.unreadDMs?.[activeFriendId] || 0) > 0;
+    } else if (activeTab === "communities" && activeCommunityId) {
+      hasUnread = (refData?.unreadCommunities?.[activeCommunityId] || 0) > 0;
+    }
+    
+    // If it's not a newly opened chat and there are no unread messages, don't fetch!
+    if (!isNewChat && !hasUnread) {
+      return;
+    }
+
     try {
       const body: any = { userId: currentUser.id };
       if (activeTab === "dm" && activeFriendId) {
@@ -1125,6 +1979,9 @@ export default function SocialView({
       } else {
         return;
       }
+
+      // Update ref immediately so we don't spam requests while this one is in-flight
+      lastMarkedChatRef.current = { type: activeTab, id: currentChatId };
 
       await fetch("/api/social/messages/mark-read", {
         method: "POST",
@@ -1140,7 +1997,9 @@ export default function SocialView({
         } else if (body.communityId) {
           nextComms[body.communityId] = 0;
         }
-        return { unreadDMs: nextDMs, unreadCommunities: nextComms };
+        const updated = { unreadDMs: nextDMs, unreadCommunities: nextComms };
+        lastUnreadStatsRef.current = updated;
+        return updated;
       });
     } catch (err) {
       console.error("Error marking active chat as read:", err);
@@ -1156,15 +2015,18 @@ export default function SocialView({
       if (res.ok) {
         const data = await res.json();
         
+        const safeUnreadDMs = data && typeof data.unreadDMs === "object" ? data.unreadDMs : {};
+        const safeUnreadCommunities = data && typeof data.unreadCommunities === "object" ? data.unreadCommunities : {};
+
         let hasNewMessage = false;
         let newMsgSenderName = "";
         let newMsgType: "dm" | "community" = "dm";
         let newMsgId = "";
         
         // Check unread count changes for DMs
-        Object.keys(data.unreadDMs).forEach(friendId => {
-          const prevCount = lastUnreadStatsRef.current.unreadDMs[friendId] || 0;
-          const currentCount = data.unreadDMs[friendId] || 0;
+        Object.keys(safeUnreadDMs).forEach(friendId => {
+          const prevCount = lastUnreadStatsRef.current?.unreadDMs?.[friendId] || 0;
+          const currentCount = safeUnreadDMs[friendId] || 0;
           if (currentCount > prevCount && friendId !== activeFriendId) {
             hasNewMessage = true;
             newMsgType = "dm";
@@ -1175,9 +2037,9 @@ export default function SocialView({
         });
         
         // Check unread count changes for Communities
-        Object.keys(data.unreadCommunities).forEach(commId => {
-          const prevCount = lastUnreadStatsRef.current.unreadCommunities[commId] || 0;
-          const currentCount = data.unreadCommunities[commId] || 0;
+        Object.keys(safeUnreadCommunities).forEach(commId => {
+          const prevCount = lastUnreadStatsRef.current?.unreadCommunities?.[commId] || 0;
+          const currentCount = safeUnreadCommunities[commId] || 0;
           if (currentCount > prevCount && commId !== activeCommunityId) {
             hasNewMessage = true;
             newMsgType = "community";
@@ -1200,10 +2062,76 @@ export default function SocialView({
           setTimeout(() => {
             setInAppNotification(null);
           }, 4500);
+
+          // Native Web Notification Integration (Push notifications)
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            try {
+              let fetchUrl = "";
+              if (newMsgType === "dm") {
+                fetchUrl = `/api/social/messages?userId=${currentUser.id}&otherId=${newMsgId}`;
+              } else {
+                fetchUrl = `/api/social/messages?communityId=${newMsgId}`;
+              }
+              
+              fetch(fetchUrl)
+                .then(r => r.json())
+                .then(msgs => {
+                  if (Array.isArray(msgs) && msgs.length > 0) {
+                    const lastMsg = msgs[msgs.length - 1];
+                    let bodyPreview = lastMsg.text;
+                    if (lastMsg.voiceUrl) bodyPreview = "🎵 Message vocal enregistré";
+                    if (lastMsg.imageUrl) bodyPreview = "🖼️ Photo / Image";
+                    if (lastMsg.documentUrl) bodyPreview = `📄 Document : ${lastMsg.documentName || "Fichier"}`;
+                    if (lastMsg.isCustomOffer) bodyPreview = `💼 Offre commerciale : ${lastMsg.customOfferName} (${lastMsg.customOfferPrice} FCFA)`;
+
+                    const notificationTitle = newMsgType === "dm" 
+                      ? `@${lastMsg.senderUsername} (${newMsgSenderName})`
+                      : `#${newMsgSenderName} • @${lastMsg.senderUsername}`;
+
+                    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                      navigator.serviceWorker.ready.then(registration => {
+                        registration.showNotification(notificationTitle, {
+                          body: bodyPreview,
+                          icon: lastMsg.senderAvatar || "/logo.jpg",
+                          badge: "/logo.jpg",
+                          tag: `msg-${newMsgId}`,
+                          silent: true
+                        });
+                      });
+                    } else {
+                      const nativeNotif = new Notification(notificationTitle, {
+                        body: bodyPreview,
+                        icon: lastMsg.senderAvatar || "/logo.jpg",
+                        silent: true
+                      });
+                      nativeNotif.onclick = () => {
+                        window.focus();
+                        setActiveTab(newMsgType === "dm" ? "dm" : "communities");
+                        if (newMsgType === "dm") {
+                          setActiveFriendId(newMsgId);
+                          setActiveCommunityId(null);
+                        } else {
+                          setActiveCommunityId(newMsgId);
+                          setActiveFriendId(null);
+                        }
+                        nativeNotif.close();
+                      };
+                    }
+                  }
+                })
+                .catch(err => console.log("Error querying last message preview:", err));
+            } catch (err) {
+              console.error("Error displaying native notification:", err);
+            }
+          }
         }
         
-        lastUnreadStatsRef.current = data;
-        setUnreadStats(data);
+        const safeData = {
+          unreadDMs: safeUnreadDMs,
+          unreadCommunities: safeUnreadCommunities
+        };
+        lastUnreadStatsRef.current = safeData;
+        setUnreadStats(safeData);
       }
     } catch (err) {
       console.error("Error loading unread stats:", err);
@@ -1276,7 +2204,7 @@ export default function SocialView({
     }
   };
 
-  // Message Send Logic (Text, Image, Voice, Documents)
+  // Message Send Logic (Text, Image, Voice, Documents - background upload with optimistic UI update!)
   const handleSendMessage = async (customPayload?: { 
     text?: string; 
     voiceUrl?: string; 
@@ -1317,6 +2245,12 @@ export default function SocialView({
       documentSize: payloadToUse?.documentSize
     };
 
+    if (replyingToMessage) {
+      payload.replyToId = replyingToMessage.id;
+      payload.replyToText = replyingToMessage.text;
+      payload.replyToSenderUsername = replyingToMessage.senderUsername;
+    }
+
     if (activeTab === "dm" && activeFriendId) {
       payload.recipientId = activeFriendId;
     } else if (activeTab === "communities" && activeCommunityId) {
@@ -1325,23 +2259,99 @@ export default function SocialView({
       return;
     }
 
-    try {
-      const res = await fetch("/api/social/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+    // 1. Create temporary optimistic message ID and object
+    const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const optimisticMsg: any = {
+      id: tempId,
+      senderId: currentUser.id,
+      senderUsername: currentUser.username,
+      senderAvatar: currentUser.avatar,
+      senderName: currentUser.name,
+      text: payload.text,
+      voiceUrl: payload.voiceUrl,
+      voiceDuration: payload.voiceDuration,
+      imageUrl: payload.imageUrl,
+      documentUrl: payload.documentUrl,
+      documentName: payload.documentName,
+      documentType: payload.documentType,
+      documentSize: payload.documentSize,
+      recipientId: payload.recipientId,
+      communityId: payload.communityId,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true,
+      replyToId: payload.replyToId,
+      replyToText: payload.replyToText,
+      replyToSenderUsername: payload.replyToSenderUsername,
+      reactions: {}
+    };
 
+    // 2. Immediately append to the messages list (instant render, no waiting!)
+    setMessages(prev => [...prev, optimisticMsg]);
+    setNewMsgText("");
+    setStagedAttachment(null);
+    setReplyingToMessage(null);
+
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      const container = document.getElementById("yaamaa_messages_scroll_container");
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }, 80);
+
+    // 3. Initiate the background request
+    fetch("/api/social/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    .then(async (res) => {
       if (res.ok) {
         const newMsg = await res.json();
-        setMessages(prev => [...prev, newMsg]);
-        setNewMsgText("");
-        setStagedAttachment(null);
+        // Swap out the temporary optimistic message with the real persistent database record
+        setMessages(prev => prev.map(m => m.id === tempId ? newMsg : m));
       } else {
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, isFailed: true } : m));
         showErrorToast("Échec de l'envoi du message.");
       }
+    })
+    .catch((err) => {
+      console.error("Background upload failed:", err);
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, isFailed: true } : m));
+      showErrorToast("Erreur de connexion. Message non envoyé.");
+    });
+  };
+
+  // Delete message helper
+  const handleDeleteMessage = async (msgId: string) => {
+    try {
+      const res = await fetch(`/api/social/messages/${msgId}`, { method: "DELETE" });
+      if (res.ok) {
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+        showToast("Message supprimé 🗑️");
+      } else {
+        showErrorToast("Impossible de supprimer le message.");
+      }
     } catch (err) {
-      showErrorToast("Erreur réseau lors de l'envoi.");
+      console.error(err);
+      showErrorToast("Erreur lors de la suppression.");
+    }
+  };
+
+  // Toggle emoji reaction helper
+  const handleToggleReaction = async (msgId: string, emoji: string) => {
+    try {
+      const res = await fetch(`/api/social/messages/${msgId}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji, userId: currentUser.id })
+      });
+      if (res.ok) {
+        const updatedMsg = await res.json();
+        setMessages(prev => prev.map(m => m.id === msgId ? updatedMsg : m));
+      }
+    } catch (err) {
+      console.error("Failed to react:", err);
     }
   };
 
@@ -1411,7 +2421,7 @@ export default function SocialView({
         body: JSON.stringify({
           action,
           userId: currentUser.id,
-          paymentMethod: "Wallet Taskora" // Uses Wallet Taskora by default
+          paymentMethod: "Wallet Yaamaa" // Uses Wallet Yaamaa by default
         })
       });
 
@@ -1586,10 +2596,10 @@ export default function SocialView({
 
   // Micro voice message recorder (Actual microphone & MediaRecorder API)
   const startRecording = async () => {
+    setIsVirtualRecording(false);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showErrorToast("Votre navigateur ne supporte pas l'enregistrement audio.");
-        return;
+        throw new Error("getUserMedia non supporté");
       }
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1662,8 +2672,15 @@ export default function SocialView({
       }
       
     } catch (err) {
-      console.error("Error accessing microphone:", err);
-      showErrorToast("Impossible d'accéder au microphone. Veuillez autoriser l'accès.");
+      console.warn("Error accessing actual microphone, starting high-fidelity simulated fallback:", err);
+      setIsVirtualRecording(true);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      const interval = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      setRecordingIntervalId(interval);
+      showToast("Simulation de micro activée (Enregistrement virtuel de démonstration) 🎙️");
     }
   };
 
@@ -1697,6 +2714,7 @@ export default function SocialView({
     audioChunksRef.current = [];
     
     setIsRecording(false);
+    setIsVirtualRecording(false);
     setRecordingDuration(0);
     setRecordingIntervalId(null);
   };
@@ -1716,14 +2734,34 @@ export default function SocialView({
       silenceAudioCtxRef.current = null;
     }
     
-    if (!mediaRecorderRef.current) {
+    const finalDuration = recordingDuration === 0 ? 3 : recordingDuration;
+
+    if (isVirtualRecording) {
+      // Programmatically synthesize high-fidelity playable WAV tone
+      const base64Audio = generateSyntheticAudioBase64(finalDuration);
+      
+      handleSendMessage({
+        text: `Message vocal (${finalDuration}s) [Démo] 🎙️`,
+        voiceUrl: base64Audio,
+        voiceDuration: finalDuration
+      });
+      
+      showToast("Message vocal virtuel envoyé ! 🚀");
       setIsRecording(false);
+      setIsVirtualRecording(false);
       setRecordingDuration(0);
       setRecordingIntervalId(null);
       return;
     }
     
-    const finalDuration = recordingDuration === 0 ? 3 : recordingDuration;
+    if (!mediaRecorderRef.current) {
+      setIsRecording(false);
+      setIsVirtualRecording(false);
+      setRecordingDuration(0);
+      setRecordingIntervalId(null);
+      return;
+    }
+    
     const mediaRecorder = mediaRecorderRef.current;
     
     mediaRecorder.onstop = () => {
@@ -1758,6 +2796,7 @@ export default function SocialView({
     }
     
     setIsRecording(false);
+    setIsVirtualRecording(false);
     setRecordingDuration(0);
     setRecordingIntervalId(null);
   };
@@ -2065,37 +3104,116 @@ export default function SocialView({
     );
   };
 
-  // FRIEND SUGGESTIONS ENGINE (Smarter & WhatsApp like suggestions)
-  const getFriendSuggestions = (): { user: User; reason: string; sameCountry: boolean }[] => {
-    // Users who are not already friends and don't have pending requests
+  // USER DYNAMIC INTERESTS MAPPING
+  const getUserInterests = (u: User): string[] => {
+    const ALL_INTEREST_TAGS = ["Freelancing", "Design", "E-commerce", "Technologies", "Crypto", "Gaming", "Music", "Marketing", "Dev", "Art", "Business", "Divertissement"];
+    if (u.role === "founder" || u.role === "admin") {
+      return ["Technologies", "Business", "Marketing", "E-commerce"];
+    }
+    // Determinate stable interests based on username characters
+    const charSum = u.username.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const i1 = charSum % ALL_INTEREST_TAGS.length;
+    const i2 = (charSum + 3) % ALL_INTEREST_TAGS.length;
+    const i3 = (charSum + 7) % ALL_INTEREST_TAGS.length;
+    
+    return Array.from(new Set([ALL_INTEREST_TAGS[i1], ALL_INTEREST_TAGS[i2], ALL_INTEREST_TAGS[i3]]));
+  };
+
+  // FRIEND SUGGESTIONS ENGINE (Smarter based on interests & geographic location)
+  const getFriendSuggestions = (): { user: User; reason: string; sameCountry: boolean; score: number }[] => {
     const matchedFriendIds = friends.map(f => f.id);
     
-    // Also skip users who sent a pending request to me, or whom I sent a pending request to
-    // We don't have a full outbound requests API yet but we can filter by matching usernames/emails
+    // Also skip users who sent a pending request or vice-versa
+    const pendingParticipantIds = [
+      ...pendingRequests.map(r => r.senderId),
+      ...pendingRequests.map(r => r.receiverId),
+      ...sentRequests.map(r => r.senderId),
+      ...sentRequests.map(r => r.receiverId)
+    ];
+    
+    const myInterests = getUserInterests(currentUser);
+    
     return usersList
-      .filter(u => u.id !== currentUser.id && !matchedFriendIds.includes(u.id))
+      .filter(u => u.id !== currentUser.id && !matchedFriendIds.includes(u.id) && !pendingParticipantIds.includes(u.id))
       .map(u => {
         let sameCountry = u.country?.toLowerCase() === currentUser.country?.toLowerCase();
-        let reason = "";
+        const uInterests = getUserInterests(u);
+        const overlap = uInterests.filter(val => myInterests.includes(val));
         
-        if (sameCountry) {
-          reason = `Réside au même pays (${u.country})`;
-        } else if (u.role === "founder") {
-          reason = "Membre de l'équipe support / Fondateur";
+        let score = 0;
+        if (sameCountry) score += 15;
+        score += overlap.length * 10;
+        
+        let reason = "";
+        if (overlap.length > 0 && sameCountry) {
+          reason = `Même pays (${u.country}) • Partage vos goûts (${overlap.slice(0, 2).join(", ")})`;
+        } else if (overlap.length > 0) {
+          reason = `Intérêts communs: ${overlap.slice(0, 2).join(", ")}`;
+        } else if (sameCountry) {
+          reason = `Réside dans le même pays (${u.country})`;
         } else {
           reason = `Membre actif (${u.country || "Afrique"})`;
         }
-
-        return { user: u, reason, sameCountry };
+        
+        return { user: u, reason, sameCountry, score };
       })
-      // Prioritize same country residents first
-      .sort((a, b) => (a.sameCountry === b.sameCountry ? 0 : a.sameCountry ? -1 : 1))
-      .slice(0, 5); // Max 5 suggestions to keep it neat
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  };
+
+  // GROUP SUGGESTIONS ENGINE (Smarter based on user and members interests)
+  const getGroupSuggestions = (): { community: Community; reason: string; score: number }[] => {
+    const joinedIds = communities
+      .filter(c => c.memberIds && c.memberIds.includes(currentUser.id))
+      .map(c => c.id);
+      
+    const unjoined = communities.filter(c => !joinedIds.includes(c.id));
+    const myInterests = getUserInterests(currentUser);
+    
+    return unjoined.map(comm => {
+      let score = 0;
+      let reason = "Recommandé selon vos intérêts";
+      
+      // 1. Keyword overlap with community name and description
+      const nameAndDesc = (comm.name + " " + comm.description).toLowerCase();
+      myInterests.forEach(interest => {
+        if (nameAndDesc.includes(interest.toLowerCase())) {
+          score += 25;
+        }
+      });
+      
+      // 2. Overlap with existing members' interests
+      const members = usersList.filter(u => comm.memberIds?.includes(u.id));
+      let sharedCount = 0;
+      members.forEach(m => {
+        const mInterests = getUserInterests(m);
+        const overlap = mInterests.filter(val => myInterests.includes(val));
+        sharedCount += overlap.length;
+      });
+      
+      score += sharedCount * 5;
+      
+      if (sharedCount > 0) {
+        reason = `${sharedCount} intérêts en commun avec les membres`;
+      } else {
+        reason = `Découvrez ce groupe de discussion`;
+      }
+      
+      return { community: comm, reason, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
   };
 
   const activeFriend = usersList.find(u => u.id === activeFriendId);
   const activeCommunity = communities.find(c => c.id === activeCommunityId);
   const hasActiveConversation = !!((activeTab === "dm" && activeFriend) || (activeTab === "communities" && activeCommunity));
+
+  useEffect(() => {
+    if (onActiveConversationChange) {
+      onActiveConversationChange(hasActiveConversation);
+    }
+  }, [hasActiveConversation, onActiveConversationChange]);
 
   // Search filtered other members
   const filteredUsers = usersList.filter(u => {
@@ -2109,8 +3227,230 @@ export default function SocialView({
   });
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 flex flex-col min-h-0 bg-slate-50/50" id="taskora_social_container">
+    <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 flex flex-col min-h-0 bg-slate-50/50" id="yaamaa_social_container">
       
+      {/* FLOATING ROUND EYE-CATCHING VIRTUAL GIFT BUTTON */}
+      {hasActiveConversation && (
+        <button
+          type="button"
+          onClick={() => {
+            const recipientId = activeFriend ? activeFriend.id : (activeCommunity ? (activeCommunity.creatorId || null) : null);
+            setGiftRecipientId(recipientId);
+            setGiftCatalogTab("send");
+            setShowGiftCatalogModal(true);
+          }}
+          className="fixed left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-400 text-white flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.6)] hover:scale-110 active:scale-95 transition-all duration-300 z-50 cursor-pointer animate-pulse border border-yellow-300"
+          title="Boutique de Cadeaux Virtuels & Retrait"
+          id="btn_floating_gifts_store"
+        >
+          <div className="relative flex flex-col items-center justify-center">
+            <Gift className="h-6 w-6 animate-bounce" />
+            <span className="text-[7.5px] font-black uppercase tracking-wider block mt-0.5 leading-none">Gift</span>
+          </div>
+        </button>
+      )}
+
+      {/* VIRTUAL GIFTS STORE & WITHDRAWAL SYSTEM MODAL */}
+      {showGiftsModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <Gift className="h-6 w-6 text-yellow-200 animate-bounce" />
+                <div className="text-left">
+                  <h3 className="font-extrabold text-sm uppercase tracking-wider leading-none">Boutique de Cadeaux Virtuels</h3>
+                  <p className="text-[10px] text-yellow-100 mt-1">Achetez des points, envoyez des cadeaux ou convertissez vos gains en argent réel !</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGiftsModal(false)}
+                className="h-8 w-8 rounded-full bg-black/20 hover:bg-black/35 flex items-center justify-center text-white font-extrabold text-sm transition cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Balances Display Card */}
+            <div className="p-4 bg-orange-50/50 border-b border-orange-100 grid grid-cols-2 gap-4">
+              <div className="bg-white p-3.5 rounded-2xl border border-orange-200 shadow-2xs text-left">
+                <span className="text-[9.5px] font-extrabold text-orange-600 uppercase tracking-wider block">Mes Points Disponibles</span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-black text-slate-800">⭐ {giftPointsBalance}</span>
+                  <span className="text-[9px] text-gray-500">points</span>
+                </div>
+                <p className="text-[8.5px] text-gray-400 mt-1">Utilisez ces points pour envoyer des cadeaux à vos amis.</p>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-orange-200 shadow-2xs text-left">
+                <span className="text-[9.5px] font-extrabold text-emerald-600 uppercase tracking-wider block">Mes Points Reçus (Convertibles)</span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-black text-slate-800">💖 {giftPointsEarnedBalance}</span>
+                  <span className="text-[9px] text-gray-500">points</span>
+                </div>
+                <p className="text-[8.5px] text-emerald-600 font-extrabold mt-1">
+                  Valeur estimée: {(giftPointsEarnedBalance * (1 / giftConversionRate)).toLocaleString()} FCFA
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-5 overflow-y-auto space-y-6 flex-1 min-h-0 text-left">
+              {/* SECTION 1: BUY POINTS / RECHARGE PACKS */}
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-1.5 border-l-3 border-amber-500 pl-2">
+                  <span>1. Acheter des Packs de Pièces / Cadeaux</span>
+                  <span className="text-[9px] text-amber-600 font-extrabold lowercase bg-amber-100 px-1.5 py-0.5 rounded-md">personnalisé admin</span>
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {(systemMetrics?.settings?.rechargePacks || [
+                    { id: "pack_100", pieces: 100, price: 1.0, currency: "USD", title: "Pack 100 Pièces" },
+                    { id: "pack_200", pieces: 200, price: 2.0, currency: "USD", title: "Pack 200 Pièces" },
+                    { id: "pack_500", pieces: 500, price: 5.0, currency: "USD", title: "Pack 500 Pièces" },
+                    { id: "pack_1000", pieces: 1000, price: 10.0, currency: "USD", title: "Pack 1000 Pièces" },
+                    { id: "pack_5000", pieces: 5000, price: 50.0, currency: "USD", title: "Pack 5000 Pièces" },
+                    { id: "pack_10000", pieces: 10000, price: 100.0, currency: "USD", title: "Pack 10,000 Pièces" }
+                  ]).map((p: any) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={buyingPack !== null}
+                      onClick={() => handleBuyPoints(p.id)}
+                      className="p-3 rounded-2xl border text-center transition cursor-pointer flex flex-col justify-between items-center gap-2 bg-amber-50/40 hover:bg-amber-50 border-amber-200 relative overflow-hidden shadow-2xs"
+                    >
+                      <span className="font-bold text-[10.5px] text-slate-700 block">{p.title || `${p.pieces} Pièces`}</span>
+                      <span className="text-lg font-black text-slate-800 block">⭐ {p.pieces} pts</span>
+                      <div className="bg-slate-900 text-white text-[9.5px] font-black py-1 px-3 rounded-xl block w-full">
+                        {buyingPack === p.id ? "Chargement..." : `${p.price} ${p.currency || "USD"}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION WITHDRAWAL / CONVERSION PACKS */}
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-1.5 border-l-3 border-emerald-500 pl-2">
+                  <span>Retrait ou Conversion Automatique par Packs</span>
+                  <span className="text-[9px] text-emerald-600 font-extrabold lowercase bg-emerald-100 px-1.5 py-0.5 rounded-md">clic instantané</span>
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {(systemMetrics?.settings?.withdrawalPacks || [
+                    { id: "w_100", pieces: 100, value: 1.0, label: "100 Pièces" },
+                    { id: "w_200", pieces: 200, value: 2.0, label: "200 Pièces" },
+                    { id: "w_500", pieces: 500, value: 5.0, label: "500 Pièces" },
+                    { id: "w_1000", pieces: 1000, value: 10.0, label: "1000 Pièces" },
+                    { id: "w_5000", pieces: 5000, value: 50.0, label: "5000 Pièces" },
+                    { id: "w_10000", pieces: 10000, value: 100.0, label: "10,000 Pièces" }
+                  ]).map((w: any) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => {
+                        setShowGiftsModal(false);
+                        if (onNavigate) onNavigate("wallet");
+                      }}
+                      className="p-3 rounded-2xl border text-center transition cursor-pointer flex flex-col justify-between items-center gap-2 bg-emerald-50/40 hover:bg-emerald-50 border-emerald-200 relative overflow-hidden shadow-2xs"
+                    >
+                      <span className="font-bold text-[10.5px] text-slate-700 block">{w.label || `${w.pieces} Pièces`}</span>
+                      <span className="text-lg font-black text-emerald-700 block">💖 {w.pieces} pts</span>
+                      <div className="bg-emerald-600 text-white text-[9.5px] font-black py-1 px-3 rounded-xl block w-full">
+                        Retirer {w.value}€
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 2: SEND A GIFT TO CURRENT CHAT COMPANION */}
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5 border-l-3 border-amber-500 pl-2">
+                  <span>2. Envoyer un Cadeau Virtuel</span>
+                </h4>
+                
+                {activeFriendId ? (
+                  <>
+                    <p className="text-[10px] text-gray-500 mb-3">
+                      Sélectionnez un objet à envoyer à votre correspondant actuel. Les points seront immédiatement retirés de votre solde et ajoutés à son portefeuille.
+                    </p>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
+                      {(systemGifts.length > 0 ? systemGifts : DEFAULT_LOCAL_GIFTS).map((gift) => (
+                        <button
+                          key={gift.id}
+                          type="button"
+                          onClick={() => handleSendGift(gift.id)}
+                          className="p-2 border border-slate-100 rounded-2xl bg-slate-50/60 hover:bg-amber-50 hover:border-amber-300 hover:scale-103 transition cursor-pointer text-center flex flex-col justify-between items-center gap-1 relative group"
+                        >
+                          <span className="text-3xl block group-hover:animate-bounce mt-1">{gift.emoji}</span>
+                          <span className="font-bold text-[9px] text-slate-700 truncate block w-full mt-1 leading-none">{gift.name}</span>
+                          <span className="text-[8px] font-extrabold bg-slate-200 text-slate-700 px-1 rounded-sm mt-1">
+                            ⭐ {gift.pointsPrice} pts
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-4 bg-slate-50 rounded-2xl text-center border border-dashed border-gray-250">
+                    <p className="text-[11px] text-gray-500">
+                      ⚠️ Aucun ami n'est sélectionné actuellement. Sélectionnez une discussion privée à gauche de l'écran pour lui envoyer un cadeau !
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: CONVERT EARNED POINTS TO MONEY & WITHDRAW */}
+              <div className="border-t border-gray-100 pt-5">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-1.5 border-l-3 border-amber-500 pl-2">
+                  <span>3. Retirer mon Argent (Conversion)</span>
+                </h4>
+                <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-left space-y-0.5">
+                      <p className="text-[11.5px] font-extrabold text-slate-800">Convertir les points en FCFA</p>
+                      <p className="text-[9.5px] text-gray-500">
+                        Taux de conversion actuel: <span className="font-bold text-emerald-600">1 point reçu = {Math.round(1 / giftConversionRate)} FCFA</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        value={pointsToConvert}
+                        onChange={(e) => setPointsToConvert(e.target.value)}
+                        placeholder="Ex: 100"
+                        className="w-24 bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        disabled={isConverting}
+                        onClick={handleConvertPoints}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition cursor-pointer shrink-0 shadow-xs"
+                      >
+                        {isConverting ? "En cours..." : "Convertir"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {parseInt(pointsToConvert) > 0 && !isNaN(parseInt(pointsToConvert)) && (
+                    <div className="text-[10px] text-emerald-800 font-extrabold text-right">
+                      👉 Vous obtiendrez: <span className="text-xs font-black">{(parseInt(pointsToConvert) * (1 / giftConversionRate)).toLocaleString()} FCFA</span> ajoutés à votre portefeuille !
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-gray-100 text-center">
+              <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Yaamaa Virtual Gifts System v2 • Sécurisé & Garanti</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Slide-down in-app notification banner */}
       {inAppNotification && (
         <div className="fixed top-20 right-4 z-50 max-w-sm w-full bg-white border-l-4 border-emerald-500 rounded-xl shadow-2xl p-4 flex items-start gap-3 animate-bounce cursor-pointer transition hover:bg-emerald-50/25"
@@ -2134,50 +3474,7 @@ export default function SocialView({
         </div>
       )}
       
-      {/* HEADER BANNER - CLEAN & PROFESSIONAL */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-650 to-teal-750 text-white rounded-3xl p-6 shadow-md mb-6 relative overflow-hidden" id="social_hero_banner">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="bg-emerald-500/35 text-emerald-100 font-extrabold text-[10px] uppercase px-2.5 py-1 rounded-full border border-emerald-400/20 tracking-wider">Discussion Hub</span>
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-heading font-black tracking-tight flex items-center gap-2.5">
-              <MessageSquare className="h-8 w-8 text-emerald-250 shrink-0" />
-              Taskora Discussions & Salons
-            </h1>
-            <p className="text-xs md:text-sm text-emerald-100 font-medium max-w-3xl">
-              Un espace de messagerie ultra-fluide pour collaborer, partager vos preuves de gains et vous entraider ! Invitez vos proches, acceptez les demandes et formez des cercles d'investisseurs de premier plan.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {onOpenProfile && (
-              <button
-                onClick={onOpenProfile}
-                className="bg-white/95 hover:bg-white text-emerald-900 font-extrabold text-[10.5px] px-3.5 py-2.5 rounded-2xl shadow-sm transition shrink-0 cursor-pointer flex items-center gap-2 border border-white/20 active:scale-98"
-              >
-                <img 
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="h-5.5 w-5.5 rounded-full object-cover border border-emerald-100 shrink-0"
-                />
-                Profil ⚙️
-              </button>
-            )}
-            <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-center">
-              <span className="block text-xl font-black font-mono leading-none">{friends.length}</span>
-              <span className="text-[9px] uppercase font-black tracking-wider text-emerald-200 mt-1 block">Amis</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-center">
-              <span className="block text-xl font-black font-mono leading-none">
-                {communities.filter(c => c.memberIds && c.memberIds.includes(currentUser.id)).length}
-              </span>
-              <span className="text-[9px] uppercase font-black tracking-wider text-emerald-200 mt-1 block">Groupes Salons</span>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* FLOATING ACTION TOASTS */}
       {successMsg && (
@@ -2194,10 +3491,10 @@ export default function SocialView({
       )}
 
       {/* CORE WRAPPER */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[620px] items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch min-h-0">
         
         {/* LEFT COLUMN: CONTACTS, CHAT ROOMS & PENDING INVITATIONS */}
-        <div className={`${hasActiveConversation ? "hidden" : "col-span-12 lg:col-span-8"} bg-white border border-gray-200 rounded-3xl shadow-sm flex flex-col overflow-hidden`} id="left_chat_pane">
+        <div className={`${hasActiveConversation ? "hidden lg:flex" : "flex"} lg:col-span-4 bg-white border border-gray-200 rounded-3xl shadow-sm flex-col overflow-hidden h-[calc(100vh-160px)] lg:h-[800px] min-h-[450px]`} id="left_chat_pane">
           
           {/* SEARCH CHAT / CONTACT */}
           <div className="p-4 border-b border-gray-100 bg-slate-50/50 space-y-3">
@@ -2249,7 +3546,7 @@ export default function SocialView({
           </div>
 
           {/* CHAT/CONTACT LIST */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 max-h-[500px]">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             
             {/* PENDING FRIEND REQUESTS NOTIFICATION BANNER */}
             {pendingRequests.length > 0 && (
@@ -2299,117 +3596,181 @@ export default function SocialView({
               <div className="space-y-4">
                 {/* 1. All Friends */}
                 <div className="space-y-1.5">
-                  <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider px-2">Mes Amis ({friends.length})</p>
-                  {friends.length === 0 ? (
-                    <div className="p-4 text-center text-gray-400">
-                      <p className="text-[11px]">Aucun ami dans votre liste.</p>
-                    </div>
-                  ) : (
-                    <>
-                      {friends.slice(0, showAllFriends ? friends.length : 20).map((friend) => {
-                        const isActive = activeFriendId === friend.id;
-                        const dmUnreadCount = unreadStats.unreadDMs[friend.id] || 0;
-                        return (
-                          <button
-                            key={friend.id}
-                            onClick={() => {
-                              setActiveFriendId(friend.id);
-                              setActiveCommunityId(null);
-                            }}
-                            className={`w-full flex items-center gap-3 p-3 rounded-2xl text-left transition border ${
-                              isActive
-                                ? "bg-emerald-50 border-emerald-150 text-emerald-950 font-extrabold shadow-sm"
-                                : "bg-transparent border-transparent hover:bg-slate-50 text-gray-700 hover:border-slate-100"
-                            }`}
-                          >
-                            <div className="relative shrink-0">
-                              <img
-                                src={friend.avatar}
-                                alt={friend.username}
-                                referrerPolicy="no-referrer"
-                                className="h-11 w-11 rounded-xl object-cover border border-gray-250 shadow-xs"
-                              />
-                              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white"></span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-black truncate">@{friend.username}</p>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {dmUnreadCount > 0 && (
-                                    <span className="bg-red-500 text-white text-[9px] font-black h-4.5 min-w-[18px] px-1 rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                                      {dmUnreadCount}
-                                    </span>
-                                  )}
-                                  <span className="text-[8px] font-mono font-bold text-gray-400">{friend.country}</span>
-                                </div>
-                              </div>
-                              <p className="text-[10px] text-gray-400 truncate mt-0.5">{friend.name}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-
-                      {friends.length > 20 && (
-                        <div className="pt-2 text-center">
-                          <button
-                            onClick={() => setShowAllFriends(!showAllFriends)}
-                            className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-extrabold px-4 py-2 rounded-xl text-xs cursor-pointer active:scale-95 transition"
-                          >
-                            {showAllFriends ? "Réduire ⬆" : `Voir tout (${friends.length}) ⬇`}
-                          </button>
+                  {(() => {
+                    const adminContact = usersList.find(u => u.id === "user_admin");
+                    const chatContacts = [...friends];
+                    if (adminContact && !chatContacts.some(c => c.id === adminContact.id)) {
+                      chatContacts.unshift(adminContact);
+                    }
+                    if (chatContacts.length === 0) {
+                      return (
+                        <div className="p-4 text-center text-gray-400">
+                          <p className="text-[11px]">Aucun contact dans votre liste.</p>
                         </div>
-                      )}
-                    </>
-                  )}
+                      );
+                    }
+                    return (
+                      <>
+                        <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider px-2">Discussions ({chatContacts.length})</p>
+                        {chatContacts.slice(0, showAllFriends ? chatContacts.length : 20).map((friend) => {
+                          const isActive = activeFriendId === friend.id;
+                          const dmUnreadCount = (unreadStats?.unreadDMs && unreadStats.unreadDMs[friend.id]) || 0;
+                          const isSystemAdmin = friend.id === "user_admin";
+                          return (
+                            <div
+                              key={friend.id}
+                              className={`w-full flex items-center justify-between p-3 rounded-2xl transition border group ${
+                                isActive
+                                  ? isSystemAdmin
+                                    ? "bg-amber-50/75 border-amber-200 text-amber-950 font-extrabold shadow-sm"
+                                    : "bg-emerald-50 border-emerald-150 text-emerald-950 font-extrabold shadow-sm"
+                                  : isSystemAdmin
+                                    ? "bg-amber-50/20 border-amber-100/50 hover:bg-amber-50/40 text-gray-800 hover:border-amber-150"
+                                    : "bg-white border-gray-150 hover:bg-slate-50 text-gray-700 hover:border-slate-150/80"
+                              }`}
+                            >
+                              <button
+                                onClick={() => {
+                                  setActiveFriendId(friend.id);
+                                  setActiveCommunityId(null);
+                                }}
+                                className="flex items-center gap-3 text-left transition min-w-0 flex-1 cursor-pointer"
+                              >
+                                <div
+                                  className="relative shrink-0 cursor-pointer hover:scale-105 transition active:scale-95"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onViewProfile) onViewProfile(friend.id);
+                                  }}
+                                  title="Voir le profil"
+                                >
+                                  <img
+                                    src={friend.avatar}
+                                    alt={friend.username}
+                                    referrerPolicy="no-referrer"
+                                    className={`h-11 w-11 rounded-xl object-cover border shadow-xs transition-all ${
+                                      isSystemAdmin 
+                                        ? "border-amber-300 group-hover:border-amber-500" 
+                                        : "border-gray-250 group-hover:border-emerald-500"
+                                    }`}
+                                  />
+                                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
+                                    isSystemAdmin ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+                                  }`}></span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <p className="text-xs font-black truncate flex items-center gap-1.5">
+                                      {isSystemAdmin ? "📢 Administration" : `@${friend.username}`}
+                                      {isSystemAdmin && (
+                                        <span className="bg-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                          Officiel
+                                        </span>
+                                      )}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {dmUnreadCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[9px] font-black h-4.5 min-w-[18px] px-1 rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                                          {dmUnreadCount}
+                                        </span>
+                                      )}
+                                      <span className="text-[8px] font-mono font-bold text-gray-400">{friend.country}</span>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-gray-400 truncate mt-0.5">{isSystemAdmin ? "Messages & Diffusions" : friend.name}</p>
+                                </div>
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  if (onViewProfile) onViewProfile(friend.id);
+                                }}
+                                className="ml-2 text-[9.5px] font-black uppercase text-gray-400 hover:text-emerald-600 bg-slate-50 hover:bg-emerald-50 border border-transparent hover:border-emerald-200/50 p-1.5 px-2 rounded-lg transition shrink-0 cursor-pointer"
+                                title="Voir le profil"
+                              >
+                                Profil
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {chatContacts.length > 20 && (
+                          <div className="pt-2 text-center">
+                            <button
+                              onClick={() => setShowAllFriends(!showAllFriends)}
+                              className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-extrabold px-4 py-2 rounded-xl text-xs cursor-pointer active:scale-95 transition"
+                            >
+                              {showAllFriends ? "Réduire ⬆" : `Voir tout (${chatContacts.length}) ⬇`}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
-                {/* 2. Suggestions */}
-                <div className="pt-2 border-t border-gray-100 space-y-2">
-                  <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider px-2 flex items-center gap-1.5">
-                    <Sparkles className="h-3 w-3 text-amber-500" />
-                    Suggestions de membres (Ajouter)
-                  </p>
-                  {getFriendSuggestions().map(({ user: suggestion, reason, sameCountry }) => {
-                    const isActive = activeFriendId === suggestion.id;
-                    return (
-                      <div
-                        key={suggestion.id}
-                        className={`group w-full flex items-center justify-between p-2 rounded-2xl transition border ${
-                          isActive
-                            ? "bg-emerald-50/50 border-emerald-100"
-                            : "bg-transparent border-transparent hover:bg-slate-50"
-                        }`}
-                      >
-                        <button
-                          onClick={() => {
-                            setActiveFriendId(suggestion.id);
-                            setActiveCommunityId(null);
-                          }}
-                          className="flex-1 flex items-center gap-2.5 text-left min-w-0 cursor-pointer"
+                {/* 2. Suggestions de Contacts */}
+                <div className="pt-4 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between px-2">
+                    <p className="text-[10px] uppercase font-black text-amber-600 tracking-wider">Suggestions d'amis</p>
+                    <span className="text-[8.5px] text-gray-400 font-extrabold uppercase">Selon vos intérêts & pays</span>
+                  </div>
+                  {getFriendSuggestions().length === 0 ? (
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center text-gray-400">
+                      <p className="text-[10px]">Aucune nouvelle suggestion.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 px-1">
+                      {getFriendSuggestions().map(({ user: sUser, reason }) => (
+                        <div
+                          key={sUser.id}
+                          className="flex items-center justify-between p-2.5 bg-gradient-to-r from-slate-50 to-white hover:from-slate-100/50 border border-gray-150/50 rounded-2xl transition shadow-xs"
                         >
-                          <img
-                            src={suggestion.avatar}
-                            alt={suggestion.username}
-                            referrerPolicy="no-referrer"
-                            className="h-9 w-9 rounded-xl object-cover border border-gray-200 shrink-0"
-                          />
-                          <div className="truncate min-w-0">
-                            <p className="font-extrabold text-gray-900 text-xs truncate">@{suggestion.username}</p>
-                            <p className="text-[9.5px] text-gray-455 truncate">{reason}</p>
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div 
+                              className="relative shrink-0 cursor-pointer hover:scale-105 transition"
+                              onClick={() => {
+                                if (onViewProfile) onViewProfile(sUser.id);
+                              }}
+                              title="Voir le profil"
+                            >
+                              <img
+                                src={sUser.avatar}
+                                alt={sUser.username}
+                                className="h-9 w-9 rounded-xl object-cover border border-gray-200"
+                              />
+                            </div>
+                            <div 
+                              className="min-w-0 cursor-pointer hover:opacity-80 transition flex-1"
+                              onClick={() => {
+                                if (onViewProfile) onViewProfile(sUser.id);
+                              }}
+                              title="Voir le profil"
+                            >
+                              <p className="text-[11px] font-black text-gray-900 truncate">@{sUser.username}</p>
+                              <p className="text-[9px] text-gray-400 font-medium truncate">{reason}</p>
+                            </div>
                           </div>
-                        </button>
-
-                        <button
-                          onClick={() => handleSendFriendRequest(suggestion.id)}
-                          className="bg-emerald-50 hover:bg-emerald-150 border border-emerald-250 px-2 py-1 rounded-lg shrink-0 cursor-pointer text-[10px] font-black text-emerald-700 transition active:scale-95"
-                        >
-                          Ajouter
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {getFriendSuggestions().length === 0 && (
-                    <p className="text-[10px] text-gray-400 px-2">Aucune suggestion disponible.</p>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                            <button
+                              onClick={() => {
+                                if (onViewProfile) onViewProfile(sUser.id);
+                              }}
+                              className="text-[9px] font-extrabold uppercase text-gray-500 hover:text-emerald-700 bg-slate-100/80 hover:bg-emerald-50 px-2 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                              title="Profil"
+                            >
+                              Profil
+                            </button>
+                            <button
+                              onClick={() => handleSendFriendRequest(sUser.id)}
+                              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 p-1.5 px-2.5 rounded-lg text-[9.5px] font-black transition cursor-pointer shrink-0 active:scale-95"
+                            >
+                              Ajouter
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
@@ -2442,7 +3803,7 @@ export default function SocialView({
                       .filter(c => c.memberIds && c.memberIds.includes(currentUser.id))
                       .map((comm) => {
                         const isActive = activeCommunityId === comm.id;
-                        const commUnreadCount = unreadStats.unreadCommunities[comm.id] || 0;
+                        const commUnreadCount = (unreadStats?.unreadCommunities && unreadStats.unreadCommunities[comm.id]) || 0;
                         return (
                           <button
                             key={comm.id}
@@ -2478,17 +3839,97 @@ export default function SocialView({
                       })
                   )}
                 </div>
+
+                {/* 3. Suggestions de Groupes */}
+                <div className="pt-4 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between px-2">
+                    <p className="text-[10px] uppercase font-black text-teal-600 tracking-wider">Suggestions de groupes</p>
+                    <span className="text-[8.5px] text-gray-400 font-extrabold uppercase">Recommandations d'intérêts</span>
+                  </div>
+                  {getGroupSuggestions().length === 0 ? (
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center text-gray-400">
+                      <p className="text-[10px]">Toutes les communautés rejointes !</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 px-1">
+                      {getGroupSuggestions().map(({ community: sComm, reason }) => (
+                        <div
+                          key={sComm.id}
+                          className="flex items-center justify-between p-2.5 bg-gradient-to-r from-slate-50 to-white hover:from-slate-100/50 border border-gray-150/50 rounded-2xl transition shadow-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <img
+                              src={sComm.avatar}
+                              alt={sComm.name}
+                              className="h-9 w-9 rounded-xl object-cover border border-gray-250 shrink-0 shadow-xs"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-[11.5px] font-black text-gray-950 truncate"># {sComm.name}</p>
+                              <p className="text-[9px] text-gray-400 font-medium truncate">{reason}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleJoinCommunity(sComm.id)}
+                            className="bg-teal-50 hover:bg-teal-100 text-teal-700 hover:text-teal-800 p-1.5 px-2.5 rounded-lg text-[9.5px] font-black transition cursor-pointer shrink-0 active:scale-95"
+                          >
+                            Rejoindre
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
 
         {/* MIDDLE COLUMN: MODERN WHATSAPP INTERACTIVE CHAT SCREEN */}
-        <div className={`${hasActiveConversation ? "col-span-12 lg:col-span-12 flex" : "hidden"} bg-white border border-gray-200 rounded-3xl shadow-sm flex-col relative overflow-hidden`} id="middle_chat_pane">
+        <div className={`${
+          hasActiveConversation 
+            ? "fixed inset-0 z-[100] flex flex-col bg-white h-screen w-screen overflow-hidden lg:relative lg:inset-auto lg:z-auto lg:h-[800px] lg:w-auto lg:col-span-8 lg:border lg:border-gray-200 lg:rounded-3xl lg:shadow-sm" 
+            : "hidden lg:flex col-span-12 lg:col-span-8 bg-white border border-gray-200 rounded-3xl shadow-sm flex-col relative overflow-hidden h-[calc(100vh-160px)] lg:h-[800px] min-h-[450px]"
+        }`} id="middle_chat_pane">
           
-          {/* SCREEN HEADER */}
+          {!hasActiveConversation ? (
+            <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center text-center p-8 bg-slate-50/50">
+              <div className="relative mb-6">
+                <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-xl animate-pulse scale-150"></div>
+                <div className="relative h-24 w-24 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center text-white shadow-2xl transform hover:rotate-6 transition duration-350">
+                  <span className="text-4xl font-extrabold tracking-widest font-sans">Y</span>
+                </div>
+                <span className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-emerald-500 border border-white flex items-center justify-center text-white text-[10px] font-black">
+                  ✓
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-gray-800 tracking-tight">Yaamaa Messagerie</h2>
+              <p className="text-xs sm:text-sm text-gray-500 max-w-sm mt-2.5 leading-relaxed font-bold">
+                Communiquez en toute simplicité et sécurité avec vos proches et vos communautés sur Yaamaa.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4 max-w-md w-full mt-8 pt-6 border-t border-gray-100">
+                <div className="p-3.5 bg-white border border-gray-150 rounded-2xl shadow-xs text-left">
+                  <span className="text-lg">🔒</span>
+                  <p className="text-[11px] font-black text-gray-900 mt-1.5 font-bold">Chiffrement de bout en bout</p>
+                  <p className="text-[9.5px] text-gray-500 mt-0.5 font-medium leading-normal">Vos discussions privées et fichiers restent entièrement confidentiels.</p>
+                </div>
+                <div className="p-3.5 bg-white border border-gray-150 rounded-2xl shadow-xs text-left">
+                  <span className="text-lg">📞</span>
+                  <p className="text-[11px] font-black text-gray-900 mt-1.5 font-bold">Appels voix &amp; vidéo fluides</p>
+                  <p className="text-[9.5px] text-gray-500 mt-0.5 font-medium leading-normal">Passez des appels HD gratuits et sans interruption avec vos contacts.</p>
+                </div>
+              </div>
+              
+              <p className="text-[9.5px] font-mono text-gray-450 mt-10 uppercase font-bold tracking-widest flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-500 animate-spin" style={{ animationDuration: "3s" }} />
+                Yaamaa • Connectez-vous à l'instant
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* SCREEN HEADER */}
           {activeTab === "dm" && activeFriend ? (
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-emerald-500/10" id="chat_header">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-emerald-500/10 shrink-0" id="chat_header">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
@@ -2500,7 +3941,13 @@ export default function SocialView({
                 >
                   <ArrowLeft className="h-4.5 w-4.5 text-emerald-700" />
                 </button>
-                <div className="relative">
+                <div 
+                  className="relative cursor-pointer hover:scale-105 transition"
+                  onClick={() => {
+                    if (onViewProfile) onViewProfile(activeFriend.id);
+                  }}
+                  title="Voir le profil"
+                >
                   <img
                     src={activeFriend.avatar}
                     alt={activeFriend.username}
@@ -2509,19 +3956,37 @@ export default function SocialView({
                   />
                   <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border border-white animate-pulse"></span>
                 </div>
-                <div>
-                  <p className="text-xs font-black text-gray-900 flex items-center gap-1.5">
-                    @{activeFriend.username}
-                    {friends.some(f => f.id === activeFriend.id) ? (
+                <div 
+                  className="cursor-pointer hover:opacity-80 transition"
+                  onClick={() => {
+                    if (onViewProfile) onViewProfile(activeFriend.id);
+                  }}
+                  title="Voir le profil"
+                >
+                  <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 flex-wrap">
+                    {activeFriend.id === "user_admin" ? "📢 Administration Officielle" : `@${activeFriend.username}`}
+                    {activeFriend.merchantNumber && <MerchantBadge tier={activeFriend.merchantPackType} size="xs" />}
+                    {activeFriend.id === "user_admin" ? (
+                      <span className="bg-amber-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">Officiel</span>
+                    ) : friends.some(f => f.id === activeFriend.id) ? (
                       <span className="bg-emerald-100 text-emerald-800 text-[8px] px-1.5 py-0.5 rounded-full font-bold">Ami</span>
                     ) : (
                       <span className="bg-amber-100 text-amber-800 text-[8px] px-1.5 py-0.5 rounded-full font-bold">Non Ami</span>
                     )}
                   </p>
-                  <p className="text-[10px] text-gray-400 font-bold flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-emerald-500" />
-                    {activeFriend.name} • {activeFriend.country}
-                  </p>
+                  {typers.length > 0 ? (
+                    <p className="text-[10px] text-emerald-600 font-extrabold flex items-center gap-1 animate-pulse">
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0s" }}></span>
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0.15s" }}></span>
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0.3s" }}></span>
+                      En train d'écrire...
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-gray-450 font-bold flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-emerald-500" />
+                      {activeFriend.name} • {activeFriend.country}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -2555,7 +4020,7 @@ export default function SocialView({
               </div>
             </div>
           ) : activeTab === "communities" && activeCommunity ? (
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-teal-500/10" id="chat_header_group">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-teal-500/10 shrink-0" id="chat_header_group">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
@@ -2575,7 +4040,16 @@ export default function SocialView({
                 />
                 <div>
                   <p className="text-xs font-black text-gray-900"># {activeCommunity.name}</p>
-                  <p className="text-[10px] text-gray-400 font-medium">{activeCommunity.description || "Aucune description de groupe."}</p>
+                  {typers.length > 0 ? (
+                    <p className="text-[10px] text-emerald-600 font-extrabold flex items-center gap-1 animate-pulse">
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0s" }}></span>
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0.15s" }}></span>
+                      <span className="inline-block h-1 w-1 rounded-full bg-emerald-600 animate-bounce" style={{ animationDelay: "0.3s" }}></span>
+                      {typers[0].name} est en train d'écrire...
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 font-medium">{activeCommunity.description || "Aucune description de groupe."}</p>
+                  )}
                 </div>
               </div>
 
@@ -2841,12 +4315,56 @@ export default function SocialView({
           {/* ACTIVE DISCUSSION SCREEN VIEW */}
           <div 
             ref={chatScrollerRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[480px] bg-slate-50 relative" 
+            className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-slate-50 relative" 
             id="chat_messages_scroller"
             style={{ 
               backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%2310b981' fill-opacity='0.03'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm1-61c3.148 0 5.7-2.552 5.7-5.7 0-3.148-2.552-5.7-5.7-5.7-3.148 0-5.7 2.552-5.7 5.7 0 3.148 2.552 5.7 5.7 5.7zm4 41c1.933 0 3.5-1.567 3.5-3.5S41.433 26 39.5 26s-3.5 1.567-3.5 3.5 1.567 3.5 3.5 3.5zM22 68c1.38 0 2.5-1.12 2.5-2.5S23.38 63 22 63s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5z'/%3E%3C/g%3E%3C/svg%3E")` 
             }}
           >
+            {/* FLOATING SUSPENDED GIFT SYMBOL ON THE LEFT / MIDDLE */}
+            {activeTab === "dm" && activeFriend && (
+              <div className="absolute left-4 top-1/3 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGiftRecipientId(activeFriend.id);
+                    setGiftCatalogTab("send");
+                    setShowGiftCatalogModal(true);
+                  }}
+                  className="h-14 w-14 rounded-full bg-gradient-to-tr from-pink-500 via-rose-500 to-amber-500 text-white flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white animate-bounce cursor-pointer group"
+                  title="Offrir un Cadeau Suspendu"
+                  style={{ animationDuration: "2.8s" }}
+                >
+                  <Gift className="h-6.5 w-6.5 text-white animate-pulse group-hover:rotate-12 transition-transform" />
+                </button>
+                <span className="bg-slate-900/95 text-pink-300 font-black text-[9px] px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-lg border border-pink-500/20 select-none uppercase tracking-wider text-center max-w-[85px]">
+                  Cadeau 🎁
+                </span>
+              </div>
+            )}
+
+            {/* FLOATING SUSPENDED GIFT SYMBOL IN COMMUNITY / FORUM */}
+            {activeTab === "communities" && activeCommunity && (
+              <div className="absolute left-4 top-1/3 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGiftRecipientId(activeCommunity.creatorId || null);
+                    setGiftCatalogTab("send");
+                    setShowGiftCatalogModal(true);
+                  }}
+                  className="h-14 w-14 rounded-full bg-gradient-to-tr from-teal-500 via-emerald-500 to-amber-500 text-white flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white animate-bounce cursor-pointer group"
+                  title="Offrir un Cadeau au Créateur ou aux membres"
+                  style={{ animationDuration: "2.8s" }}
+                >
+                  <Gift className="h-6.5 w-6.5 text-white animate-pulse group-hover:rotate-12 transition-transform" />
+                </button>
+                <span className="bg-slate-900/95 text-teal-300 font-black text-[9px] px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-lg border border-teal-500/20 select-none uppercase tracking-wider text-center max-w-[85px]">
+                  Donateur 🎁
+                </span>
+              </div>
+            )}
+
             {((activeTab === "dm" && !activeFriend) || (activeTab === "communities" && !activeCommunity)) ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-gray-400">
                 <div className="h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600 animate-bounce">
@@ -2876,10 +4394,26 @@ export default function SocialView({
                 return (
                   <div
                     key={msg.id}
-                    className={`flex items-end gap-2 max-w-[85%] ${
+                    className={`flex items-end gap-2 max-w-[90%] relative group ${
                       isMine ? "ml-auto flex-row-reverse" : ""
                     }`}
                   >
+                    {/* DIRECT GIFT OFFER BUTTON FOR THE MESSAGE SENDER / DONOR */}
+                    {!isMine && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGiftRecipientId(msg.senderId);
+                          setGiftCatalogTab("send");
+                          setShowGiftCatalogModal(true);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 h-7 w-7 rounded-full bg-pink-50 hover:bg-pink-100 text-pink-600 flex items-center justify-center shadow-xs cursor-pointer border border-pink-200 shrink-0 self-center"
+                        title={`Envoyer un cadeau à @${msg.senderUsername}`}
+                      >
+                        <Gift className="h-4 w-4 text-pink-500 animate-pulse" />
+                      </button>
+                    )}
+
                     {/* Avatar side */}
                     {!isMine && (
                       <img
@@ -2896,24 +4430,112 @@ export default function SocialView({
                     <div className="space-y-0.5">
                       {/* Name tag */}
                       {!isMine && (
-                        <span 
-                          className="text-[9.5px] font-black text-gray-500 pl-1 block cursor-pointer hover:text-emerald-700 transition"
+                        <div 
+                          className="flex items-center gap-1.5 pl-1 cursor-pointer hover:opacity-85 transition"
                           onClick={() => {
                             if (onViewProfile) onViewProfile(msg.senderId);
                           }}
                         >
-                          @{msg.senderUsername}
-                        </span>
+                          <span className="text-[9.5px] font-black text-gray-500">
+                            @{msg.senderUsername}
+                          </span>
+                          {usersList.find(u => u.id === msg.senderId)?.merchantNumber && (
+                            <MerchantBadge tier={usersList.find(u => u.id === msg.senderId)?.merchantPackType} size="xs" />
+                          )}
+                        </div>
                       )}
 
                       {/* Msg Bubble Container */}
                       <div
-                        className={`p-3 rounded-2xl text-xs shadow-xs leading-relaxed font-medium transition relative border ${
+                        onMouseDown={() => handleStartLongPress(msg.id)}
+                        onMouseUp={handleCancelLongPress}
+                        onMouseLeave={handleCancelLongPress}
+                        onTouchStart={() => handleStartLongPress(msg.id)}
+                        onTouchEnd={handleCancelLongPress}
+                        className={`p-3 rounded-2xl text-xs shadow-xs leading-relaxed font-medium transition relative border select-none ${
                           isMine
                             ? "bg-emerald-600 border-emerald-650 text-white rounded-br-none"
                             : "bg-white border-gray-150 text-gray-800 rounded-bl-none"
                         }`}
                       >
+                        {/* FLOATING LONG-PRESS MENU */}
+                        {longPressedMessageId === msg.id && (
+                          <div className="absolute left-1/2 -translate-x-1/2 -top-12 bg-white border border-gray-200 p-1 rounded-full shadow-xl flex items-center gap-1 z-50 animate-in fade-in zoom-in-90 duration-150">
+                            {["👍", "❤️", "😂", "😮", "😢", "🙏"].map(emoji => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleReaction(msg.id, emoji);
+                                  setLongPressedMessageId(null);
+                                }}
+                                className="text-sm hover:scale-125 active:scale-95 transition cursor-pointer p-0.5"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            <div className="w-[1px] h-4 bg-gray-200 self-center mx-1"></div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReplyingToMessage(msg);
+                                setLongPressedMessageId(null);
+                              }}
+                              className="text-[9px] font-black uppercase text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-full transition shrink-0 cursor-pointer"
+                            >
+                              ↩️ Répondre
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLongPressedMessageId(null);
+                              }}
+                              className="text-[9px] font-extrabold uppercase text-gray-400 hover:text-gray-600 hover:bg-gray-50 px-2 py-1 rounded-full transition shrink-0 cursor-pointer"
+                            >
+                              X
+                            </button>
+                          </div>
+                        )}
+
+                        {/* QUOTED REPLY BLOCK */}
+                        {msg.replyToId && (
+                          <div className={`mb-2 p-2 rounded-xl border-l-4 text-[11px] text-left max-w-sm ${
+                            isMine 
+                              ? "bg-emerald-700/50 border-emerald-300 text-emerald-50" 
+                              : "bg-slate-100 border-emerald-500 text-gray-700"
+                          }`}>
+                            <span className="font-extrabold block text-[9px] uppercase tracking-wide">
+                              @{msg.replyToSenderUsername}
+                            </span>
+                            <span className="opacity-90 block truncate font-medium mt-0.5">
+                              {msg.replyToText || "Média"}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* VIRTUAL GIFT PRESENTATION CARD */}
+                        {msg.isGift && (
+                          <div className="my-1.5 p-3 rounded-xl bg-gradient-to-br from-amber-50 to-orange-100 text-slate-900 border border-amber-200/50 flex items-center gap-3 max-w-sm shadow-xs">
+                            <span className="text-3xl animate-bounce shrink-0 select-none">
+                              {msg.giftImage || "🎁"}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-[10px] font-black uppercase text-amber-800 tracking-wide">
+                                Cadeau Virtuel Envoyé !
+                              </span>
+                              <p className="text-[12px] font-extrabold text-slate-800 truncate">
+                                {msg.giftName || "Objet Virtuel"}
+                              </p>
+                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-black bg-amber-200/70 text-amber-950 px-1.5 py-0.5 rounded-md mt-1">
+                                ⭐ {msg.giftPoints || 0} Points
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* 0. CUSTOM OFFER DIRECT CARD */}
                         {msg.isCustomOffer && (
                           <div className="my-1 p-3.5 rounded-2xl bg-amber-50 text-slate-900 border border-amber-200/60 space-y-3 max-w-sm shadow-xs font-sans">
@@ -3016,31 +4638,30 @@ export default function SocialView({
 
                         {/* 2. VOICE MESSAGE WIDGET */}
                         {isVoice ? (
-                          <div className="flex items-center gap-3.5 py-1 px-1 min-w-[220px]">
+                          <div className="flex items-center gap-2 py-0.5 px-0.5 min-w-[150px] md:min-w-[170px]">
                             <button
                               type="button"
                               onClick={() => togglePlayVoice(msg.id, msg.voiceDuration || 5)}
-                              className={`p-2.5 rounded-full flex items-center justify-center shrink-0 shadow-xs cursor-pointer ${
+                              className={`p-1.5 rounded-full flex items-center justify-center shrink-0 shadow-xs cursor-pointer ${
                                 isMine
                                   ? "bg-emerald-500 hover:bg-emerald-450 text-white"
                                   : "bg-emerald-100 hover:bg-emerald-200 text-emerald-800"
                               }`}
                             >
                               {isPlaying ? (
-                                <Pause className="h-3.5 w-3.5 animate-pulse fill-current" />
+                                <Pause className="h-3 w-3 animate-pulse fill-current" />
                               ) : (
-                                <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+                                <Play className="h-3 w-3 fill-current ml-0.5" />
                               )}
                             </button>
-
-                            <div className="flex-1 space-y-1">
-                              {/* Audio Waveform Emulation */}
-                              <div className="flex items-end gap-0.5 h-6">
-                                {[...Array(14)].map((_, i) => {
-                                  // Random waveform heights
-                                  const heights = [4, 6, 3, 7, 5, 8, 4, 6, 3, 7, 5, 8, 4, 5];
-                                  const height = heights[i % heights.length] * 2.5;
-                                  const isActive = progress > (i * (100 / 14));
+                            
+                            <div className="flex-1 space-y-0.5">
+                              {/* Audio Waveform Emulation - Extra Slim and Fine */}
+                              <div className="flex items-end gap-0.5 h-4.5">
+                                {[...Array(10)].map((_, i) => {
+                                  const heights = [3, 5, 2, 6, 4, 5, 3, 4, 2, 5];
+                                  const height = heights[i % heights.length] * 2.0;
+                                  const isActive = progress > (i * (100 / 10));
                                   return (
                                     <span
                                       key={i}
@@ -3056,9 +4677,9 @@ export default function SocialView({
                                 })}
                               </div>
                               
-                              <div className="flex justify-between items-center text-[8.5px]">
+                              <div className="flex justify-between items-center text-[7.5px] leading-none">
                                 <span className={isMine ? "text-emerald-100" : "text-gray-400"}>
-                                  Voice note
+                                  Vocal
                                 </span>
                                 <span className={`font-mono font-bold ${isMine ? "text-emerald-100" : "text-gray-500"}`}>
                                   {isPlaying 
@@ -3118,10 +4739,57 @@ export default function SocialView({
                             {msg.text && !msg.text.startsWith("📄") && !msg.text.startsWith("📝") && !msg.text.startsWith("📎") && !msg.text.startsWith("🎵") && (
                               <p className="text-[11.5px] font-bold leading-relaxed break-words">{msg.text}</p>
                             )}
+                            {msg.translation && msg.translation !== msg.text && (
+                              <div className={`mt-1.5 pt-1.5 border-t border-dashed ${isMine ? "border-emerald-500/50 text-emerald-100" : "border-gray-200 text-gray-500"} text-[10.5px] italic font-medium flex items-start gap-1`}>
+                                <span className="shrink-0 font-extrabold text-[8.5px] uppercase bg-slate-100 text-slate-700 px-1 py-0.5 rounded-sm not-italic select-none" title={`Traduit de ${msg.translatedFrom || 'auto'} vers ${msg.translatedTo || 'auto'}`}>
+                                  TRADUIT
+                                </span>
+                                <span className="break-words">{msg.translation}</span>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           /* Standard Text */
-                          <p className="text-[11.5px] font-bold leading-relaxed break-words">{msg.text}</p>
+                          <div>
+                            <p className="text-[11.5px] font-bold leading-relaxed break-words">{msg.text}</p>
+                            {msg.translation && msg.translation !== msg.text && (
+                              <div className={`mt-1.5 pt-1.5 border-t border-dashed ${isMine ? "border-emerald-500/50 text-emerald-100" : "border-gray-200 text-gray-500"} text-[10.5px] italic font-medium flex items-start gap-1`}>
+                                <span className="shrink-0 font-extrabold text-[8.5px] uppercase bg-slate-100 text-slate-700 px-1 py-0.5 rounded-sm not-italic select-none" title={`Traduit de ${msg.translatedFrom || 'auto'} vers ${msg.translatedTo || 'auto'}`}>
+                                  TRADUIT
+                                </span>
+                                <span className="break-words">{msg.translation}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* REACTIONS DISPLAY ROW */}
+                        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                          <div className={`flex flex-wrap gap-1 mt-2 ${isMine ? "justify-end" : "justify-start"}`}>
+                            {Object.entries(msg.reactions).map(([emoji, uids]) => {
+                              const userIds = (uids || []) as string[];
+                              if (userIds.length === 0) return null;
+                              const hasIReacted = userIds.includes(currentUser.id);
+                              return (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleToggleReaction(msg.id, emoji)}
+                                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-black border transition cursor-pointer select-none active:scale-90 ${
+                                    hasIReacted
+                                      ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-extrabold"
+                                      : isMine
+                                      ? "bg-emerald-700/40 border-emerald-550 text-emerald-50 hover:bg-emerald-700/60"
+                                      : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200"
+                                  }`}
+                                  title={`${userIds.length} personne(s) (${emoji})`}
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="text-[9px] opacity-90">{userIds.length}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         )}
 
                         {/* Timing + WhatsApp Style Ticks */}
@@ -3130,10 +4798,108 @@ export default function SocialView({
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           {isMine && (
-                            <CheckCheck className="h-3 w-3 text-emerald-250 shrink-0" />
+                            msg.isOptimistic ? (
+                              <Loader2 className="h-3 w-3 text-emerald-100 animate-spin shrink-0" />
+                            ) : msg.isFailed ? (
+                              <span className="text-rose-200 text-[10px] font-black shrink-0" title="Échec de l'envoi">⚠️</span>
+                            ) : (
+                              <CheckCheck className="h-3 w-3 text-emerald-250 shrink-0" />
+                            )
                           )}
                         </div>
                       </div>
+                    </div>
+
+                    {/* HOVER ACTIONS BAR FOR EACH MESSAGE */}
+                    <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-150 flex items-center gap-1 z-20 px-2 py-1 bg-white border border-gray-200 rounded-full shadow-md ${
+                      isMine 
+                        ? "-left-48 flex-row-reverse" 
+                        : "-right-48 flex-row"
+                    }`}>
+                      {/* Quick Reactions Emojis */}
+                      {!msg.isAdminOfficial && ["👍", "❤️", "😂", "🙏"].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleToggleReaction(msg.id, emoji)}
+                          className="hover:scale-125 transition text-xs cursor-pointer p-0.5 select-none"
+                          title={`Réagir avec ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      
+                      {!msg.isAdminOfficial && <span className="h-3 w-[1px] bg-gray-200 mx-0.5"></span>}
+
+                      {/* Reply button */}
+                      {!msg.isAdminOfficial && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplyingToMessage(msg);
+                            showToast("Répondre au message 💬");
+                            const inputEl = document.querySelector("#yaamaa_chat_form input");
+                            if (inputEl) {
+                              (inputEl as HTMLInputElement).focus();
+                            }
+                          }}
+                          className="p-1 text-gray-500 hover:text-emerald-600 hover:scale-110 transition cursor-pointer"
+                          title="Répondre"
+                        >
+                          <CornerUpLeft className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Toggle Read/Unread manually */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await fetch(`/api/social/messages/${msg.id}/toggle-read`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ userId: currentUser.id })
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, readBy: data.readBy } : m));
+                            showToast(data.readBy.includes(currentUser.id) ? "Marqué comme lu 📩" : "Marqué comme non lu ✉️");
+                            fetchUnreadStats();
+                          }
+                        }}
+                        className="p-1 text-gray-500 hover:text-emerald-650 hover:scale-110 transition cursor-pointer flex items-center justify-center"
+                        title={msg.readBy?.includes(currentUser.id) ? "Marquer comme non lu" : "Marquer comme lu"}
+                      >
+                        {msg.readBy?.includes(currentUser.id) ? (
+                          <Mail className="h-3.5 w-3.5 text-gray-400 hover:text-emerald-600" />
+                        ) : (
+                          <MailOpen className="h-3.5 w-3.5 text-emerald-600 hover:text-emerald-700 animate-pulse" />
+                        )}
+                      </button>
+
+                      {/* Copy Text button */}
+                      {msg.text && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.text);
+                            showToast("Message copié 📋");
+                          }}
+                          className="p-1 text-gray-500 hover:text-emerald-600 hover:scale-110 transition cursor-pointer"
+                          title="Copier le texte"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="p-1 text-gray-400 hover:text-rose-600 hover:scale-110 transition cursor-pointer"
+                        title="Supprimer"
+                      >
+                        <Trash className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -3195,7 +4961,7 @@ export default function SocialView({
 
           {/* CHAT INPUT AREA WITH PRESETS & AUDIO */}
           {((activeTab === "dm" && activeFriend) || (activeTab === "communities" && activeCommunity)) && (
-            <div className="border-t border-gray-100 p-2 sm:p-3 bg-white space-y-2">
+            <div className="border-t border-gray-100 p-2 sm:p-3 bg-white space-y-2 shrink-0">
               
               {/* IMAGE SELECTION ACCORDION */}
               {showImageDropdown && (
@@ -3454,202 +5220,175 @@ export default function SocialView({
                 </div>
               )}
 
-              {/* MESSAGE FORM INPUT ROW */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendMessage();
-                }}
-                className="flex items-center gap-1.5 sm:gap-2"
-                id="taskora_chat_form"
-              >
-                {/* FILE/MEDIA POPUP BUTTON */}
-                <button
-                  type="button"
-                  onClick={() => setShowImageDropdown(!showImageDropdown)}
-                  className={`p-2 sm:p-2.5 rounded-xl border transition shrink-0 cursor-pointer ${
-                    showImageDropdown
-                      ? "bg-emerald-100 border-emerald-200 text-emerald-800"
-                      : "bg-slate-50 border-gray-200 hover:bg-slate-100 text-gray-500 hover:text-gray-800"
-                  }`}
-                  title="Partager un fichier, photo, document, PDF ou audio"
-                >
-                  <Paperclip className="h-4 sm:h-4.5 w-4 sm:w-4.5 text-emerald-600" />
-                </button>
-
-                {/* VOCAL MICRO RECORD DIRECT BUTTON */}
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  disabled={isRecording}
-                  className="p-2 sm:p-2.5 rounded-xl border bg-slate-50 border-gray-200 hover:bg-slate-100 text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer disabled:opacity-50"
-                  title="Enregistrer un message vocal"
-                >
-                  <Mic className="h-4 sm:h-4.5 w-4 sm:w-4.5 text-emerald-600" />
-                </button>
-
-                {/* CUSTOM OFFER "FAIRE L'ORDRE" BUTTON (ONLY IN PRIVATE DM) */}
-                {activeTab === "dm" && activeFriend && (
+              {/* REPLYING TO MESSAGE PREVIEW BANNER */}
+              {replyingToMessage && (
+                <div className="bg-slate-100 p-2.5 px-3.5 rounded-xl border-l-4 border-emerald-500 flex items-center justify-between gap-3 animate-fade-in mb-2 text-xs">
+                  <div className="truncate min-w-0 text-left">
+                    <p className="font-extrabold text-emerald-800 text-[9.5px] uppercase tracking-wide">
+                      Réponse à @{replyingToMessage.senderUsername}
+                    </p>
+                    <p className="text-gray-600 truncate text-[11px] font-medium mt-0.5">
+                      {replyingToMessage.text || (replyingToMessage.voiceUrl ? "🎙️ Message vocal" : replyingToMessage.imageUrl ? "🖼️ Image" : "📎 Fichier")}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowCustomOfferModal(true)}
-                    className="p-2 sm:p-2.5 rounded-xl border bg-amber-50 border-amber-200 hover:bg-amber-150 text-amber-700 hover:text-amber-800 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
-                    title="Faire un ordre / Offre personnalisée"
+                    onClick={() => setReplyingToMessage(null)}
+                    className="h-5 w-5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 flex items-center justify-center transition cursor-pointer font-black text-[10px] shrink-0"
+                    title="Annuler la réponse"
                   >
-                    <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 animate-pulse" />
-                    <span className="hidden sm:inline">Faire l'ordre</span>
+                    ✕
                   </button>
-                )}
+                </div>
+              )}
 
-                <input
-                  type="text"
-                  value={newMsgText}
-                  onChange={(e) => setNewMsgText(e.target.value)}
-                  placeholder="Tapez un message..."
-                  className="flex-1 min-w-0 bg-slate-50 border border-gray-200 focus:border-emerald-300 focus:bg-white focus:outline-none rounded-xl px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold text-gray-800 transition"
-                />
-
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 sm:p-2.5 rounded-xl cursor-pointer shadow-sm transition shrink-0 active:scale-95"
+              {/* MESSAGE FORM INPUT ROW */}
+              {activeFriend?.id === "user_admin" ? (
+                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-center text-amber-900 text-xs font-bold shadow-xs animate-fade-in flex flex-col items-center gap-1.5">
+                  <span className="text-sm">🔒 Canal Officiel d'Annonces</span>
+                  <p className="text-[11px] text-amber-700 font-medium max-w-lg">
+                    Ce canal de discussion est réservé exclusivement aux informations importantes, diffusions de masse et notifications officielles de l'administration de la plateforme. Les réponses et réactions y sont désactivées.
+                  </p>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (isRecording) {
+                      stopAndSendVoice();
+                    } else {
+                      handleSendMessage();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 sm:gap-2"
+                  id="yaamaa_chat_form"
                 >
-                  <Send className="h-4 sm:h-4.5 w-4 sm:w-4.5" />
-                </button>
-              </form>
+                  {/* FILE/MEDIA POPUP BUTTON */}
+                  <button
+                    type="button"
+                    onClick={() => setShowImageDropdown(!showImageDropdown)}
+                    className={`p-2 sm:p-2.5 rounded-xl border transition shrink-0 cursor-pointer ${
+                      showImageDropdown
+                        ? "bg-emerald-100 border-emerald-200 text-emerald-800"
+                        : "bg-slate-50 border-gray-200 hover:bg-slate-100 text-gray-500 hover:text-gray-800"
+                    }`}
+                    title="Partager un fichier, photo, document, PDF ou audio"
+                  >
+                    <Paperclip className="h-4 sm:h-4.5 w-4 sm:w-4.5 text-emerald-600" />
+                  </button>
+                  
+                  {/* VOCAL MICRO RECORD DIRECT BUTTON */}
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopAndSendVoice : startRecording}
+                    className={`p-2 sm:p-2.5 rounded-xl border shrink-0 cursor-pointer transition active:scale-95 ${
+                      isRecording 
+                        ? "bg-rose-50/50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse" 
+                        : "bg-slate-50 border-gray-200 hover:bg-slate-100 text-gray-500 hover:text-gray-800"
+                    }`}
+                    title={isRecording ? "Arrêter et envoyer l'enregistrement" : "Enregistrer un message vocal"}
+                  >
+                    <Mic className={`h-4 sm:h-4.5 w-4 sm:w-4.5 ${isRecording ? "text-rose-600" : "text-emerald-600"}`} />
+                  </button>
+
+                  {/* CUSTOM OFFER "FAIRE L'ORDRE" BUTTON (ONLY IN PRIVATE DM) */}
+                  {activeTab === "dm" && activeFriend && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomOfferModal(true)}
+                      className="p-2 sm:p-2.5 rounded-xl border bg-amber-50 border-amber-200 hover:bg-amber-150 text-amber-700 hover:text-amber-800 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
+                      title="Faire un ordre / Offre personnalisée"
+                    >
+                      <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 animate-pulse" />
+                      <span className="inline">Faire l'ordre</span>
+                    </button>
+                  )}
+
+                  {/* VIRTUAL GIFT BUTTON (IN DIRECT MESSAGE) */}
+                  {activeTab === "dm" && activeFriend && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGiftRecipientId(activeFriend.id);
+                        setGiftCatalogTab("send");
+                        setShowGiftCatalogModal(true);
+                      }}
+                      className="p-2 sm:p-2.5 rounded-xl border bg-pink-50 border-pink-200 hover:bg-pink-100 text-pink-700 hover:text-pink-800 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
+                      title="Envoyer un cadeau virtuel premium"
+                    >
+                      <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-pink-600" />
+                      <span className="inline">Cadeau</span>
+                    </button>
+                  )}
+
+                  {/* VIRTUAL GIFT BUTTON (IN COMMUNITY/FORUM) */}
+                  {activeTab === "communities" && activeCommunity && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGiftRecipientId(activeCommunity.creatorId || null);
+                        setGiftCatalogTab("send");
+                        setShowGiftCatalogModal(true);
+                      }}
+                      className="p-2 sm:p-2.5 rounded-xl border bg-teal-50 border-teal-200 hover:bg-teal-100 text-teal-700 hover:text-teal-850 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
+                      title="Envoyer un cadeau au créateur / membre"
+                    >
+                      <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-600" />
+                      <span className="inline">Cadeau</span>
+                    </button>
+                  )}
+
+                  <input
+                    type="text"
+                    value={isRecording ? `Message vocal (durée: ${recordingDuration}s)...` : newMsgText}
+                    onChange={(e) => !isRecording && handleTextareaChange(e.target.value)}
+                    disabled={isRecording}
+                    placeholder={isRecording ? "Enregistrement vocal en cours..." : "Tapez un message..."}
+                    className={`flex-1 min-w-0 border focus:outline-none rounded-xl px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold transition ${
+                      isRecording 
+                        ? "bg-rose-50/50 border-rose-200 text-rose-750 placeholder-rose-400 select-none cursor-not-allowed" 
+                        : "bg-slate-50 border-gray-200 focus:border-emerald-300 focus:bg-white text-gray-800"
+                    }`}
+                  />
+
+                  <button
+                    type="submit"
+                    className={`p-2 sm:p-2.5 rounded-xl cursor-pointer shadow-sm transition shrink-0 active:scale-95 ${
+                      isRecording 
+                        ? "bg-rose-600 hover:bg-rose-700 text-white animate-bounce" 
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    }`}
+                    title={isRecording ? "Envoyer l'enregistrement vocal" : "Envoyer"}
+                  >
+                    <Send className="h-4 sm:h-4.5 w-4 sm:w-4.5" />
+                  </button>
+                </form>
+              )}
 
             </div>
           )}
-        </div>
 
-        {/* RIGHT COLUMN: DISCOVER & SUGGESTED INVITATIONS */}
-        <div className={`${hasActiveConversation ? "hidden" : "col-span-12 lg:col-span-4"} space-y-6 flex flex-col`} id="right_utility_pane">
-          
-          {/* CREATE DISCUSSION GROUP BUTTON */}
-          <button
-            onClick={() => {
-              setIsCreatingCommunity(true);
-              setSelectedFriendsForNewComm([]);
-            }}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white p-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-sm flex items-center justify-center gap-2 cursor-pointer transition active:scale-95 shrink-0"
-          >
-            <PlusSquare className="h-4.5 w-4.5" />
-            Créer un Groupe de Discussion
-          </button>
-
-          {/* INTELLIGENT COUNTRY SUGGESTIONS SIDEBAR (Slick & Premium) */}
-          <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm flex flex-col max-h-[300px]" id="suggestions_sidebar">
-            <h3 className="text-xs font-black uppercase text-gray-800 tracking-wider mb-3 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-              Suggestions d'Amis
-            </h3>
-
-            <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
-              {getFriendSuggestions().map(({ user: suggestion, reason, sameCountry }) => (
-                <div
-                  key={suggestion.id}
-                  className={`p-2.5 rounded-2xl border text-xs flex items-center gap-2.5 justify-between transition ${
-                    sameCountry 
-                      ? "bg-emerald-50/40 border-emerald-100" 
-                      : "bg-slate-50 border-slate-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <img
-                      src={suggestion.avatar}
-                      alt={suggestion.username}
-                      className="h-8.5 w-8.5 rounded-xl object-cover border border-gray-200 shrink-0"
-                    />
-                    <div className="truncate min-w-0">
-                      <p className="font-extrabold text-gray-900 text-[11px] truncate flex items-center gap-1">
-                        @{suggestion.username}
-                        {sameCountry && (
-                          <span className="bg-emerald-100 text-emerald-800 text-[8px] px-1 py-0.2 rounded-full font-bold">Même Pays</span>
-                        )}
-                      </p>
-                      <p className="text-[9px] text-gray-400 truncate mt-0.5">{reason}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleSendFriendRequest(suggestion.id)}
-                    className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 p-1.5 rounded-lg shrink-0 cursor-pointer text-[10px] font-bold text-emerald-700"
-                    title="Envoyer Demande d'ami"
-                  >
-                    Inviter
-                  </button>
-                </div>
-              ))}
-              {getFriendSuggestions().length === 0 && (
-                <p className="text-[10px] text-gray-400 text-center py-4">Aucune suggestion disponible.</p>
-              )}
-            </div>
-          </div>
-
-          {/* GENERAL MEMBERS DIRECTORY */}
-          <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm flex flex-col flex-1 max-h-[320px]" id="members_search_directory">
-            <h3 className="text-xs font-black uppercase text-gray-800 tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-emerald-600 shrink-0" />
-              Recherche Membres
-            </h3>
-
-            <div className="relative mb-3">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={directorySearch}
-                onChange={(e) => setDirectorySearch(e.target.value)}
-                placeholder="Rechercher par pseudo..."
-                className="w-full bg-slate-50 border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-[10.5px] font-bold text-gray-700 focus:outline-none focus:ring-0 focus:border-emerald-500"
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {filteredUsers.length === 0 ? (
-                <p className="text-[10px] text-gray-400 text-center py-4">Aucun membre ne correspond.</p>
+          {/* Floating "New Messages" / "Go to bottom" button */}
+          {showNewMessagesBtn && (
+            <button
+              type="button"
+              onClick={handleScrollToBottom}
+              className="absolute bottom-20 right-6 bg-emerald-600 hover:bg-emerald-750 text-white shadow-xl px-4 py-2.5 rounded-full flex items-center gap-2 text-xs font-black tracking-wide transition-all transform hover:scale-105 active:scale-95 z-40 animate-bounce cursor-pointer border border-emerald-500"
+            >
+              <ArrowDown className="h-4 w-4 stroke-[3]" />
+              {newMessagesCount > 0 ? (
+                <span>{newMessagesCount} nouveau{newMessagesCount > 1 ? "s" : ""} message{newMessagesCount > 1 ? "s" : ""}</span>
               ) : (
-                filteredUsers.map((usr) => {
-                  const isFriend = currentUser.friendIds?.includes(usr.id) || false;
-                  return (
-                    <div
-                      key={usr.id}
-                      className="flex items-center gap-2 justify-between p-2 rounded-2xl bg-slate-50 border border-slate-100 text-xs"
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <img
-                          src={usr.avatar}
-                          alt={usr.username}
-                          referrerPolicy="no-referrer"
-                          className="h-8 w-8 rounded-xl object-cover border border-gray-200 shrink-0"
-                        />
-                        <div className="truncate">
-                          <p className="font-extrabold text-gray-900 text-[11px] truncate">@{usr.username}</p>
-                          <p className="text-[9px] text-gray-400 truncate">{usr.role} • {usr.country}</p>
-                        </div>
-                      </div>
-
-                      {isFriend ? (
-                        <span className="text-[9.5px] text-emerald-600 font-extrabold pr-1.5 flex items-center gap-0.5">
-                          <UserCheck className="h-3.5 w-3.5" />
-                          Amis
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleSendFriendRequest(usr.id)}
-                          className="text-emerald-700 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 p-1.5 rounded-xl shrink-0 cursor-pointer text-[10px] font-bold flex items-center gap-0.5"
-                          title="Envoyer Demande d'ami"
-                        >
-                          <UserPlus className="h-3.5 w-3.5" />
-                          Ajouter
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
+                <span>Défiler vers le bas</span>
               )}
-            </div>
-          </div>
+            </button>
+          )}
 
+          </>
+         )}
         </div>
+
+        {/* RIGHT COLUMN REMOVED */}
 
       </div>
 
@@ -3790,6 +5529,602 @@ export default function SocialView({
                 <Send className="h-3.5 w-3.5 animate-pulse" />
                 Envoyer l'offre
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 4D ULTRA-PREMIUM VIRTUAL GIFT FULL SCREEN ANIMATION OVERLAY */}
+      {activeGiftAnimation && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-slate-950/80 backdrop-blur-md pointer-events-none select-none">
+          {/* Custom CSS animations injection */}
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes yama-gift-bounce {
+              0%, 100% { transform: scale(1) translateY(0) rotate(0deg); filter: drop-shadow(0 0 15px rgba(245,158,11,0.6)); }
+              50% { transform: scale(1.25) translateY(-25px) rotate(8deg); filter: drop-shadow(0 0 35px rgba(239,68,68,0.9)); }
+            }
+            @keyframes yama-particle-fall {
+              0% { transform: translateY(-50px) translateX(0) rotate(0deg); opacity: 0; }
+              10% { opacity: 1; }
+              90% { opacity: 1; }
+              100% { transform: translateY(105vh) translateX(var(--drift, 100px)) rotate(var(--spin, 360deg)); opacity: 0; }
+            }
+            @keyframes yama-particle-burst {
+              0% { transform: translate(0, 0) scale(0.3); opacity: 0; }
+              15% { opacity: 1; }
+              100% { transform: translate(var(--burst-x, 200px), var(--burst-y, -200px)) scale(var(--burst-scale, 1.5)) rotate(var(--spin, 720deg)); opacity: 0; }
+            }
+            @keyframes yama-particle-shoot {
+              0% { transform: translateX(-150px) translateY(var(--wave-y, 0px)) scale(0.8); opacity: 0; }
+              10% { opacity: 1; }
+              90% { opacity: 1; }
+              100% { transform: translateX(110vw) translateY(var(--wave-y-end, 0px)) scale(1.4); opacity: 0; }
+            }
+            @keyframes yama-text-glow {
+              0%, 100% { text-shadow: 0 0 15px rgba(251,191,36,0.6), 0 0 30px rgba(251,146,60,0.4); }
+              50% { text-shadow: 0 0 30px rgba(251,191,36,1), 0 0 50px rgba(239,68,68,0.8); }
+            }
+            @keyframes yama-shockwave {
+              0% { transform: scale(0.6); opacity: 0.8; border-color: rgba(251,191,36,0.8); }
+              100% { transform: scale(2.5); opacity: 0; border-color: rgba(239,68,68,0); }
+            }
+            .yama-animate-bounce-gift {
+              animation: yama-gift-bounce 2s ease-in-out infinite;
+            }
+            .yama-animate-text-glow {
+              animation: yama-text-glow 1.5s ease-in-out infinite;
+            }
+            .yama-shockwave-ring {
+              animation: yama-shockwave 1.5s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+            }
+          `}} />
+
+          {/* Particle stream elements generator */}
+          <div className="absolute inset-0 pointer-events-none">
+            {Array.from({ length: 45 }).map((_, i) => {
+              const delay = Math.random() * 2.5;
+              const duration = 2.5 + Math.random() * 2.5;
+              const size = 16 + Math.random() * 32;
+              const spin = -360 + Math.random() * 720;
+              const drift = -150 + Math.random() * 300;
+              
+              let animationStyle = {};
+              let particleContent = activeGiftAnimation.emoji;
+
+              if (activeGiftAnimation.type === "petals") {
+                particleContent = ["🌸", "🌹", "🌷", "💖", "✨"][i % 5];
+                animationStyle = {
+                  left: `${Math.random() * 100}%`,
+                  top: `-40px`,
+                  fontSize: `${size}px`,
+                  animation: `yama-particle-fall ${duration}s linear infinite`,
+                  animationDelay: `${delay}s`,
+                  "--drift": `${drift}px`,
+                  "--spin": `${spin}deg`
+                } as any;
+              } else if (activeGiftAnimation.type === "diamonds") {
+                particleContent = ["💎", "✨", "💎", "⭐", "💙"][i % 5];
+                animationStyle = {
+                  left: `${Math.random() * 100}%`,
+                  top: `-40px`,
+                  fontSize: `${size}px`,
+                  animation: `yama-particle-fall ${duration - 0.5}s cubic-bezier(0.25, 1, 0.5, 1) infinite`,
+                  animationDelay: `${delay}s`,
+                  "--drift": `${drift * 0.5}px`,
+                  "--spin": `${spin * 1.5}deg`
+                } as any;
+              } else if (activeGiftAnimation.type === "money") {
+                particleContent = ["💵", "💰", "💵", "💸", "🪙"][i % 5];
+                animationStyle = {
+                  left: `${Math.random() * 100}%`,
+                  top: `-40px`,
+                  fontSize: `${size}px`,
+                  animation: `yama-particle-fall ${duration + 0.5}s ease-in-out infinite`,
+                  animationDelay: `${delay}s`,
+                  "--drift": `${drift * 1.2}px`,
+                  "--spin": `${spin}deg`
+                } as any;
+              } else if (activeGiftAnimation.type === "rocket") {
+                particleContent = ["🚀", "🔥", "✨", "⭐"][i % 4];
+                const waveY = -150 + Math.random() * 300;
+                const waveYEnd = waveY + (-100 + Math.random() * 200);
+                animationStyle = {
+                  left: `-100px`,
+                  top: `${20 + Math.random() * 60}%`,
+                  fontSize: `${size}px`,
+                  animation: `yama-particle-shoot ${duration - 1.2}s cubic-bezier(0.4, 0, 0.2, 1) infinite`,
+                  animationDelay: `${delay * 0.6}s`,
+                  "--wave-y": `${waveY}px`,
+                  "--wave-y-end": `${waveYEnd}px`
+                } as any;
+              } else if (activeGiftAnimation.type === "car") {
+                particleContent = ["🏎️", "💨", "🔥", "🏁"][i % 4];
+                animationStyle = {
+                  left: `-120px`,
+                  top: `${60 + Math.random() * 25}%`,
+                  fontSize: `${size}px`,
+                  animation: `yama-particle-shoot ${duration - 1.5}s ease-in-out infinite`,
+                  animationDelay: `${delay * 0.5}s`,
+                  "--wave-y": "0px",
+                  "--wave-y-end": "0px"
+                } as any;
+              } else {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 100 + Math.random() * 350;
+                const burstX = Math.cos(angle) * dist;
+                const burstY = Math.sin(angle) * dist;
+                animationStyle = {
+                  left: `50%`,
+                  top: `45%`,
+                  fontSize: `${size * 0.8}px`,
+                  animation: `yama-particle-burst ${duration - 1}s cubic-bezier(0.1, 0.8, 0.3, 1) infinite`,
+                  animationDelay: `${delay * 0.4}s`,
+                  "--burst-x": `${burstX}px`,
+                  "--burst-y": `${burstY}px`,
+                  "--burst-scale": `${0.5 + Math.random() * 1.5}`
+                } as any;
+              }
+
+              return (
+                <span
+                  key={i}
+                  className="absolute select-none pointer-events-none filter drop-shadow-md z-10 transition-transform duration-300"
+                  style={animationStyle}
+                >
+                  {particleContent}
+                </span>
+              );
+            })}
+          </div>
+
+          {(["lion", "dragon", "light", "lightning"].includes(activeGiftAnimation.type)) && (
+            <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+              <div className="w-64 h-64 border-4 rounded-full yama-shockwave-ring" style={{ animationDelay: "0s" }} />
+              <div className="w-64 h-64 border-4 rounded-full yama-shockwave-ring" style={{ animationDelay: "0.5s" }} />
+              <div className="w-64 h-64 border-4 rounded-full yama-shockwave-ring" style={{ animationDelay: "1s" }} />
+            </div>
+          )}
+
+          <div className="relative z-20 flex flex-col items-center justify-center p-8 max-w-lg text-center">
+            <div className="absolute -inset-10 bg-gradient-to-tr from-amber-500/20 via-pink-500/20 to-red-500/20 blur-3xl opacity-75 rounded-full animate-pulse pointer-events-none" />
+
+            <div className="relative mb-8 flex items-center justify-center w-52 h-52 bg-slate-900/60 border border-white/20 rounded-full shadow-2xl backdrop-blur-xl animate-fade-in">
+              <div className="absolute inset-2 bg-gradient-to-br from-amber-500/10 to-pink-500/10 rounded-full" />
+              <span className="text-8xl select-none yama-animate-bounce-gift drop-shadow-2xl">
+                {activeGiftAnimation.emoji}
+              </span>
+            </div>
+
+            <div className="space-y-3 max-w-md animate-scale-up">
+              <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-pink-500/20 text-amber-300 border border-amber-500/30 shadow-lg">
+                👑 CADEAU ULTRA PREMIUM YAMA 👑
+              </span>
+              
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight yama-animate-text-glow leading-tight">
+                @{activeFriend?.username || "Abonné"}
+              </h1>
+              
+              <p className="text-lg font-extrabold text-amber-200">
+                a reçu <span className="underline decoration-pink-500 decoration-2">{activeGiftAnimation.name}</span> !
+              </p>
+
+              <div className="pt-4 flex justify-center items-center gap-2 text-slate-400 font-bold text-xs">
+                <span>Animation 4D Immersive</span>
+                <span>•</span>
+                <span>Audio spatialisé</span>
+                <span>•</span>
+                <span>+{activeGiftAnimation.duration}s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIRTUAL GIFT SELECTION CATALOG MODAL */}
+      {showGiftCatalogModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" id="gift_catalog_modal_overlay">
+          <div className="bg-slate-900 text-slate-100 rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-800 overflow-hidden animate-scale-up flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-pink-500/10 rounded-xl flex items-center justify-center border border-pink-500/20">
+                  <Gift className="h-5 w-5 text-pink-500 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    Système de Cadeaux Yama
+                  </h3>
+                  <p className="text-[10.5px] text-slate-400 font-medium">Offrez des cadeaux 3D/4D, achetez des pièces ou convertissez vos revenus.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGiftCatalogModal(false);
+                  setGiftSendingError(null);
+                  setGiftSendingSuccess(null);
+                  setGiftRecipientId(null);
+                }}
+                className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* THREE MODULE INTERACTIVE TABS */}
+            <div className="px-5 bg-slate-950 border-b border-slate-800 flex gap-1 shrink-0">
+              {[
+                { id: "send", label: "Envoyer un Cadeau 🎁" },
+                { id: "buy", label: "Acheter des Pièces 🪙" },
+                { id: "withdraw", label: "Retrait & Revenus 💰" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setGiftCatalogTab(tab.id as any);
+                    setGiftSendingError(null);
+                    setGiftSendingSuccess(null);
+                  }}
+                  className={`px-4 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${
+                    giftCatalogTab === tab.id
+                      ? "border-pink-500 text-pink-400 bg-pink-500/5"
+                      : "border-transparent text-slate-400 hover:text-white hover:bg-slate-900/40"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Balances & Alerts Banner */}
+            <div className="px-6 py-3 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-bold">Mon Solde :</span>
+                  <span className="inline-flex items-center gap-1 font-black bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-full border border-amber-500/20">
+                    🪙 {currentUser?.giftPoints?.toLocaleString() || "0"} Pièces
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-bold">Gains Reçus :</span>
+                  <span className="inline-flex items-center gap-1 font-black bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                    💎 {currentUser?.giftPointsEarned?.toLocaleString() || "0"} Pièces
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-[180px] text-right">
+                {giftSendingError && (
+                  <p className="text-[11px] text-rose-400 font-bold animate-pulse">{giftSendingError}</p>
+                )}
+                {giftSendingSuccess && (
+                  <p className="text-[11px] text-emerald-400 font-black animate-bounce">{giftSendingSuccess}</p>
+                )}
+              </div>
+            </div>
+
+            {/* TAB CONTENT MODULE */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-900/40">
+              
+              {/* TAB 1: SEND GIFT CATALOG */}
+              {giftCatalogTab === "send" && (
+                <div className="space-y-4">
+                  
+                  {/* Recipient Dropdown if in Community/Group */}
+                  {activeTab === "communities" && activeCommunity && (
+                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-1.5 shadow-md">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-teal-400">Destinataire du cadeau :</label>
+                      <select
+                        value={giftRecipientId || ""}
+                        onChange={(e) => setGiftRecipientId(e.target.value || null)}
+                        className="bg-slate-950 text-white font-extrabold text-xs px-3 py-2.5 rounded-xl border border-slate-800 outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        <option value="">-- Choisir un donateur / membre --</option>
+                        {usersList.map((usr: any) => (
+                          <option key={usr.id} value={usr.id}>
+                            @{usr.username} {usr.id === activeCommunity.creatorId ? "(Créateur ⭐)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Recipient Information Display */}
+                  {(() => {
+                    const recipientUser = usersList.find((u: any) => u.id === (giftRecipientId || activeFriend?.id));
+                    return recipientUser ? (
+                      <div className="flex items-center gap-3 p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80">
+                        <img
+                          src={recipientUser.avatar}
+                          alt={recipientUser.username}
+                          className="h-9 w-9 rounded-xl object-cover border border-slate-700 shadow-sm animate-pulse"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-white uppercase tracking-wider">Cadeau destiné à :</p>
+                          <p className="text-xs font-bold text-pink-400">@{recipientUser.username} <span className="text-[10px] text-slate-400">({recipientUser.name})</span></p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl text-xs font-bold text-center">
+                        ⚠️ Veuillez sélectionner un destinataire pour pouvoir lui envoyer le cadeau.
+                      </div>
+                    );
+                  })()}
+
+                  {/* Categories Pills */}
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none shrink-0 border-b border-slate-800/60">
+                    {[
+                      { id: "all", label: "Tous" },
+                      { id: "Classique", label: "Classique" },
+                      { id: "Premium", label: "Premium" },
+                      { id: "Royale", label: "Royale" },
+                      { id: "Légendaire", label: "Légendaire" },
+                      { id: "Richesse", label: "Richesse" },
+                      { id: "Amour", label: "Amour" },
+                      { id: "Fête", label: "Fête" },
+                      { id: "Gaming", label: "Gaming" },
+                      { id: "Sport", label: "Sport" },
+                      { id: "Afrique", label: "Afrique" },
+                      { id: "Saisonnier", label: "Saisonnier" },
+                      { id: "Exclusif", label: "Exclusif" }
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setGiftCategoryFilter(cat.id)}
+                        className={`px-3.5 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide shrink-0 transition cursor-pointer border ${
+                          giftCategoryFilter === cat.id
+                            ? "bg-pink-600 border-pink-500 text-white shadow-md shadow-pink-600/20"
+                            : "bg-slate-800 border-slate-750 hover:border-slate-700 text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Gifts Catalog Grid */}
+                  {(() => {
+                    const rawGifts = systemMetrics?.settings?.virtualGifts || [];
+                    const filteredGifts = rawGifts.filter((g: any) => {
+                      if (g.active === false) return false;
+                      if (giftCategoryFilter === "all") return true;
+                      return g.category === giftCategoryFilter;
+                    });
+
+                    if (filteredGifts.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <Gift className="h-10 w-10 text-slate-700 mx-auto mb-3" />
+                          <p className="text-slate-500 text-xs font-bold">Aucun cadeau virtuel disponible dans cette catégorie.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {filteredGifts.map((gift: any) => {
+                          const isAffordable = (currentUser?.giftPoints || 0) >= gift.pointsPrice;
+                          const currentRecipient = giftRecipientId || activeFriend?.id;
+                          
+                          const rarityGlows: Record<string, string> = {
+                            "Commun": "border-slate-750 hover:border-slate-600 bg-slate-800/20 hover:bg-slate-800/40",
+                            "Rare": "border-blue-900/50 hover:border-blue-700 bg-blue-950/10 hover:bg-blue-950/20 shadow-blue-900/5",
+                            "Épique": "border-purple-900/50 hover:border-purple-700 bg-purple-950/10 hover:bg-purple-950/20 shadow-purple-900/5",
+                            "Légendaire": "border-amber-900/50 hover:border-amber-700 bg-amber-950/10 hover:bg-amber-950/20 shadow-amber-900/5",
+                            "Mythique": "border-rose-900/50 hover:border-rose-700 bg-rose-950/10 hover:bg-rose-950/20 shadow-rose-900/5"
+                          };
+
+                          const badgeColors: Record<string, string> = {
+                            "Commun": "bg-slate-800 text-slate-300",
+                            "Rare": "bg-blue-900/30 text-blue-300 border border-blue-800/30",
+                            "Épique": "bg-purple-900/30 text-purple-300 border border-purple-800/30",
+                            "Légendaire": "bg-amber-900/30 text-amber-300 border border-amber-800/30",
+                            "Mythique": "bg-rose-900/30 text-rose-300 border border-rose-800/30"
+                          };
+
+                          return (
+                            <div
+                              key={gift.id}
+                              className={`rounded-2xl p-4 border flex flex-col items-center justify-between text-center relative group overflow-hidden transition-all duration-300 select-none ${
+                                rarityGlows[gift.rarity || "Commun"]
+                              }`}
+                            >
+                              <div className="absolute -inset-10 bg-gradient-to-tr from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out" />
+
+                              <span className={`absolute top-2.5 right-2.5 text-[8.5px] font-black uppercase px-2 py-0.5 rounded-md ${badgeColors[gift.rarity || "Commun"]}`}>
+                                {gift.rarity || "Commun"}
+                              </span>
+
+                              <span className="text-4xl my-3 group-hover:scale-125 transition-transform duration-300 shrink-0 filter drop-shadow-md">
+                                {gift.emoji || "🎁"}
+                              </span>
+
+                              <div className="w-full space-y-1">
+                                <h4 className="text-xs font-black text-white truncate px-1">{gift.name}</h4>
+                                <p className="text-[10px] text-slate-400 leading-tight font-medium line-clamp-2 px-1">
+                                  {gift.description || "Objet cadeau interactif."}
+                                </p>
+                              </div>
+
+                              <div className="mt-4 w-full pt-3 border-t border-slate-800/50 flex items-center justify-between gap-2 shrink-0">
+                                <span className="text-[10.5px] font-black text-amber-400">
+                                  🪙 {gift.pointsPrice}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendVirtualGift(gift.id)}
+                                  disabled={!currentRecipient}
+                                  className={`px-3 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wide transition active:scale-95 cursor-pointer ${
+                                    currentRecipient
+                                      ? "bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/10"
+                                      : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-750"
+                                  }`}
+                                  title={currentRecipient ? `Envoyer` : "Veuillez choisir un destinataire"}
+                                >
+                                  Envoyer
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              )}
+
+              {/* TAB 2: BUY COINS PACKS */}
+              {giftCatalogTab === "buy" && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 text-center">
+                    <p className="text-xs text-slate-300 font-bold">
+                      Besoin de pièces pour gâter vos proches ? Achetez des pièces instantanément avec votre solde de portefeuille.
+                    </p>
+                    <p className="text-[10.5px] text-slate-400 mt-1 font-medium">
+                      Solde actuel du Portefeuille : <span className="text-emerald-400 font-black">{(currentUser?.wallet?.available || 0).toFixed(2)} {currentUser?.currency || "EUR"}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onNavigate) {
+                          setShowGiftCatalogModal(false);
+                          onNavigate("wallet", "deposit");
+                        }
+                      }}
+                      className="mt-3 inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase text-[10px] px-4 py-2 rounded-xl transition cursor-pointer shadow-md active:scale-95 animate-pulse"
+                    >
+                      💳 Recharger mon portefeuille
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                      { packType: "pack_100", coins: 100, price: 1.00, label: "Pack Mini", desc: "Parfait pour offrir des coeurs ou des roses !" },
+                      { packType: "pack_500", coins: 500, price: 5.00, label: "Pack Standard", desc: "Populaire pour de superbes animations de cadeaux." },
+                      { packType: "pack_1000", coins: 1000, price: 10.00, label: "Pack Premium", desc: "Pour les vrais amateurs d'effets ultra premium 3D." },
+                      { packType: "pack_5000", coins: 5000, price: 45.00, label: "Pack Royal", desc: "Valeur incroyable avec 10% de réduction incluse !" },
+                      { packType: "pack_10000", coins: 10000, price: 80.00, label: "Pack Légendaire", desc: "Régnez sur la communauté avec le maximum de pièces !" }
+                    ].map((pack) => {
+                      const isAffordableWallet = (currentUser?.wallet?.available || 0) >= pack.price;
+                      return (
+                        <div key={pack.packType} className="bg-slate-950 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/30 transition duration-300">
+                          <div>
+                            <div className="flex justify-between items-start">
+                              <span className="text-[9.5px] font-black uppercase bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded-md">
+                                {pack.label}
+                              </span>
+                              <span className="text-xs font-black text-white">
+                                {pack.price.toFixed(2)} {currentUser?.currency || "EUR"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-3">
+                              <span className="text-2xl">🪙</span>
+                              <p className="text-lg font-black text-amber-300">
+                                {pack.coins.toLocaleString()} <span className="text-xs font-bold text-slate-400">Pièces</span>
+                              </p>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1 font-medium leading-normal">
+                              {pack.desc}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={purchasingPoints}
+                            onClick={() => handleBuyPointsInteractive(pack.packType, pack.price)}
+                            className={`w-full mt-4 py-2 rounded-xl font-black uppercase text-[10px] transition cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 ${
+                              isAffordableWallet
+                                ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/10"
+                                : "bg-slate-800 text-slate-400 hover:bg-slate-750 hover:text-white border border-slate-700"
+                            }`}
+                          >
+                            {purchasingPoints ? "Traitement..." : isAffordableWallet ? "Acheter instantanément" : "Acheter / Recharger"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: CONVERT EARNED POINTS TO WALLET CASH */}
+              {giftCatalogTab === "withdraw" && (
+                <div className="space-y-6">
+                  <div className="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-3">
+                    <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      💰 Convertir vos revenus de cadeaux
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                      Chaque fois qu'un utilisateur vous envoie un cadeau virtuel, vos points gagnés augmentent automatiquement ! Vous pouvez convertir ces points en argent réel utilisable directement dans votre portefeuille, puis le retirer.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                        <p className="text-[9.5px] text-slate-400 font-extrabold uppercase">Gains cumulés</p>
+                        <p className="text-lg font-black text-emerald-400 mt-1">
+                          💎 {currentUser?.giftPointsEarned?.toLocaleString() || "0"} <span className="text-xs font-bold text-slate-400">Pièces</span>
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                        <p className="text-[9.5px] text-slate-400 font-extrabold uppercase">Taux de conversion</p>
+                        <p className="text-xs font-bold text-white mt-1">
+                          100 Pièces = <span className="text-emerald-400 font-black">1.00 {currentUser?.currency || "EUR"}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conversion Tool Action */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <h5 className="text-[11px] font-black uppercase text-slate-300 tracking-wider">Demander une conversion instantanée</h5>
+                    
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-wide block">Nombre de pièces à convertir :</label>
+                      <div className="flex gap-3">
+                        <input
+                          type="number"
+                          placeholder="Ex: 500"
+                          value={conversionPointsAmount}
+                          onChange={(e) => setConversionPointsAmount(e.target.value)}
+                          className="bg-slate-900 text-white font-extrabold text-sm px-4 py-2.5 rounded-xl border border-slate-850 focus:border-emerald-500 outline-none flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setConversionPointsAmount(String(currentUser?.giftPointsEarned || 0))}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-2 text-[10px] font-black uppercase rounded-xl transition cursor-pointer"
+                        >
+                          Max
+                        </button>
+                      </div>
+                      {conversionPointsAmount && !isNaN(parseInt(conversionPointsAmount)) && (
+                        <p className="text-[10px] text-emerald-400 font-bold">
+                          Vous recevrez : <span className="font-black">{(parseInt(conversionPointsAmount) * 0.01).toFixed(2)} {currentUser?.currency || "EUR"}</span> dans votre portefeuille !
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={convertingPoints}
+                      onClick={handleConvertPointsInteractive}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase py-2.5 rounded-xl text-xs tracking-wider transition cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
+                    >
+                      {convertingPoints ? "Traitement..." : "Convertir en argent de portefeuille"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/40 text-center text-[10px] font-bold text-slate-500 shrink-0">
+              Les transferts de cadeaux et conversions de pièces sont immédiats. En cas de litige, contactez l'assistance Yaamaa.
             </div>
 
           </div>
@@ -4175,12 +6510,21 @@ export default function SocialView({
                 </div>
               </div>
               <div>
-                <h4 className="font-black text-xs uppercase tracking-wider text-slate-300">
-                  {activeCall.status === "ringing" ? "Lancement de la réunion..." : "Conférence Active"}
-                </h4>
-                <p className="text-[10px] font-mono text-emerald-400 flex items-center gap-1.5 font-bold">
-                  {(activeCall.participants || []).length} / 10 Participants
-                </p>
+                {(() => {
+                  const callMins = Math.floor(callDuration / 60);
+                  const callSecs = callDuration % 60;
+                  const durationStr = `${callMins.toString().padStart(2, "0")}:${callSecs.toString().padStart(2, "0")}`;
+                  return (
+                    <>
+                      <h4 className="font-black text-xs uppercase tracking-wider text-slate-300">
+                        {activeCall.status === "ringing" ? "Lancement de la réunion..." : `Conférence Active • ${durationStr}`}
+                      </h4>
+                      <p className="text-[10px] font-mono text-emerald-400 flex items-center gap-1.5 font-bold">
+                        {(activeCall.participants || []).length} / 10 Participants
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -4221,7 +6565,9 @@ export default function SocialView({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-white">Appel en cours...</h3>
-                  <p className="text-xs text-slate-400 mt-1">Connexion en cours avec @{usersList.find(u => u.id === activeCall.receiverId)?.username || "Correspondant"}</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {callStatusMessage || `Connexion en cours avec @${usersList.find(u => u.id === activeCall.receiverId)?.username || "Correspondant"}`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 px-4 py-2 rounded-full text-[10px] text-slate-400 font-mono">
                   <span>Sécurisé de bout en bout</span>
@@ -4229,7 +6575,18 @@ export default function SocialView({
               </div>
             ) : (
               // Active Call (Pinned Layout: Creator/Host at the top, others side-by-side below)
-              <div className="w-full h-full flex flex-col gap-4 p-2 max-w-5xl overflow-y-auto">
+              <div className="w-full h-full flex flex-col gap-4 p-2 max-w-5xl overflow-y-auto relative">
+                {isCallOnHold && (
+                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-35 flex flex-col items-center justify-center text-center p-6 gap-3 rounded-3xl">
+                    <div className="h-16 w-16 bg-amber-500/10 rounded-full border border-amber-500/30 text-amber-500 flex items-center justify-center animate-bounce">
+                      <Pause className="h-8 w-8 stroke-[2.5]" />
+                    </div>
+                    <h3 className="text-lg font-black text-white uppercase tracking-wider">Appel en attente</h3>
+                    <p className="text-xs text-slate-400 max-w-xs font-bold leading-relaxed">
+                      L'appel a été mis en attente. Cliquez sur le bouton "Lecture" en bas pour reprendre la conversation.
+                    </p>
+                  </div>
+                )}
                 {(() => {
                   const callParts = activeCall.participants || [
                     {
@@ -4554,6 +6911,25 @@ export default function SocialView({
                 title={isMuted ? "Activer le micro" : "Couper le micro"}
               >
                 {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </button>
+            )}
+
+            {/* Toggle Hold / Mettre en attente */}
+            {activeCall.status === "active" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCallOnHold(!isCallOnHold);
+                  showToast(isCallOnHold ? "Appel repris ▶" : "Appel mis en attente ⏸");
+                }}
+                className={`p-4 rounded-2xl transition cursor-pointer active:scale-95 border flex items-center justify-center ${
+                  !isCallOnHold 
+                    ? "bg-slate-800 hover:bg-slate-700 text-white border-slate-700" 
+                    : "bg-amber-500/25 border-amber-500 text-amber-500 animate-pulse"
+                }`}
+                title={isCallOnHold ? "Reprendre l'appel" : "Mettre l'appel en attente"}
+              >
+                {isCallOnHold ? <Play className="h-5 w-5 text-amber-400" /> : <Pause className="h-5 w-5" />}
               </button>
             )}
 

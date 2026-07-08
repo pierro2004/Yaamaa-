@@ -19,7 +19,7 @@ export const translations = {
     promotions: "Promotions",
     wallet: "Portefeuille",
     discussions: "Discussions",
-    assistant: "Taskora AI",
+    assistant: "Yaamaa AI",
     admin_console: "Console Admin",
     founder_console: "Console Fondateur",
     test_mode: "Mode Test :",
@@ -31,16 +31,16 @@ export const translations = {
     new_notifs: "nouvelles",
     
     // Hero & Banner sections
-    hero_title: "Moteur Neurologique de Tâches Rémunérées Taskora AI",
+    hero_title: "Moteur Neurologique de Tâches Rémunérées Yaamaa AI",
     hero_sub: "Le moyen le plus rapide d'obtenir des compléments de revenus réels en accomplissant de petites tâches en ligne.",
     btn_invite: "Inviter des Filleuls",
     btn_parrainer: "Parrainer & Gagner",
     btn_suivi: "Suivi de mes Filleuls",
     
     // Special referral section
-    referral_offer: "🎁 OFFRE SPÉCIALE : PARRAINAGE TASKORA",
+    referral_offer: "🎁 OFFRE SPÉCIALE : PARRAINAGE YAAMAA",
     referral_adv: "Vous gagnez 10% sur leurs missions, 5% sur leurs ventes et 3% sur leurs achats à vie !",
-    referral_gain: "Gagnez 1.0 € par parrainé certifié rejoignant Taskora.",
+    referral_gain: "Gagnez 1.0 € par parrainé certifié rejoignant Yaamaa.",
     referral_btn: "Suivre mes Filleuls",
     
     // Share / Invite Modal
@@ -71,8 +71,8 @@ export const translations = {
     alert: "Alerte :",
     balance_available: "Solde Disponible",
     balance_pending: "en attente",
-    balance_title: "Portefeuille Financier Taskora",
-    balance_internal: "💳 Balance Interne Taskora",
+    balance_title: "Portefeuille Financier Yaamaa",
+    balance_internal: "💳 Balance Interne Yaamaa",
   },
   en: {
     // Logo & Slogans
@@ -87,7 +87,7 @@ export const translations = {
     promotions: "Promotions",
     wallet: "Wallet",
     discussions: "Discussions",
-    assistant: "Taskora AI",
+    assistant: "Yaamaa AI",
     admin_console: "Admin Console",
     founder_console: "Founder Console",
     test_mode: "Test Mode:",
@@ -99,16 +99,16 @@ export const translations = {
     new_notifs: "new",
     
     // Hero & Banner sections
-    hero_title: "Taskora AI Neural Engine for Rewarded Tasks",
+    hero_title: "Yaamaa AI Neural Engine for Rewarded Tasks",
     hero_sub: "The fastest way to earn real secondary income by completing small tasks online.",
     btn_invite: "Invite Referrals",
     btn_parrainer: "Refer & Earn",
     btn_suivi: "Track my Referrals",
     
     // Special referral section
-    referral_offer: "🎁 SPECIAL OFFER: TASKORA REFERRAL",
+    referral_offer: "🎁 SPECIAL OFFER: YAAMAA REFERRAL",
     referral_adv: "You earn 10% on their tasks, 5% on their sales and 3% on their purchases for life!",
-    referral_gain: "Earn €1.0 per certified referral joining Taskora.",
+    referral_gain: "Earn €1.0 per certified referral joining Yaamaa.",
     referral_btn: "Track my Referrals",
     
     // Share / Invite Modal
@@ -139,8 +139,8 @@ export const translations = {
     alert: "Alert:",
     balance_available: "Available Balance",
     balance_pending: "pending",
-    balance_title: "Taskora Financial Wallet",
-    balance_internal: "💳 Taskora Internal Balance",
+    balance_title: "Yaamaa Financial Wallet",
+    balance_internal: "💳 Yaamaa Internal Balance",
   },
 };
 

@@ -45,6 +45,7 @@ interface BoutiqueViewProps {
   products: Product[];
   orders: Order[];
   disputes: Dispute[];
+  usersList: User[];
   syncPlatformData: () => Promise<void>;
   onNavigate: (view: string) => void;
   onTriggerKkiapayPayment?: (amount: number, payload: any) => void;
@@ -58,6 +59,7 @@ export default function BoutiqueView({
   products,
   orders,
   disputes,
+  usersList = [],
   syncPlatformData,
   onNavigate,
   onTriggerKkiapayPayment,
@@ -230,7 +232,7 @@ export default function BoutiqueView({
   const [shippingAddress, setShippingAddress] = useState("");
   const [buyerPhone, setBuyerPhone] = useState(currentUser?.phone || "");
   const [buyerEmail, setBuyerEmail] = useState(currentUser?.email || "");
-  const [paymentMethod, setPaymentMethod] = useState("Wallet Taskora");
+  const [paymentMethod, setPaymentMethod] = useState("Wallet Yaamaa");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState("");
   const [orderError, setOrderError] = useState("");
@@ -428,9 +430,9 @@ export default function BoutiqueView({
       return;
     }
 
-    if (paymentMethod === "Wallet Taskora") {
+    if (paymentMethod === "Wallet Yaamaa") {
       if (currentUser.wallet.available < (buyingProduct.price * orderQuantity)) {
-        setOrderError("Le solde de votre Wallet Taskora est insuffisant pour finaliser cet achat.");
+        setOrderError("Le solde de votre Wallet Yaamaa est insuffisant pour finaliser cet achat.");
         return;
       }
 
@@ -609,6 +611,16 @@ export default function BoutiqueView({
   const filteredProducts = products.filter(prod => {
     if (prod.isBanned) return false;
     
+    // Public platform visibility advantage check: Only show products of Gold / Diamond sellers
+    // (Always show if it's the current user's own product so they can see their inventory, or if they are founder/admin)
+    const owner = usersList.find(u => u.id === prod.ownerId);
+    const isOwnerOrStaff = currentUser && (prod.ownerId === currentUser.id || currentUser.role === "founder" || currentUser.role === "admin");
+    const hasMarketplaceAdvantage = owner && (owner.merchantPackType === "gold" || owner.merchantPackType === "diamond");
+    
+    if (!isOwnerOrStaff && !hasMarketplaceAdvantage) {
+      return false;
+    }
+    
     // Search query matched in name, desc, shopname
     const matchesSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           prod.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -640,6 +652,13 @@ export default function BoutiqueView({
 
   // Sort products
   const sortedProducts = [...filteredProducts].sort((a, b) => {
+    // Diamond and Gold boost
+    const aOwner = usersList.find(u => u.id === a.ownerId);
+    const bOwner = usersList.find(u => u.id === b.ownerId);
+    const aRank = aOwner?.merchantPackType === "diamond" ? 2 : (aOwner?.merchantPackType === "gold" ? 1 : 0);
+    const bRank = bOwner?.merchantPackType === "diamond" ? 2 : (bOwner?.merchantPackType === "gold" ? 1 : 0);
+    if (aRank !== bRank) return bRank - aRank; // Higher rank goes first
+
     if (sortBy === "price_asc") return a.price - b.price;
     if (sortBy === "price_desc") return b.price - a.price;
     if (sortBy === "date") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -994,7 +1013,7 @@ export default function BoutiqueView({
                   <Store className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-heading font-black text-gray-950">Créer une boutique en ligne</h3>
-                <p className="text-xs text-gray-500 max-w-sm mx-auto">Vendez des fichiers digitaux, e-books, cours en ligne ou produits physiques à la communauté Taskora avec notre système d'Escrow garanti.</p>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto">Vendez des fichiers digitaux, e-books, cours en ligne ou produits physiques à la communauté Yaamaa avec notre système d'Escrow garanti.</p>
               </div>
 
               <form onSubmit={handleCreateShop} className="space-y-4">
@@ -1266,9 +1285,45 @@ export default function BoutiqueView({
 
                 <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/5 text-xs">
                   <span className="block text-[10px] text-emerald-100 font-mono tracking-wider uppercase">Vendeur Verified</span>
-                  <span className="font-bold">@{currentUser?.username}</span>
+                  <span className="font-bold flex items-center gap-1.5 flex-wrap">
+                    @{currentUser?.username}
+                    {currentUser?.merchantPackType === "diamond" && <span className="bg-cyan-400/20 text-cyan-200 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">💎 Diamant</span>}
+                    {currentUser?.merchantPackType === "gold" && <span className="bg-amber-400/20 text-amber-200 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">🌟 Motivation</span>}
+                    {currentUser?.merchantPackType === "premium" && <span className="bg-indigo-400/20 text-indigo-200 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">✨ Base</span>}
+                  </span>
                 </div>
               </div>
+
+              {/* STATUS DE VISIBILITÉ DE LA BOUTIQUE */}
+              {(!currentUser?.merchantPackType || (currentUser?.merchantPackType !== "gold" && currentUser?.merchantPackType !== "diamond")) && (
+                <div className="bg-amber-50 border border-amber-200 p-4.5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans shadow-xs" id="boutique_package_warning_banner">
+                  <div className="space-y-1">
+                    <p className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                      Visibilité limitée sur le catalogue public (Marketplace)
+                    </p>
+                    <p className="text-[11px] text-amber-900 leading-relaxed max-w-3xl">
+                      Actuellement, vos produits sont visibles uniquement sur votre page de boutique privée ou pour vous-même. Pour que vos produits soient publiés et recherchables sur le <strong>Catalogue public (Marketplace)</strong> de Yaamaa, vous devez posséder un <strong>Pack Or (Gold)</strong> ou un <strong>Pack Diamant (Diamond)</strong>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate("home");
+                        setTimeout(() => {
+                          const triggerBtn = document.getElementById("open_merchant_button") || document.getElementById("navbar_notif_button");
+                          if (triggerBtn) {
+                            (triggerBtn as HTMLElement).click();
+                          }
+                        }, 500);
+                      }
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] py-1.5 px-3.5 rounded-xl whitespace-nowrap transition cursor-pointer self-stretch sm:self-auto text-center shadow-xs"
+                  >
+                    Devenir Marchand Or / Diamant
+                  </button>
+                </div>
+              )}
 
               {/* SHARE OPTIONS PANEL */}
               {showShareOptions && (
@@ -1296,7 +1351,7 @@ export default function BoutiqueView({
                     </button>
 
                     <a
-                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Découvrez ma boutique "${myShop.name}" sur Taskora ! Retrouvez nos produits de qualité ici : ` + getShopShareUrl(myShop.id))}`}
+                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Découvrez ma boutique "${myShop.name}" sur Yaamaa ! Retrouvez nos produits de qualité ici : ` + getShopShareUrl(myShop.id))}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-[#25D366] hover:bg-[#20ba56] text-white text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 shadow-xs transition"
@@ -1306,7 +1361,7 @@ export default function BoutiqueView({
                     </a>
 
                     <a
-                      href={`https://t.me/share/url?url=${encodeURIComponent(getShopShareUrl(myShop.id))}&text=${encodeURIComponent(`Découvrez ma boutique "${myShop.name}" sur Taskora !`)}`}
+                      href={`https://t.me/share/url?url=${encodeURIComponent(getShopShareUrl(myShop.id))}&text=${encodeURIComponent(`Découvrez ma boutique "${myShop.name}" sur Yaamaa !`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-[#0088cc] hover:bg-[#0077b3] text-white text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 shadow-xs transition"
@@ -2035,7 +2090,7 @@ export default function BoutiqueView({
                           )}
                         </div>
                         
-                        <p className="text-[10px] text-emerald-800 font-medium">Taskora Escrow sécurise vos fonds. Une fois satisfait du contenu numérique, veuillez valider le paiement pour reverser le solde au vendeur.</p>
+                        <p className="text-[10px] text-emerald-800 font-medium">Yaamaa Escrow sécurise vos fonds. Une fois satisfait du contenu numérique, veuillez valider le paiement pour reverser le solde au vendeur.</p>
                       </div>
                     );
                   })()}
@@ -2183,7 +2238,7 @@ export default function BoutiqueView({
                 <label className="text-xs font-bold text-gray-700 block">Moyen de paiement sécurisé</label>
                 <div className="grid grid-cols-2 gap-2 shrink-0">
                   {[
-                    { key: "Wallet Taskora", label: `Wallet Taskora (${currentUser?.wallet.available.toLocaleString()} disponibles)` },
+                    { key: "Wallet Yaamaa", label: `Wallet Yaamaa (${currentUser?.wallet.available.toLocaleString()} disponibles)` },
                     { key: "Mobile Money", label: "Orange / Wave Money (Simulation)" },
                     { key: "Cartes bancaires", label: "Visa / Mastercard" },
                     { key: "Virements bancaires", label: "Transfert Bancaire direct" }
@@ -2680,7 +2735,7 @@ export default function BoutiqueView({
 
                   <div className="pt-2 flex justify-center gap-4">
                     <a
-                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Découvrez et achetez sécurisé sur Taskora : *${sharedProd.name}* au prix de ${sharedProd.price.toLocaleString()} ${sharedProd.currency} : ` + shareUrl)}`}
+                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Découvrez et achetez sécurisé sur Yaamaa : *${sharedProd.name}* au prix de ${sharedProd.price.toLocaleString()} ${sharedProd.currency} : ` + shareUrl)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex flex-col items-center gap-1 text-center group cursor-pointer"

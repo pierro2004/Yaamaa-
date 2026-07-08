@@ -1,9 +1,7 @@
-const CACHE_NAME = "taskora-v1";
+const CACHE_NAME = "yaamaa-v1";
 const ASSETS = [
   "/",
-  "/index.html",
-  "/src/main.tsx",
-  "/src/index.css"
+  "/index.html"
 ];
 
 // Install event

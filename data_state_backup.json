@@ -1,0 +1,519 @@
+{
+  "users": [
+    {
+      "id": "user_founder",
+      "email": "founder@yaamaa.com",
+      "password": "password123",
+      "phone": "+33612345678",
+      "name": "Pierre Le Fondateur",
+      "username": "FounderPierre",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop",
+      "role": "founder",
+      "level": 50,
+      "xp": 95000,
+      "wallet": {
+        "available": 5000,
+        "pending": 0,
+        "totalEarned": 15400,
+        "referralEarned": 3200
+      },
+      "country": "France",
+      "currency": "EUR",
+      "referralCode": "BOSS2026",
+      "is2faEnabled": true,
+      "isSuspended": false
+    },
+    {
+      "id": "user_admin",
+      "email": "celine@yaamaa.com",
+      "password": "password123",
+      "phone": "+33687654321",
+      "name": "Celine Admin",
+      "username": "CelineAdmin",
+      "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+      "role": "admin",
+      "level": 25,
+      "xp": 34000,
+      "wallet": {
+        "available": 1500,
+        "pending": 0,
+        "totalEarned": 8400,
+        "referralEarned": 950
+      },
+      "country": "France",
+      "currency": "EUR",
+      "referralCode": "CELINE_A",
+      "is2faEnabled": false,
+      "isSuspended": false
+    },
+    {
+      "id": "user_participant_1",
+      "email": "mamadou@yaamaa.com",
+      "password": "password123",
+      "phone": "+221771234567",
+      "name": "Mamadou Diop",
+      "username": "MamadGains",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
+      "role": "participant",
+      "level": 6,
+      "xp": 5400,
+      "wallet": {
+        "available": 25000,
+        "pending": 3500,
+        "totalEarned": 185000,
+        "referralEarned": 24000
+      },
+      "country": "Sénégal",
+      "currency": "XOF",
+      "referralCode": "SENEGAL221",
+      "referredBy": "BOSS2026",
+      "is2faEnabled": true,
+      "isSuspended": false
+    },
+    {
+      "id": "user_participant_2",
+      "email": "amelie@yaamaa.com",
+      "password": "password123",
+      "phone": "+15149999999",
+      "name": "Amélie Tremblay",
+      "username": "Lili_QC",
+      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop",
+      "role": "participant",
+      "level": 12,
+      "xp": 14200,
+      "wallet": {
+        "available": 65,
+        "pending": 15,
+        "totalEarned": 480,
+        "referralEarned": 20
+      },
+      "country": "Canada",
+      "currency": "CAD",
+      "referralCode": "QUEBEC2026",
+      "is2faEnabled": false,
+      "isSuspended": false
+    },
+    {
+      "id": "user_advertiser_1",
+      "email": "mark@republican.com",
+      "password": "password123",
+      "phone": "+14155552671",
+      "name": "Mark Advertiser",
+      "username": "MarkPromo",
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop",
+      "role": "advertiser",
+      "level": 15,
+      "xp": 18500,
+      "wallet": {
+        "available": 450,
+        "pending": 0,
+        "totalEarned": 0,
+        "referralEarned": 0
+      },
+      "country": "United States",
+      "currency": "USD",
+      "referralCode": "USA_PROM",
+      "is2faEnabled": true,
+      "isSuspended": false
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "camp_1",
+      "title": "Aimer et S'abonner - Compilation TikTok Humour",
+      "description": "Allez sur la vidéo TikTok en lien, regardez pendant au moins 30 secondes pour ne pas être marqué comme spam, laissez un like et abonnez-vous au compte. Soumettez votre pseudonyme TikTok ainsi qu'un lien ou capture d'écran de votre profil en preuve.",
+      "category": "Humour & Divertissement",
+      "destLink": "https://tiktok.com/@comedycompilation/video/1239847129",
+      "type": "like_post",
+      "budgetTotal": 100,
+      "rewardPerUser": 0.2,
+      "participantsCount": 450,
+      "commission": 10,
+      "totalToPay": 110,
+      "targeting": {
+        "countries": [
+          "France",
+          "Sénégal",
+          "Canada",
+          "Côte d'Ivoire"
+        ],
+        "languages": [
+          "Français"
+        ],
+        "gender": "all",
+        "ageMin": 15,
+        "ageMax": 45,
+        "interests": [
+          "Mèmes",
+          "Humour",
+          "Jeux vidéo"
+        ],
+        "devices": [
+          "Mobile"
+        ],
+        "minUserLevel": 1
+      },
+      "schedule": {
+        "immediate": true
+      },
+      "status": "active",
+      "advertiserId": "user_advertiser_1",
+      "advertiserName": "Mark Advertiser",
+      "createdAt": "2026-06-18T14:30:00Z",
+      "completedCount": 24,
+      "proofRequirements": "Votre pseudonyme TikTok et le lien de votre profil public."
+    },
+    {
+      "id": "camp_2",
+      "title": "Lire et donner un avis authentique sur l'App 'SwiftBudget'",
+      "description": "Téléchargez l'application mobile de budget personnel SwiftBudget sur Google Play Store ou Apple App Store. Testez-la pendant 5 minutes, configurez un premier budget fictif, puis laissez un avis de 5 étoiles authentique indiquant ce que vous appréciez le plus. Fournissez votre nom sur le Play Store et le texte de l'avis laissé.",
+      "category": "Finance & Fintech",
+      "destLink": "https://play.google.com/store/apps/details?id=com.swiftbudget.app",
+      "type": "give_review",
+      "budgetTotal": 500,
+      "rewardPerUser": 1.5,
+      "participantsCount": 300,
+      "commission": 50,
+      "totalToPay": 550,
+      "targeting": {
+        "countries": [
+          "France",
+          "Canada",
+          "United States"
+        ],
+        "languages": [
+          "Français",
+          "Anglais"
+        ],
+        "gender": "all",
+        "ageMin": 18,
+        "ageMax": 60,
+        "interests": [
+          "Budget",
+          "Épargne",
+          "Investissement"
+        ],
+        "devices": [
+          "Mobile",
+          "Tablet"
+        ],
+        "minUserLevel": 2
+      },
+      "schedule": {
+        "immediate": true
+      },
+      "status": "active",
+      "advertiserId": "user_advertiser_1",
+      "advertiserName": "Mark Advertiser",
+      "createdAt": "2026-06-19T09:12:00Z",
+      "completedCount": 112,
+      "proofRequirements": "Nom utilisé sur le store, texte exact de votre évaluation de l'application."
+    },
+    {
+      "id": "camp_3",
+      "title": "S'abonner à la chaine YouTube 'DevTech Masters'",
+      "description": "Recherchez la chaine YouTube 'DevTech Masters' ou utilisez le lien direct ci-dessous, abonnez-vous et activez la cloche des notifications. Visionnez la toute dernière vidéo (durée de 2 minutes minimum) pour que l'abonnement reste actif.",
+      "category": "Technologie",
+      "destLink": "https://youtube.com/c/devtechmasters",
+      "type": "follow_account",
+      "budgetTotal": 150,
+      "rewardPerUser": 0.25,
+      "participantsCount": 540,
+      "commission": 15,
+      "totalToPay": 165,
+      "targeting": {
+        "countries": [],
+        "languages": [],
+        "gender": "all",
+        "ageMin": 13,
+        "ageMax": 99,
+        "interests": [
+          "Programmation",
+          "High Tech",
+          "Tutoriels"
+        ],
+        "devices": [],
+        "minUserLevel": 1
+      },
+      "schedule": {
+        "immediate": true
+      },
+      "status": "active",
+      "advertiserId": "user_advertiser_1",
+      "advertiserName": "Mark Advertiser",
+      "createdAt": "2026-06-20T11:00:00Z",
+      "completedCount": 388,
+      "proofRequirements": "Copie d'écran de l'abonnement avec la clèche active, ou votre lien de chaine YouTube."
+    }
+  ],
+  "submissions": [
+    {
+      "id": "sub_1",
+      "campaignId": "camp_1",
+      "campaignTitle": "Aimer et S'abonner - Compilation TikTok Humour",
+      "campaignReward": 0.2,
+      "campaignCurrency": "EUR",
+      "participantId": "user_participant_1",
+      "participantUsername": "MamadGains",
+      "proofText": "Mon pseudo est @MamadouDiop221. Je me suis abonné à 15h40 et j'ai liké.",
+      "proofLink": "https://tiktok.com/@MamadouDiop221",
+      "status": "approved",
+      "autoCheckedByAI": true,
+      "fraudProbability": 5,
+      "aiReport": "Nom vérifié sur l'interface publique. Comportement naturel détecté.",
+      "createdAt": "2026-06-19T16:00:00Z"
+    },
+    {
+      "id": "sub_2",
+      "campaignId": "camp_2",
+      "campaignTitle": "Lire et donner un avis authentique sur l'App 'SwiftBudget'",
+      "campaignReward": 1.5,
+      "campaignCurrency": "CAD",
+      "participantId": "user_participant_2",
+      "participantUsername": "Lili_QC",
+      "proofText": "Pseudo Store: Amélie T. Avis laissé: 'Cette application simplifie enfin mon budget mensuel! Ultra propre.'",
+      "status": "pending",
+      "autoCheckedByAI": false,
+      "fraudProbability": 12,
+      "createdAt": "2026-06-20T21:44:00Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "tx_1",
+      "userId": "user_participant_1",
+      "type": "earn",
+      "amount": 130,
+      "currency": "XOF",
+      "status": "completed",
+      "method": "Yaamaa Balance",
+      "details": "Rémunération de la tâche 'Abonnement YouTube'",
+      "createdAt": "2026-06-19T10:15:00Z"
+    },
+    {
+      "id": "tx_2",
+      "userId": "user_participant_1",
+      "type": "withdraw",
+      "amount": 15000,
+      "currency": "XOF",
+      "status": "pending",
+      "method": "Mobile Money (Orange Money)",
+      "details": "Demande de retrait vers le +221771234567",
+      "createdAt": "2026-06-20T18:30:00Z"
+    },
+    {
+      "id": "tx_3",
+      "userId": "user_advertiser_1",
+      "type": "funded_campaign",
+      "amount": 110,
+      "currency": "USD",
+      "status": "completed",
+      "method": "Carte Bancaire (VISA)",
+      "details": "Financement campagne 'TikTok compilation Humour'",
+      "createdAt": "2026-06-18T14:28:00Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1",
+      "userId": "user_founder",
+      "username": "FounderPierre",
+      "role": "founder",
+      "action": "Système démarré",
+      "details": "Initialisation globale de la plateforme Yaamaa v1.0.0",
+      "timestamp": "2026-06-18T08:00:00Z",
+      "ip": "192.168.1.1"
+    },
+    {
+      "id": "log_2",
+      "userId": "user_founder",
+      "username": "FounderPierre",
+      "role": "founder",
+      "action": "Configuration Platform",
+      "details": "Frais de commission de plateforme configurés à 10%",
+      "timestamp": "2026-06-18T08:15:00Z",
+      "ip": "192.168.1.1"
+    }
+  ],
+  "settings": {
+    "isWithdrawalFrozen": false,
+    "suspendedCountries": [],
+    "suspendedCurrencies": [],
+    "platformFeePercentage": 10,
+    "payoutsDistributed": 14520,
+    "totalUsersCount": 15420,
+    "minWithdrawalAmount": 10,
+    "baseReward": 0.2,
+    "defaultCommission": 10
+  },
+  "shops": [
+    {
+      "id": "shop_mamadou",
+      "ownerId": "user_participant_1",
+      "ownerUsername": "MamadGains",
+      "name": "AfriqTech Solutions",
+      "logo": "https://images.unsplash.com/photo-1546054454-aa26e2b734c7?q=80&w=150&auto=format&fit=crop",
+      "description": "Gadgets électroniques, supports digitaux et formations de qualité pour réussir en Afrique.",
+      "country": "Sénégal",
+      "contactInfo": "+221771234567, mamadou@yaamaa.com",
+      "createdAt": "2026-06-20T10:00:00Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod_stand",
+      "shopId": "shop_mamadou",
+      "shopName": "AfriqTech Solutions",
+      "ownerId": "user_participant_1",
+      "name": "Support de Smartphone Flexible Multi-angle",
+      "category": "physical",
+      "description": "Support pivotant à 360 degrés pour vidéos TikTok, tournages de tutoriels et appels vidéos. Très stable, solide et adapté à tous les modèles de smartphones.",
+      "targetCountries": [
+        "Sénégal",
+        "France",
+        "Côte d'Ivoire"
+      ],
+      "images": [
+        "https://images.unsplash.com/photo-1586105251261-72a756497a11?q=80&w=400&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1572635196237-14b3f281503f?q=80&w=400&auto=format&fit=crop"
+      ],
+      "videoUrl": "",
+      "quantityAvailable": 48,
+      "price": 3500,
+      "currency": "XOF",
+      "shippingTime": "2-4 jours ouvrés",
+      "salesCount": 15,
+      "rating": 4.8,
+      "termsOfSale": "Garantie de remboursement de 14 jours en cas de défaut de fabrication. Livraison sécurisée par Point Relais ou livraison directe.",
+      "isApproved": true,
+      "isBanned": false,
+      "createdAt": "2026-06-20T11:30:00Z"
+    },
+    {
+      "id": "prod_guide",
+      "shopId": "shop_mamadou",
+      "shopName": "AfriqTech Solutions",
+      "ownerId": "user_participant_1",
+      "name": "E-book : Réussir son Entrepreneuriat en Afrique de l'Ouest",
+      "category": "ebook",
+      "description": "Un guide pragmatique contenant les stratégies indispensables, les erreurs à éviter et les secteurs porteurs en Afrique de l'Ouest pour lancer et sécuriser ses revenus.",
+      "targetCountries": [
+        "Sénégal",
+        "Côte d'Ivoire",
+        "Cameroun",
+        "Mali",
+        "Burkina Faso",
+        "France"
+      ],
+      "images": [
+        "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=400&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop"
+      ],
+      "videoUrl": "",
+      "quantityAvailable": 9999,
+      "price": 5000,
+      "currency": "XOF",
+      "shippingTime": "Téléchargement immédiat par e-mail",
+      "salesCount": 84,
+      "rating": 4.9,
+      "termsOfSale": "Produit livrable immédiatement après paiement. Pas de remboursement car contenu numérique.",
+      "isApproved": true,
+      "isBanned": false,
+      "createdAt": "2026-06-21T09:15:00Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "order_1",
+      "productId": "prod_stand",
+      "productName": "Support de Smartphone Flexible Multi-angle",
+      "productImage": "https://images.unsplash.com/photo-1586105251261-72a756497a11?q=80&w=400&auto=format&fit=crop",
+      "shopId": "shop_mamadou",
+      "shopName": "AfriqTech Solutions",
+      "sellerId": "user_participant_1",
+      "buyerId": "user_founder",
+      "buyerUsername": "FounderPierre",
+      "quantity": 1,
+      "totalPrice": 3500,
+      "currency": "XOF",
+      "shippingAddress": "Villa 142, Sacré-Cœur, Dakar, Sénégal",
+      "phoneNumber": "+221774567890",
+      "email": "founder@yaamaa.com",
+      "paymentMethod": "Wallet Yaamaa",
+      "trackingNumber": "TRK-DK-94827",
+      "status": "completed",
+      "createdAt": "2026-06-21T14:20:00Z"
+    },
+    {
+      "id": "order_2",
+      "productId": "prod_guide",
+      "productName": "E-book : Réussir son Entrepreneuriat en Afrique de l'Ouest",
+      "productImage": "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=400&auto=format&fit=crop",
+      "shopId": "shop_mamadou",
+      "shopName": "AfriqTech Solutions",
+      "sellerId": "user_participant_1",
+      "buyerId": "user_participant_2",
+      "buyerUsername": "Lili_QC",
+      "quantity": 1,
+      "totalPrice": 5000,
+      "currency": "XOF",
+      "shippingAddress": "Numérique via E-mail, Québec, Canada",
+      "phoneNumber": "+15149999999",
+      "email": "amelie@yaamaa.com",
+      "paymentMethod": "Cartes bancaires",
+      "status": "completed",
+      "createdAt": "2026-06-22T08:00:00Z"
+    }
+  ],
+  "disputes": [],
+  "promoCampaigns": [
+    {
+      "id": "promo_1",
+      "ownerId": "user_advertiser_1",
+      "ownerUsername": "MarkPromo",
+      "type": "youtube",
+      "title": "Chaîne YouTube - Secrets de Liberté Financière",
+      "productServiceName": "Abonnement YouTube Secrets Financiers",
+      "destLink": "https://youtube.com/c/secretsfinanciers",
+      "description": "Apprenez les leviers d'épargne forcée, d'investissement locatif et de freelancing pour sortir de la dépendance salariale en 2026.",
+      "instructions": "Cliquez sur le lien, abonnez-vous et activez la cloche des notifications.",
+      "images": [
+        "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?q=80&w=400&auto=format&fit=crop"
+      ],
+      "videos": [],
+      "targetCountries": [
+        "France",
+        "Belgique",
+        "Sénégal",
+        "Canada",
+        "Côte d'Ivoire"
+      ],
+      "targetLanguages": [
+        "Français"
+      ],
+      "targetAge": "18+",
+      "targetInterests": [
+        "Investissement",
+        "Finance",
+        "Bourse",
+        "Entreprenariat"
+      ],
+      "startDate": "2026-06-22",
+      "endDate": "2026-07-22",
+      "budgetTier": "standard",
+      "budgetPrice": 500,
+      "currency": "EUR",
+      "paymentStatus": "paid",
+      "status": "active",
+      "impressions": 4890,
+      "views": 1250,
+      "clicks": 430,
+      "ctr": 8.79,
+      "revenueGenerated": 0,
+      "createdAt": "2026-06-22T10:00:00Z"
+    }
+  ],
+  "communities": [],
+  "socialMessages": [],
+  "friendRequests": []
+}

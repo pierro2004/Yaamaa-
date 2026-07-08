@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { User, Product, PromoCampaign, Campaign } from "../types";
 import { Language, getTranslation } from "../i18n";
+import MerchantBadge from "./MerchantBadge";
 import {
   X,
   MessageSquare,
@@ -94,16 +95,16 @@ export default function UserProfileModal({
 
   // Default bio/story if not provided
   const userBio = user.bio || (currentLanguage === "fr" 
-    ? "Membre actif de la communauté Taskora. Ensemble, construisons l'économie de demain." 
-    : "Active member of the Taskora community. Together, let's build the economy of tomorrow.");
+    ? "Membre actif de la communauté Yaamaa. Ensemble, construisons l'économie de demain." 
+    : "Active member of the Yaamaa community. Together, let's build the economy of tomorrow.");
 
   const userStory = user.story || (currentLanguage === "fr"
-    ? `J'ai rejoint la plateforme pour participer à des micro-tâches rémunérées et découvrir les talents locaux. Taskora m'aide au quotidien à rentabiliser mes réseaux sociaux tout en échangeant avec des pionniers de toute l'Afrique.`
-    : `I joined the platform to participate in rewarded micro-tasks and discover local talents. Taskora helps me monetize my social media daily while interacting with pioneers from all over Africa.`);
+    ? `J'ai rejoint la plateforme pour participer à des micro-tâches rémunérées et découvrir les talents locaux. Yaamaa m'aide au quotidien à rentabiliser mes réseaux sociaux tout en échangeant avec des pionniers de toute l'Afrique.`
+    : `I joined the platform to participate in rewarded micro-tasks and discover local talents. Yaamaa helps me monetize my social media daily while interacting with pioneers from all over Africa.`);
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case "founder": return currentLanguage === "fr" ? "Fondateur Taskora" : "Taskora Founder";
+      case "founder": return currentLanguage === "fr" ? "Fondateur Yaamaa" : "Yaamaa Founder";
       case "admin": return currentLanguage === "fr" ? "Administrateur" : "Administrator";
       case "advertiser": return currentLanguage === "fr" ? "Annonceur Pro" : "Pro Advertiser";
       default: return currentLanguage === "fr" ? "Participant Actif" : "Active Participant";
@@ -124,8 +125,11 @@ export default function UserProfileModal({
       <div id="user_profile_modal_card" className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-8">
         
         {/* BANNER COVER */}
-        <div className="h-36 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 relative shrink-0">
-          <div className="absolute inset-0 bg-black/10"></div>
+        <div 
+          className="h-36 bg-cover bg-center relative shrink-0" 
+          style={{ backgroundImage: `url('/src/assets/images/yamaa_cover_1783033730508.jpg')` }}
+        >
+          <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px]"></div>
           <button
             id="close_profile_modal_btn"
             onClick={onClose}
@@ -151,6 +155,9 @@ export default function UserProfileModal({
                 <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border tracking-widest leading-none ${getRoleColor(user.role)}`}>
                   {getRoleLabel(user.role)}
                 </span>
+                {user.merchantNumber && (
+                  <MerchantBadge tier={user.merchantPackType} size="sm" showLabel={true} />
+                )}
               </div>
               <p className="text-xs text-gray-400 font-mono mt-0.5">@{user.username}</p>
               
@@ -240,7 +247,7 @@ export default function UserProfileModal({
               <div className="space-y-2">
                 <h3 className="text-xs font-black uppercase text-gray-400 tracking-widest flex items-center gap-1.5">
                   <BookOpen className="h-3.5 w-3.5 text-emerald-500" />
-                  {currentLanguage === "fr" ? "Mon histoire sur Taskora" : "My Taskora Story"}
+                  {currentLanguage === "fr" ? "Mon histoire sur Yaamaa" : "My Yaamaa Story"}
                 </h3>
                 <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs text-xs text-gray-600 leading-relaxed font-sans space-y-2">
                   <p className="whitespace-pre-line">{userStory}</p>
@@ -276,6 +283,92 @@ export default function UserProfileModal({
                   </span>
                 </div>
               </div>
+
+              {/* ZONE MARCHAND (If user has merchantNumber) */}
+              {user.merchantNumber && (
+                <div className="bg-gradient-to-br from-indigo-50/60 to-purple-50/60 border border-indigo-150 p-5 rounded-3xl space-y-4 shadow-xs" id="user_profile_merchant_credentials_block">
+                  <div className="flex items-center gap-2 border-b border-indigo-100/60 pb-2.5">
+                    <Award className="h-5 w-5 text-indigo-600 animate-pulse" />
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-indigo-950 tracking-wider">Zone Marchand</h4>
+                      <p className="text-[10px] text-indigo-500 font-semibold">
+                        {user.merchantPackType === "diamond" ? "Membre Diamant VIP (Avantages illimités)" : 
+                         user.merchantPackType === "gold" ? "Membre Motivation (Sponsorship étendu)" : 
+                         "Membre de Base (Badge & Numéro Marchand)"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-700 font-sans">
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Numéro Marchand</span>
+                      <p className="font-mono font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl flex items-center justify-between">
+                        <span>{user.merchantNumber}</span>
+                        <span className="text-[8px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-sans uppercase font-black">Actif</span>
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Code de parrainage</span>
+                      <p className="font-mono font-bold text-gray-950 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl">
+                        {user.referralCode}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Nom & Prénom</span>
+                      <p className="font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl truncate">
+                        {user.name}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Adresse E-mail</span>
+                      <p className="font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl truncate">
+                        {user.email}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Pays & Devise</span>
+                      <p className="font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl">
+                        {user.country} ({user.currency})
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Numéro de Téléphone</span>
+                      <p className="font-mono font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl">
+                        {user.phone || "Non renseigné"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Date d'inscription</span>
+                      <p className="font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl">
+                        {user.merchantNumberPurchasedAt ? new Date(user.merchantNumberPurchasedAt).toLocaleDateString("fr-FR", {day: 'numeric', month: 'long', year: 'numeric'}) : "Inconnue"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Type de Pack</span>
+                      <p className="font-black text-indigo-950 uppercase text-[10px] bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
+                        {user.merchantPackType === "diamond" && "💎 Diamant (VIP)"}
+                        {user.merchantPackType === "gold" && "🌟 Niveau Motivation (Gold)"}
+                        {user.merchantPackType === "premium" && "✨ Niveau de Base (Basic)"}
+                      </p>
+                    </div>
+
+                    {/* Personnes parrainées et limites */}
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Filleuls Parrainés</span>
+                      <p className="font-bold text-gray-900 bg-white border border-gray-100 px-2.5 py-1.5 rounded-xl">
+                        {usersList.filter(u => u.referredBy === user.id || u.referredBy === user.referralCode).length} / {user.merchantPackType === "diamond" ? 2000 : (user.merchantPackType === "gold" ? 500 : 20)} parrainages
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -369,6 +462,21 @@ export default function UserProfileModal({
                             {prod.rating || "5.0"}
                           </span>
                         </div>
+                        {user && user.id !== currentUserId && (
+                          <div className="pt-2.5 border-t border-gray-100 flex">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onStartChat(user.id);
+                                onClose();
+                              }}
+                              className="w-full bg-slate-950 hover:bg-emerald-600 text-white font-extrabold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                            >
+                              <ShoppingBag className="h-3.5 w-3.5" />
+                              Commander / Offre
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

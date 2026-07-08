@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { User, UserRole } from "../types";
 import { Language, getTranslation } from "../i18n";
 
-const taskoraLogo = "/src/assets/images/taskora_logo_1782911727093.jpg";
+const yaamaaLogo = "/src/assets/images/yaamaa_logo_updated_1783116905472.jpg";
 
 import { 
   Coins, 
@@ -18,6 +18,7 @@ import {
   Bell, 
   Globe, 
   Zap,
+  Bot,
   CheckCircle2,
   Store,
   Megaphone,
@@ -38,11 +39,21 @@ import {
   X,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   Menu,
   Gift,
   BarChart3,
-  Vote
+  Vote,
+  Calendar,
+  Mail,
+  Phone,
+  Award,
+  FileText,
+  Search,
+  Download,
+  Truck
 } from "lucide-react";
+import InstallPwaModal from "./InstallPwaModal";
 
 interface NavbarProps {
   currentUser: User | null;
@@ -57,15 +68,17 @@ interface NavbarProps {
   onViewProfile?: (userId: string) => void;
   isMenuOpen?: boolean;
   onMenuToggle?: (open: boolean) => void;
+  onOpenMerchantModal?: () => void;
+  onOpenVirtualGifts?: () => void;
 }
 
 function SafeText({ text }: { text: string }) {
   if (!text) return null;
-  const parts = text.split(/(Taskora|TASKORA)/g);
+  const parts = text.split(/(Yaamaa|YAAMAA)/g);
   return (
     <>
       {parts.map((part, i) => {
-        if (part === "Taskora" || part === "TASKORA") {
+        if (part === "Yaamaa" || part === "YAAMAA") {
           return (
             <span key={i} translate="no" className="notranslate inline-block">
               {part}
@@ -90,7 +103,9 @@ export default function Navbar({
   onChangeLanguage,
   onViewProfile,
   isMenuOpen,
-  onMenuToggle
+  onMenuToggle,
+  onOpenMerchantModal,
+  onOpenVirtualGifts
 }: NavbarProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -147,6 +162,9 @@ export default function Navbar({
   const [showPacksModal, setShowPacksModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showSecurityDialog, setShowSecurityDialog] = useState(false);
+  const [showMerchantZoneModal, setShowMerchantZoneModal] = useState(false);
+  const [showConditionsModal, setShowConditionsModal] = useState(false);
+  const [showInstallPwaModal, setShowInstallPwaModal] = useState(false);
   
   // Support Simulated Chat
   const [supportMessage, setSupportMessage] = useState("");
@@ -154,8 +172,8 @@ export default function Navbar({
     { 
       sender: "support", 
       text: currentLanguage === "fr" 
-        ? "Bonjour ! Je suis Aura de l'équipe d'assistance Taskora. Comment puis-je vous aider aujourd'hui ? 🎧" 
-        : "Hello! I am Aura from the Taskora Support Team. How can I help you today? 🎧", 
+        ? "Bonjour ! Je suis Aura de l'équipe d'assistance Yaamaa. Comment puis-je vous aider aujourd'hui ? 🎧" 
+        : "Hello! I am Aura from the Yaamaa Support Team. How can I help you today? 🎧", 
       time: "16:30" 
     }
   ]);
@@ -295,8 +313,8 @@ export default function Navbar({
 
       if (lower.includes("retrait") || lower.includes("argent") || lower.includes("gains") || lower.includes("withdraw")) {
         reply = isFr 
-          ? "Pour retirer vos gains, rendez-vous dans l'onglet 'Portefeuille'. Les retraits via Taskora Pay (MTN, Moov, Celtiis), Wave, et Orange Money sont instantanés et traités en moins de 5 minutes ! 💰"
-          : "To withdraw your earnings, go to the 'Wallet' tab. Withdrawals via Taskora Pay (Mobile Money), Wave, and Orange Money are instant and processed in less than 5 minutes! 💰";
+          ? "Pour retirer vos gains, rendez-vous dans l'onglet 'Portefeuille'. Les retraits via Yaamaa Pay (MTN, Moov, Celtiis), Wave, et Orange Money sont instantanés et traités en moins de 5 minutes ! 💰"
+          : "To withdraw your earnings, go to the 'Wallet' tab. Withdrawals via Yaamaa Pay (Mobile Money), Wave, and Orange Money are instant and processed in less than 5 minutes! 💰";
       } else if (lower.includes("pack") || lower.includes("diffusion") || lower.includes("pub") || lower.includes("campaign")) {
         reply = isFr
           ? "Nos Packs de Diffusion (Bronze, Silver, Gold, Diamond) vous permettent d'acheter de la visibilité garantie pour vos liens ou boutiques. Cliquez sur l'onglet 'Promotions' pour configurer et lancer votre campagne ! 📦"
@@ -307,8 +325,8 @@ export default function Navbar({
           : "To earn money, visit the 'Missions' tab or click on 'Missions' in the shortcuts. Select a mission, follow the instructions, upload a screenshot proof, and collect your rewards! 🚀";
       } else {
         reply = isFr
-          ? "Merci pour votre message ! Un administrateur de l'équipe Taskora étudie votre demande et vous répondra sous peu. N'hésitez pas à consulter également notre FAQ ci-dessous pour une réponse instantanée. 🤝"
-          : "Thank you for your message! A Taskora administrator is reviewing your inquiry and will reply shortly. Feel free to browse our FAQ below for instant answers. 🤝";
+          ? "Merci pour votre message ! Un administrateur de l'équipe Yaamaa étudie votre demande et vous répondra sous peu. N'hésitez pas à consulter également notre FAQ ci-dessous pour une réponse instantanée. 🤝"
+          : "Thank you for your message! A Yaamaa administrator is reviewing your inquiry and will reply shortly. Feel free to browse our FAQ below for instant answers. 🤝";
       }
 
       setSupportChat(prev => [...prev, { sender: "support", text: reply, time: now }]);
@@ -317,36 +335,84 @@ export default function Navbar({
   };
 
   return (
-    <div className="w-full flex flex-col" id="taskora_entire_navigation_suite">
+    <div className="w-full flex flex-col" id="yaamaa_entire_navigation_suite">
       
       {/* 1. FIXED HEADER (BRAND + 4 FIXED MAIN BUTTONS) */}
-      <header id="taskora_navbar_container" className="fixed top-0 left-0 right-0 z-50 w-full border-b border-gray-200/85 bg-white shadow-md">
+      <header id="yaamaa_navbar_container" className="fixed top-0 left-0 right-0 z-50 w-full border-b border-gray-200/85 bg-white shadow-md">
         
         {/* UPPER ROW: BRAND LOGO & USER ACCOUNT CONSOLE */}
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8 border-b border-gray-100">
           
-          {/* BRANDING LOGO */}
-          <div 
-            id="taskora_logo" 
-            onClick={() => onNavigate("home")} 
-            className="flex cursor-pointer items-center gap-2 transition active:scale-95 group"
-          >
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl overflow-hidden border border-emerald-100 shadow-xs group-hover:shadow-md transition duration-350">
-              <img src={taskoraLogo} alt="Taskora Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1">
-                <span translate="no" className="notranslate font-heading text-lg font-black tracking-tight text-slate-900 leading-none">
-                  Task<span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">ora</span>
-                </span>
-                <span className="px-1 py-0.2 rounded bg-emerald-50 border border-emerald-100 text-[7px] font-mono font-black text-emerald-700 uppercase tracking-wider leading-none">
-                  {t.edition}
+          {/* BRANDING LOGO & BACK BUTTON */}
+          <div className="flex items-center gap-2">
+            {currentView !== "home" && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.history.back();
+                }}
+                className="p-1.5 sm:p-2 rounded-xl bg-gray-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 hover:border-emerald-200 transition-all flex items-center justify-center cursor-pointer active:scale-95 border border-gray-200"
+                title={currentLanguage === "fr" ? "Retour" : "Back"}
+                id="navbar_back_button"
+              >
+                <ArrowLeft className="h-4.5 w-4.5" />
+              </button>
+            )}
+
+            <div 
+              id="yaamaa_logo" 
+              onClick={() => onNavigate("home")} 
+              className="flex cursor-pointer items-center gap-2 transition active:scale-95 group"
+            >
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-xl overflow-hidden border border-emerald-100 shadow-xs group-hover:shadow-md transition duration-350">
+                <img src={yaamaaLogo} alt="Yaamaa Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
               </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1">
+                  <span translate="no" className="notranslate font-heading text-lg font-black tracking-tight text-slate-900 leading-none">
+                    Yaam<span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">aa</span>
+                  </span>
+                  <span className="px-1 py-0.2 rounded bg-emerald-50 border border-emerald-100 text-[7px] font-mono font-black text-emerald-700 uppercase tracking-wider leading-none">
+                    {t.edition}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RECHERCHE DIRECTE PAR NUMÉRO MARCHAND OU TÉLÉPHONE */}
+          <div className="hidden md:flex flex-1 max-w-xs mx-4 relative" id="navbar_merchant_direct_search">
+            <input
+              type="text"
+              placeholder={currentLanguage === "fr" ? "Recherche par ID Marchand ou Tél..." : "Search by Merchant ID or Phone..."}
+              className="w-full bg-gray-50 border border-gray-200 hover:border-gray-300 focus:border-indigo-500 focus:bg-white rounded-full py-1.5 pl-3.5 pr-9 text-[11px] font-semibold text-slate-900 focus:outline-none transition duration-150"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const query = (e.target as HTMLInputElement).value.trim();
+                  if (query) {
+                    const cleanQuery = query.replace(/[\s+]/g, "").toLowerCase();
+                    const found = usersList.find(u => {
+                      const cleanMerch = (u.merchantNumber || "").toLowerCase();
+                      const cleanPhone = (u.phone || "").replace(/[\s+]/g, "").toLowerCase();
+                      return cleanMerch === cleanQuery || cleanPhone === cleanQuery || cleanPhone.includes(cleanQuery) || cleanMerch.includes(cleanQuery);
+                    });
+                    if (found) {
+                      if (onViewProfile) onViewProfile(found.id);
+                    } else {
+                      alert(currentLanguage === "fr" 
+                        ? "Aucun membre trouvé avec ce numéro marchand ou numéro de téléphone." 
+                        : "No member found with this merchant number or phone number.");
+                    }
+                  }
+                }
+              }}
+            />
+            <div className="absolute right-3 top-2 text-gray-400">
+              <Search className="h-3.5 w-3.5" />
             </div>
           </div>
 
@@ -732,6 +798,73 @@ export default function Navbar({
           </div>
         </div>
 
+        {/* VIP MERCHANT SPECIAL TOP STRIP - "EN TÊTE DE LA PLATEFORME" */}
+        {(() => {
+          const hasMerchantNo = currentUser?.merchantNumber;
+          const packType = currentUser?.merchantPackType;
+
+          return (
+            <div className="w-full bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 border-t border-b border-white/5 py-2 px-3 sm:px-6 lg:px-8 flex items-center justify-between text-white relative overflow-hidden" id="navbar_merchant_vip_banner">
+              {/* Pulsing glowing ambient light in the background */}
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-indigo-600/10 opacity-40 blur-md pointer-events-none"></div>
+              
+              {/* Glossy shine overlay sweep effect */}
+              <span className="absolute inset-y-0 h-full w-48 bg-gradient-to-r from-transparent via-white/5 to-transparent -skew-x-12 animate-shine pointer-events-none"></span>
+              
+              <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3 text-[10px] sm:text-xs relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-gradient-to-br from-amber-400 via-rose-500 to-indigo-600 rounded text-slate-950 shrink-0">
+                    <Sparkles className="h-3 w-3 text-white animate-spin-slow" />
+                  </div>
+                  <span className="font-sans font-bold tracking-wide">
+                    {hasMerchantNo ? (
+                      currentLanguage === "fr" ? (
+                        <span>Compte Marchand VIP Actif : <strong className="text-amber-400 font-mono text-[11px] sm:text-xs">{currentUser?.merchantNumber}</strong> ({packType === "diamond" ? "💎 Diamant" : packType === "gold" ? "🌟 Motivation" : "✨ Base"})</span>
+                      ) : (
+                        <span>VIP Merchant Account Active: <strong className="text-amber-400 font-mono text-[11px] sm:text-xs">{currentUser?.merchantNumber}</strong> ({packType === "diamond" ? "💎 Diamond" : packType === "gold" ? "🌟 Motivation" : "✨ Base"})</span>
+                      )
+                    ) : (
+                      currentLanguage === "fr" ? (
+                        <span>🚀 Activez votre <strong>Numéro Marchand</strong> unique pour toucher vos gains & publier sur la boutique !</span>
+                      ) : (
+                        <span>🚀 Activate your unique <strong>Merchant Number</strong> to earn commissions & publish on the store!</span>
+                      )
+                    )}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  id="header_activate_merchant_btn"
+                  onClick={() => {
+                    if (!currentUser) {
+                      onOpenAuth();
+                    } else {
+                      if (onOpenMerchantModal) onOpenMerchantModal();
+                    }
+                  }}
+                  className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all duration-300 transform active:scale-95 cursor-pointer flex items-center gap-1 hover:scale-105 shrink-0 ${
+                    !hasMerchantNo
+                      ? "bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white shadow-md border border-white/10"
+                      : "bg-white/5 hover:bg-white/10 text-amber-400 border border-amber-400/20"
+                  }`}
+                >
+                  <span>
+                    {!currentUser ? (
+                      currentLanguage === "fr" ? "S'inscrire 👑" : "Register 👑"
+                    ) : !hasMerchantNo ? (
+                      currentLanguage === "fr" ? "Activer 🚀" : "Activate 🚀"
+                    ) : (
+                      currentLanguage === "fr" ? "Gérer mon Espace ⚙️" : "Manage ⚙️"
+                    )}
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-white" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* EXPANDABLE MENU LISTS (MOVED INSIDE THE STICKY HEADER SUITE) */}
         {showOtherOptionsList && (
           <div 
@@ -746,7 +879,7 @@ export default function Navbar({
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-mono">
                     Line 1: {currentLanguage === "fr" ? "Gains & Publicités" : "Earnings & Campaigns"}
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     {/* Missions */}
                     <button
                       id="menu_list_btn_missions"
@@ -803,6 +936,28 @@ export default function Navbar({
                         </span>
                       </div>
                     </button>
+
+                    {/* Fournisseurs & Livreurs */}
+                    <button
+                      id="menu_list_btn_suppliers"
+                      onClick={() => handleOptionSelect(() => onNavigate("suppliers_deliverers"))}
+                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-amber-50/50 border border-gray-150/80 hover:border-amber-250 transition-all text-left cursor-pointer"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-150/20 text-amber-600 group-hover:scale-105 transition relative">
+                        <Truck className="h-5.5 w-5.5" />
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[8px] font-bold text-white">
+                          🤝
+                        </span>
+                      </div>
+                      <div className="truncate">
+                        <span className="block text-xs font-black text-slate-900 group-hover:text-amber-600 transition font-heading">
+                          {currentLanguage === "fr" ? "Fournisseurs & Livreurs" : "Suppliers & Drivers"}
+                        </span>
+                        <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
+                          {currentLanguage === "fr" ? "Annuaire, missions & inscriptions" : "Directory & missions"}
+                        </span>
+                      </div>
+                    </button>
                   </div>
                 </div>
 
@@ -811,7 +966,7 @@ export default function Navbar({
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-mono">
                     Line 2: {currentLanguage === "fr" ? "Espace Membres & Solde" : "Community & Wallet"}
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     {/* Packs */}
                     <button
                       id="menu_list_btn_packs"
@@ -864,10 +1019,32 @@ export default function Navbar({
                       </div>
                       <div className="truncate">
                         <span className="block text-xs font-black text-slate-900 group-hover:text-violet-600 transition font-heading">
-                          {currentLanguage === "fr" ? "Annuaire des Membres" : "Member Directory"}
+                          {currentLanguage === "fr" ? "Membres" : "Members"}
                         </span>
                         <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
                           {currentLanguage === "fr" ? "Leaderboard & Communautés" : "Rankings & custom groups"}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Zone Marchand */}
+                    <button
+                      id="menu_list_btn_merchant_zone"
+                      onClick={() => handleOptionSelect(() => setShowMerchantZoneModal(true))}
+                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50 to-emerald-50 hover:from-indigo-100 hover:to-emerald-100 border border-emerald-200 hover:border-emerald-300 transition-all text-left cursor-pointer"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 group-hover:scale-105 transition relative">
+                        <Sparkles className="h-5.5 w-5.5 text-emerald-600 animate-pulse" />
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[8px] font-bold text-white animate-pulse">
+                          🌟
+                        </span>
+                      </div>
+                      <div className="truncate">
+                        <span className="block text-xs font-black text-emerald-800 group-hover:text-emerald-950 transition font-heading">
+                          {currentLanguage === "fr" ? "Zone Marchand 🌟" : "Merchant Zone 🌟"}
+                        </span>
+                        <span className="block text-[10.5px] text-emerald-700/80 font-mono mt-0.5 truncate">
+                          {currentLanguage === "fr" ? "Infos Premium, Code & Gains" : "Premium account info & code"}
                         </span>
                       </div>
                     </button>
@@ -897,6 +1074,28 @@ export default function Navbar({
                           {currentLanguage === "fr" ? "Conseils de gains automatisés" : "Smart optimization advice"}
                         </span>
                       </div>
+                    </button>
+
+                    {/* Yaamaa AI Agent */}
+                    <button
+                      id="menu_list_btn_yaamaa_ai"
+                      onClick={() => handleOptionSelect(() => onNavigate("yaamaa-ai"))}
+                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-gray-150/80 hover:border-indigo-250 transition-all text-left cursor-pointer relative"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-150/20 text-indigo-600 group-hover:scale-105 transition">
+                        <Bot className="h-5.5 w-5.5 text-indigo-600 animate-pulse" />
+                      </div>
+                      <div className="truncate">
+                        <span className="block text-xs font-black text-slate-900 group-hover:text-indigo-650 transition font-heading flex items-center gap-1">
+                          {currentLanguage === "fr" ? "Yaamaa AI 🤖" : "Yaamaa AI 🤖"}
+                        </span>
+                        <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
+                          {currentLanguage === "fr" ? "Louez votre agent virtuel 24h/7" : "Rent your personal 24/7 virtual assistant"}
+                        </span>
+                      </div>
+                      {currentUser?.yaamaaAiActive && (
+                        <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      )}
                     </button>
 
                     {/* Sécurité */}
@@ -941,6 +1140,25 @@ export default function Navbar({
                         </span>
                         <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
                           {currentLanguage === "fr" ? "Aide immédiate par Aura" : "Get help with any trouble"}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Installer l'application */}
+                    <button
+                      id="menu_list_btn_install_app"
+                      onClick={() => handleOptionSelect(() => setShowInstallPwaModal(true))}
+                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-emerald-50/50 border border-gray-150/80 hover:border-emerald-250 transition-all text-left cursor-pointer relative"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-150/20 text-emerald-600 group-hover:scale-105 transition">
+                        <Download className="h-5.5 w-5.5 text-emerald-600 animate-pulse" />
+                      </div>
+                      <div className="truncate">
+                        <span className="block text-xs font-black text-slate-900 group-hover:text-emerald-600 transition font-heading flex items-center gap-1">
+                          {currentLanguage === "fr" ? "Installer l'App 📲" : "Install App 📲"}
+                        </span>
+                        <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
+                          {currentLanguage === "fr" ? "Lancer depuis l'écran d'accueil" : "Launch from your home screen"}
                         </span>
                       </div>
                     </button>
@@ -1021,6 +1239,27 @@ export default function Navbar({
                         </span>
                         <span className="block text-[10.5px] text-slate-650 font-mono mt-0.5 truncate">
                           {currentLanguage === "fr" ? "Membres actifs & volume de paiements" : "Live audit of active members"}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Cadeaux Virtuels */}
+                    <button
+                      id="menu_list_btn_virtual_gifts"
+                      onClick={() => handleOptionSelect(() => {
+                        if (onOpenVirtualGifts) onOpenVirtualGifts();
+                      })}
+                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-gradient-to-br from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 border border-amber-200 hover:border-amber-300 transition-all text-left cursor-pointer animate-pulse"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 group-hover:scale-105 transition">
+                        <Gift className="h-5.5 w-5.5 text-amber-600 animate-bounce" />
+                      </div>
+                      <div className="truncate">
+                        <span className="block text-xs font-black text-amber-900 group-hover:text-amber-950 transition font-heading flex items-center gap-1">
+                          {currentLanguage === "fr" ? "Cadeaux Virtuels 🎁" : "Virtual Gifts 🎁"}
+                        </span>
+                        <span className="block text-[10.5px] text-amber-700/80 font-mono mt-0.5 truncate">
+                          {currentLanguage === "fr" ? "Boutique, envoi & retraits" : "Store, sending & withdrawal"}
                         </span>
                       </div>
                     </button>
@@ -1179,8 +1418,8 @@ export default function Navbar({
                   </p>
                   <p className="text-gray-500 text-[11px] mt-1.5 leading-relaxed">
                     {currentLanguage === "fr" 
-                      ? "Rendez-vous dans la section 'Portefeuille'. Cliquez sur 'Demander un Retrait', saisissez le montant en XOF ou EUR, puis choisissez Taskora Pay (Mobile Money MTN/Moov/Celtiis), Wave, ou Orange Money. Le traitement est instantané et validé sous 5 minutes."
-                      : "Go to the 'Wallet' tab, click 'Request Withdrawal', enter the amount, and choose Taskora Pay (Mobile Money) or other automated cashouts. Our automated system handles transactions within 5 minutes."}
+                      ? "Rendez-vous dans la section 'Portefeuille'. Cliquez sur 'Demander un Retrait', saisissez le montant en XOF ou EUR, puis choisissez Yaamaa Pay (Mobile Money MTN/Moov/Celtiis), Wave, ou Orange Money. Le traitement est instantané et validé sous 5 minutes."
+                      : "Go to the 'Wallet' tab, click 'Request Withdrawal', enter the amount, and choose Yaamaa Pay (Mobile Money) or other automated cashouts. Our automated system handles transactions within 5 minutes."}
                   </p>
                 </div>
 
@@ -1223,7 +1462,7 @@ export default function Navbar({
                   📲 {currentLanguage === "fr" ? "Support WhatsApp" : "WhatsApp Support"}
                 </a>
                 <a 
-                  href="https://t.me/taskorafounder" 
+                  href="https://t.me/yaamaafounder" 
                   target="_blank" 
                   rel="noreferrer" 
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-sky-50 text-sky-700 font-bold border border-sky-100 hover:bg-sky-100 transition text-center"
@@ -1315,7 +1554,7 @@ export default function Navbar({
                 <Lock className="h-6 w-6 animate-pulse" />
               </div>
               <h3 className="text-lg font-black text-slate-900">
-                {currentLanguage === "fr" ? "Rapport de Sécurité Taskora" : "Taskora Security Console"}
+                {currentLanguage === "fr" ? "Rapport de Sécurité Yaamaa" : "Yaamaa Security Console"}
               </h3>
               <p className="text-xs text-gray-400 font-mono mt-1">Status: SECURE_NODE_OK</p>
             </div>
@@ -1382,8 +1621,8 @@ export default function Navbar({
               <p>
                 <strong>{currentLanguage === "fr" ? "Rappel crucial :" : "Crucial Reminder:"}</strong>{" "}
                 {currentLanguage === "fr"
-                  ? "Ne communiquez jamais vos codes de validation Taskora Pay, vos mots de passe ou vos codes OTP reçus par SMS à qui que ce soit. L'équipe d'administration de Taskora ne vous les demandera jamais."
-                  : "Never share your Taskora Pay tokens, passwords, or SMS OTP verification codes with anyone. Taskora support agents will never ask for your private verification numbers."}
+                  ? "Ne communiquez jamais vos codes de validation Yaamaa Pay, vos mots de passe ou vos codes OTP reçus par SMS à qui que ce soit. L'équipe d'administration de Yaamaa ne vous les demandera jamais."
+                  : "Never share your Yaamaa Pay tokens, passwords, or SMS OTP verification codes with anyone. Yaamaa support agents will never ask for your private verification numbers."}
               </p>
             </div>
 
@@ -1396,6 +1635,411 @@ export default function Navbar({
 
           </div>
         </div>
+      )}
+
+      {/* 4. MODAL ZONE MARCHAND */}
+      {showMerchantZoneModal && currentUser && (() => {
+        const referralsCount = usersList.filter(
+          (u) => u.referredBy === currentUser.id || u.referredBy === currentUser.referralCode
+        ).length;
+
+        const regDateFormatted = currentUser.createdAt
+          ? new Date(currentUser.createdAt).toLocaleDateString(currentLanguage === "fr" ? "fr-FR" : "en-US", {
+              day: "numeric",
+              month: "long",
+              year: "numeric"
+            })
+          : "N/A";
+
+        const isPremium = !!currentUser.merchantNumber;
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="merchant_zone_modal">
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-gray-150 text-left max-h-[90vh] overflow-y-auto">
+              
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowMerchantZoneModal(false)}
+                className="absolute right-4 top-4 rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+
+              {/* Header */}
+              <div className="flex items-center gap-3.5 border-b pb-4 mb-5">
+                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 shrink-0 border border-emerald-100">
+                  <Sparkles className="h-6 w-6 animate-pulse" />
+                </div>
+                <div>
+                  <span className="font-mono text-[9px] font-bold text-emerald-600 uppercase tracking-widest block">Yaamaa Premium</span>
+                  <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wider">
+                    {currentLanguage === "fr" ? "Espace Zone Marchand" : "Merchant Zone Panel"}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Profile Card & Premium Badge Info */}
+              <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 mb-5 relative overflow-hidden">
+                {isPremium && (
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+                )}
+                
+                {/* Avatar with absolute premium badge next to it */}
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full border-4 border-white shadow-md overflow-hidden bg-white shrink-0">
+                    <img 
+                      src={currentUser.avatar} 
+                      alt={currentUser.name} 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  {isPremium ? (
+                    <span className="absolute -bottom-1.5 -right-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-md flex items-center gap-0.5 border border-white animate-bounce">
+                      👑 PREMIUM
+                    </span>
+                  ) : (
+                    <span className="absolute -bottom-1.5 -right-1.5 bg-slate-300 text-slate-700 text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs border border-white">
+                      STANDARD
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-center sm:text-left space-y-1">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">{currentUser.name}</h4>
+                    {isPremium ? (
+                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-bold uppercase px-2 py-0.5 rounded-lg">
+                        Actif
+                      </span>
+                    ) : (
+                      <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-bold uppercase px-2 py-0.5 rounded-lg">
+                        En Attente d'Activation
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-mono">@{currentUser.username}</p>
+                  <p className="text-[11px] text-indigo-750 font-semibold flex items-center gap-1 justify-center sm:justify-start mt-1">
+                    <Award className="h-3.5 w-3.5 text-indigo-600" />
+                    <span>
+                      {currentUser.role === "founder" ? "Super Admin (Fondateur)" : currentUser.role === "admin" ? "Administrateur" : isPremium ? "Membre Yaamaa Premium" : "Membre Standard"}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Informational Grid of User Attributes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-5">
+                
+                {/* Email Address */}
+                <div className="p-3 bg-gray-50/50 border rounded-2xl space-y-1">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Adresse Email</span>
+                  <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                    <span className="truncate">{currentUser.email || "N/A"}</span>
+                  </p>
+                </div>
+
+                {/* Country of Residence */}
+                <div className="p-3 bg-gray-50/50 border rounded-2xl space-y-1">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Pays de Résidence</span>
+                  <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                    <span>{currentUser.country || "N/A"}</span>
+                  </p>
+                </div>
+
+                {/* Phone number */}
+                <div className="p-3 bg-gray-50/50 border rounded-2xl space-y-1">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Numéro de Téléphone</span>
+                  <p className="font-semibold text-slate-900 flex items-center gap-1.5 font-mono">
+                    <Phone className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                    <span>{currentUser.phone || "N/A"}</span>
+                  </p>
+                </div>
+
+                {/* Date d'inscription */}
+                <div className="p-3 bg-gray-50/50 border rounded-2xl space-y-1">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Date d'Inscription</span>
+                  <p className="font-semibold text-slate-900 flex items-center gap-1.5 font-mono">
+                    <Calendar className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                    <span>{regDateFormatted}</span>
+                  </p>
+                </div>
+
+                {/* Unique referral code */}
+                <div className="p-3 bg-indigo-50/35 border border-indigo-100 rounded-2xl col-span-1 sm:col-span-2 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-wider block">Votre Code de Parrainage</span>
+                    <strong className="font-mono text-sm font-black text-gray-950 tracking-wider">
+                      {currentUser.referralCode}
+                    </strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentUser.referralCode || "");
+                      alert("Code de parrainage copié avec succès !");
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] px-3 py-1.5 rounded-xl transition cursor-pointer shadow-sm"
+                  >
+                    Copier
+                  </button>
+                </div>
+
+                {/* Unique Merchant Number */}
+                <div className="p-3 bg-emerald-50/35 border border-emerald-100 rounded-2xl col-span-1 sm:col-span-2 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider block">Votre Numéro Marchand</span>
+                    <strong className="font-mono text-sm font-black text-gray-950 tracking-wider">
+                      {currentUser.merchantNumber || "NON ACTIVER (Standard)"}
+                    </strong>
+                  </div>
+                  {currentUser.merchantNumber ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentUser.merchantNumber || "");
+                        alert("Numéro marchand copié avec succès !");
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9px] px-3 py-1.5 rounded-xl transition cursor-pointer shadow-sm"
+                    >
+                      Copier
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMerchantZoneModal(false);
+                        onOpenMerchantModal?.();
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] px-3 py-1.5 rounded-xl transition cursor-pointer shadow-sm animate-pulse"
+                    >
+                      Activer 🚀
+                    </button>
+                  )}
+                </div>
+
+                {/* Motivational Banner when Merchant Number is not active */}
+                {!currentUser.merchantNumber && (
+                  <div className="col-span-1 sm:col-span-2 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4.5 space-y-3.5 shadow-xs">
+                    <div className="flex items-start gap-2.5">
+                      <div className="p-1.5 bg-amber-100 rounded-xl text-amber-800 shrink-0">
+                        <Sparkles className="h-4.5 w-4.5 animate-pulse text-amber-600" />
+                      </div>
+                      <div>
+                        <h5 className="text-[11.5px] font-extrabold text-amber-950 uppercase tracking-wide">
+                          🚀 Avantages du Compte Yaamaa Premium & Numéro Marchand
+                        </h5>
+                        <p className="text-[10.5px] text-amber-900/80 mt-0.5 leading-relaxed font-medium">
+                          Déverrouillez le véritable potentiel d'affiliation de votre compte et commencez à bâtir un revenu passif puissant !
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-[10.5px] text-gray-750 pl-1">
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-extrabold">✓</span>
+                        <p>
+                          <strong className="text-slate-900 font-semibold">Gagnez 50% de commission immédiate</strong> sur chaque nouveau filleul qui active son propre numéro marchand !
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-extrabold">✓</span>
+                        <p>
+                          <strong className="text-slate-900 font-semibold">Éligibilité de gains à vie</strong> : Ne perdez jamais vos droits de parrainage après le délai obligatoire de 30 jours !
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-extrabold">✓</span>
+                        <p>
+                          <strong className="text-slate-900 font-semibold">Badge Premium Royal 👑</strong> visible sur votre profil public pour maximiser la confiance de vos filleuls !
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-extrabold">✓</span>
+                        <p>
+                          <strong className="text-slate-900 font-semibold">Retraits prioritaires</strong> sans limite et support client VIP 24h/24.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-1.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMerchantZoneModal(false);
+                          onOpenMerchantModal?.();
+                        }}
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition shadow-md hover:shadow-lg transform active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>🌟 Activer mon Numéro Marchand maintenant</span>
+                        <span>🚀</span>
+                      </button>
+                      <p className="text-[9.5px] text-amber-800/80 mt-2 font-mono text-center">
+                        ⚠️ Sans numéro actif sous 30 jours, vos parrainages actuels et futurs ne vous rapporteront aucune commission.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Count of Referred Users */}
+                <div className="p-4 bg-slate-50 border rounded-2xl col-span-1 sm:col-span-2 text-center space-y-1">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Nombre total de Filleuls Parrainés</span>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Users className="h-4 w-4 text-indigo-600" />
+                    <span className="font-mono text-base font-black text-gray-950">
+                      {referralsCount} {referralsCount > 1 ? "Filleuls" : "Filleul"}
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Sub-buttons Footer Area */}
+              <div className="border-t pt-4 flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMerchantZoneModal(false);
+                    setShowConditionsModal(true);
+                  }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-2xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <FileText className="h-4 w-4 text-slate-600" />
+                  <span>📜 Conditions d'Utilisation</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMerchantZoneModal(false)}
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition text-center cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 5. MODAL CONDITIONS D'UTILISATION */}
+      {showConditionsModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="conditions_modal">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-gray-150 text-left max-h-[90vh] overflow-y-auto">
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowConditionsModal(false)}
+              className="absolute right-4 top-4 rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition cursor-pointer font-bold"
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3.5 border-b pb-4 mb-5">
+              <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shrink-0 border border-indigo-100">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="font-mono text-[9px] font-bold text-indigo-600 uppercase tracking-widest block">Règles de la Plateforme</span>
+                <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wider">
+                  {currentLanguage === "fr" ? "Conditions & Règles de Yaamaa" : "Yaamaa Platform Conditions"}
+                </h3>
+              </div>
+            </div>
+
+            {/* Content Details */}
+            <div className="space-y-4 text-xs text-gray-650 leading-relaxed mb-6">
+              <p className="font-medium text-[11px] text-gray-400 uppercase tracking-wider">Règlement et Code de Conduite de l'Utilisateur</p>
+              
+              {/* Rule 1 */}
+              <div className="p-3 rounded-2xl bg-amber-50/40 border border-amber-100 space-y-1">
+                <h4 className="font-bold text-slate-950 flex items-center gap-1.5">
+                  <span className="text-base">🕒</span>
+                  <span>1. Règle d'Éligibilité des 30 Jours</span>
+                </h4>
+                <p className="text-gray-600 text-[11px]">
+                  Tout utilisateur de Yaamaa dispose d'un délai de <strong>30 jours</strong> après son inscription pour acheter et activer son Numéro Marchand unique. Si le numéro n'est pas activé dans ce délai, l'éligibilité aux commissions d'affiliation est perdue définitivement à vie.
+                </p>
+              </div>
+
+              {/* Rule 2 */}
+              <div className="p-3 rounded-2xl bg-indigo-50/30 border border-indigo-100 space-y-1">
+                <h4 className="font-bold text-slate-950 flex items-center gap-1.5">
+                  <span className="text-base">🤝</span>
+                  <span>2. Unicité Exclusive du Numéro Marchand</span>
+                </h4>
+                <p className="text-gray-600 text-[11px]">
+                  Chaque Numéro Marchand est strictement unique et lié à un seul et unique compte utilisateur. Il est formellement impossible de partager, louer ou attribuer un même numéro marchand à plusieurs comptes.
+                </p>
+              </div>
+
+              {/* Rule 3 */}
+              <div className="p-3 rounded-2xl bg-rose-50/45 border border-rose-100 space-y-1">
+                <h4 className="font-bold text-slate-950 flex items-center gap-1.5">
+                  <span className="text-base">🚫</span>
+                  <span>3. Anti-Fraude & Multi-comptes</span>
+                </h4>
+                <p className="text-gray-600 text-[11px]">
+                  La création de comptes factices, d'auto-parrainages frauduleux ou la simulation artificielle d'inscriptions est strictement proscrite. Les comptes fraudeurs seront immédiatement et définitivement bloqués avec confiscation définitive des gains.
+                </p>
+              </div>
+
+              {/* Rule 4 */}
+              <div className="p-3 rounded-2xl bg-emerald-50/30 border border-emerald-100 space-y-1">
+                <h4 className="font-bold text-slate-950 flex items-center gap-1.5">
+                  <span className="text-base">💰</span>
+                  <span>4. Versement des Commissions d'Affiliation</span>
+                </h4>
+                <p className="text-gray-600 text-[11px]">
+                  Pour qu'un parrain touche sa commission de <strong>50%</strong>, le filleul parrainé doit obligatoirement acheter et activer son propre Numéro Marchand unique. Si le parrain ne possède pas de numéro marchand actif, aucune commission ne sera créditée.
+                </p>
+              </div>
+
+              {/* Rule 5 */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-150 space-y-1">
+                <h4 className="font-bold text-slate-950 flex items-center gap-1.5">
+                  <span className="text-base">📸</span>
+                  <span>5. Authenticité des Preuves de Tâche</span>
+                </h4>
+                <p className="text-gray-600 text-[11px]">
+                  Toutes les captures d'écran servant de preuves de validation des missions (abonnements, avis, likes) doivent provenir d'actions réelles de l'utilisateur. Toute soumission de fausse preuve mènera à la suspension temporaire ou permanente du compte.
+                </p>
+              </div>
+
+            </div>
+
+            {/* Back Button */}
+            <div className="flex gap-3 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConditionsModal(false);
+                  setShowMerchantZoneModal(true);
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-2xl transition cursor-pointer"
+              >
+                Retour
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConditionsModal(false)}
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showInstallPwaModal && (
+        <InstallPwaModal
+          isOpen={showInstallPwaModal}
+          onClose={() => setShowInstallPwaModal(false)}
+        />
       )}
 
     </div>

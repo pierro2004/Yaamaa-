@@ -26,12 +26,27 @@ export interface User {
   currency: string;
   referralCode: string;
   referredBy?: string;
+  giftPoints?: number; // points balance to buy/send gifts
+  giftPointsEarned?: number; // points earned from receiving gifts
   is2faEnabled: boolean;
   isSuspended: boolean;
   friendIds?: string[];
   address?: string;
   bio?: string;
   story?: string;
+  merchantNumber?: string;
+  merchantNumberPurchasedAt?: string;
+  merchantNumberEligible?: boolean;
+  merchantPackType?: "premium" | "gold" | "diamond";
+  createdAt?: string;
+  yaamaaAiActive?: boolean;
+  yaamaaAiExpiresAt?: string;
+  yaamaaAiSettings?: YaamaaAiSettings;
+  yaamaaAiStats?: YaamaaAiStats;
+  yaamaaAiHandledConversations?: YaamaaAiHandledConversation[];
+  yaamaaAiNotifications?: YaamaaAiNotification[];
+  status?: "online" | "offline" | "unavailable";
+  language?: "fr" | "en";
 }
 
 export type MissionType =
@@ -139,6 +154,54 @@ export interface HomeCustomPost {
   date: string;
 }
 
+export interface VirtualGift {
+  id: string;
+  name: string;
+  emoji: string;
+  pointsPrice: number;
+  description?: string;
+  rarity?: "Commun" | "Rare" | "Épique" | "Légendaire" | "Mythique";
+  category?: "Classique" | "Premium" | "Royale" | "Légendaire" | "Richesse" | "Amour" | "Fête" | "Gaming" | "Sport" | "Afrique" | "Événementiel" | "Saisonnier" | "Exclusif";
+  animation?: "petals" | "diamonds" | "money" | "light" | "lightning" | "galaxy" | "rocket" | "lion" | "dragon" | "phoenix" | "castle" | "car" | "confetti" | "fireworks";
+  soundEffect?: string;
+  duration?: number; // duration in seconds
+  isActive?: boolean;
+  isTemporary?: boolean;
+  expiryDate?: string;
+  promotionDiscount?: number; // percentage discount
+  pointsValue?: number; // points the recipient gets
+}
+
+export interface RechargePack {
+  id: string;
+  pieces: number;
+  price: number; // e.g. price in USD or currency defined by admin
+  currency: string;
+  title: string;
+  isActive: boolean;
+}
+
+export interface WithdrawalPack {
+  id: string;
+  pieces: number;
+  value: number; // cash value or conversion rate
+  label: string;
+  isActive: boolean;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  keyValue: string;
+  providerType: "payment" | "enterprise" | "ai" | "sms" | "webhook" | "custom";
+  recognizedRole: string;
+  scope: string;
+  status: "active" | "testing" | "revoked";
+  createdAt: string;
+  lastUsedAt?: string;
+  operatorId: string;
+}
+
 export interface SystemSettings {
   isWithdrawalFrozen: boolean;
   suspendedCountries: string[];
@@ -156,6 +219,18 @@ export interface SystemSettings {
   homeCustomPromoTitle?: string;
   homeCustomPromoDescription?: string;
   homeCustomPosts?: HomeCustomPost[];
+  merchantNumberPrice?: number;
+  merchantPremiumPrice?: number;
+  merchantGoldPrice?: number;
+  merchantDiamondPrice?: number;
+  virtualGifts?: VirtualGift[];
+  giftPointsConversionRate?: number; // conversion factor, e.g. 0.01 for 1 point = 0.01 currency units
+  autoSenderName?: string; // name e.g. "Yama Assistance"
+  autoSenderPhone?: string; // number e.g. "+221701234567"
+  autoSenderAvatar?: string; // custom avatar
+  rechargePacks?: RechargePack[];
+  withdrawalPacks?: WithdrawalPack[];
+  apiKeys?: ApiKey[];
 }
 
 // ==========================================
@@ -332,6 +407,22 @@ export interface SocialMessage {
   customOfferStatus?: "pending" | "paid" | "shipped" | "received";
   customOfferOrderId?: string;
   readBy?: string[];
+  replyToId?: string;
+  replyToText?: string;
+  replyToSenderUsername?: string;
+  reactions?: Record<string, string[]>;
+  translation?: string;
+  translatedTo?: string;
+  translatedFrom?: string;
+  isGift?: boolean;
+  giftId?: string;
+  giftName?: string;
+  giftPoints?: number;
+  giftImage?: string;
+  isAdminOfficial?: boolean;
+  adminCampaignId?: string;
+  isAiReply?: boolean;
+  aiAgentOwnerId?: string;
 }
 
 export interface FriendRequest {
@@ -381,4 +472,222 @@ export interface CallSession {
   participants: CallParticipant[]; // supporting up to 10 participants
   speakerOn?: boolean; // dynamic speaker toggle simulation
 }
+
+export interface BroadcastCampaign {
+  id: string;
+  title: string;
+  text: string;
+  mediaUrl?: string;
+  mediaType: "none" | "image" | "video" | "document" | "link";
+  mediaName?: string;
+  scheduleType: "immediate" | "scheduled";
+  scheduledAt?: string;
+  status: "draft" | "scheduled" | "sent";
+  targeting: {
+    targetGroup: string;
+    countries?: string[];
+    region?: string;
+    city?: string;
+  };
+  senderId: string;
+  senderUsername: string;
+  senderAvatar: string;
+  createdAt: string;
+  sentCount?: number;
+  readCount?: number;
+  recipientCount?: number;
+  distributedCount?: number;
+  sentAt?: string;
+}
+
+export interface YaamaaAiSettings {
+  personality: string;
+  customKnowledge?: string;
+  authorizedTopics?: string;
+  forbiddenTopics?: string;
+  activationSchedule: "always" | "custom";
+  activationStartHour?: number;
+  activationEndHour?: number;
+  autoReplyOn: boolean;
+  authorizesHistory: boolean;
+  authorizesStock: boolean;
+}
+
+export interface YaamaaAiStats {
+  conversationsCount: number;
+  satisfactionRate: number;
+  responseTime: number;
+}
+
+export interface YaamaaAiHandledConversation {
+  id: string;
+  senderId: string;
+  senderUsername: string;
+  senderAvatar: string;
+  messageId: string;
+  messageText: string;
+  aiResponseText: string;
+  timestamp: string;
+  rating?: number;
+  feedback?: string;
+}
+
+export interface YaamaaAiNotification {
+  id: string;
+  senderUsername: string;
+  messageSnippet: string;
+  timestamp: string;
+}
+
+export type SupplierOrDelivererType = "supplier" | "deliverer";
+export type SupplierDelivererStatus = "pending" | "approved" | "rejected" | "suspended";
+
+export interface SupplierDelivererProfile {
+  id: string;
+  userId: string;
+  type: SupplierOrDelivererType;
+  fullName: string;
+  profilePhoto: string;
+  companyLogo?: string;
+  phone: string;
+  email: string;
+  country: string;
+  city: string;
+  interventionZone: string;
+  professionalAddress: string;
+  activityType: string;
+  servicesDescription: string;
+  idDocumentUrl: string;
+  companyDocumentUrl?: string;
+  drivingLicenseUrl?: string;
+  transportMethod?: string;
+  vehiclePhotos?: string[];
+  insuranceDocumentUrl?: string;
+  certifications?: string[];
+  availabilityHours: string;
+  rates?: string;
+  spokenLanguages?: string[];
+  status: SupplierDelivererStatus;
+  isVerified: boolean;
+  rating: number;
+  reviewsCount: number;
+  missionsCompletedCount: number;
+  successRate: number;
+  createdAt: string;
+  adminFeedback?: string;
+}
+
+export interface SupplierDelivererReview {
+  id: string;
+  profileId: string;
+  userId: string;
+  username: string;
+  userAvatar: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+export type BadgeTier = "blue" | "bronze" | "gold" | "diamond";
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  tier: BadgeTier;
+  badgeLabel: string;
+  colorTheme: {
+    bg: string;
+    border: string;
+    text: string;
+    gradient: string;
+  };
+  description: string;
+  benefits: string[];
+  initialPrice: number;
+  renewalPrice: number;
+  durationValue: number;
+  durationUnit: "days" | "weeks" | "months" | "years";
+  maxReferrals: number;
+  referralCommission: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface UserSubscription {
+  id: string;
+  userId: string;
+  planId: string;
+  planName: string;
+  tier: BadgeTier;
+  merchantNumber: string;
+  startDate: string;
+  expirationDate: string;
+  status: "active" | "suspended" | "expired" | "cancelled";
+  isAutoRenew: boolean;
+  createdAt: string;
+  lastRenewedAt?: string;
+}
+
+export interface SubscriptionNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: "activation" | "reminder" | "expiration" | "renewal" | "suspension" | "reactivation";
+  createdAt: string;
+  isRead: boolean;
+}
+
+export interface MissionRequest {
+  id: string;
+  profileId: string;
+  profileName: string;
+  profileType: SupplierOrDelivererType;
+  clientId: string;
+  clientUsername: string;
+  clientAvatar: string;
+  title: string;
+  description: string;
+  budgetOrRates: string;
+  status: "pending" | "accepted" | "rejected" | "completed";
+  createdAt: string;
+}
+
+export type SupervisionSeverity = "low" | "medium" | "high" | "critical";
+
+export interface SupervisionIncident {
+  id: string;
+  component: string;
+  componentKey: string;
+  timestamp: string;
+  severity: SupervisionSeverity;
+  title: string;
+  description: string;
+  consequences: string;
+  logs: string[];
+  impactedUsersCount: number;
+  probableCauses: string;
+  recommendations: string;
+  correctionSteps: string[];
+  isAutoCorrectable: boolean;
+  status: "active" | "resolved" | "auto_corrected";
+  resolvedAt?: string;
+}
+
+export interface SupervisionReport {
+  id: string;
+  type: "daily" | "weekly" | "monthly";
+  date: string;
+  title: string;
+  performanceSummary: string;
+  incidentsCount: number;
+  resolvedCount: number;
+  activeUsersCount: number;
+  growthRate: number;
+  details: string;
+}
+
+
+
+
 

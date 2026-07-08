@@ -11,14 +11,23 @@ import {
   WalletTransaction, 
   SystemSettings, 
   MissionType,
-  AuditLog
+  AuditLog,
+  SubscriptionPlan
 } from "./types";
 import { ALL_COUNTRIES, getCurrencyForCountry } from "./countries";
 import Navbar from "./components/Navbar";
+import PwaInstallBanner from "./components/PwaInstallBanner";
 import BoutiqueView from "./components/BoutiqueView";
 import PromotionsView from "./components/PromotionsView";
 import SocialView from "./components/SocialView";
+import SuppliersDeliverersView from "./components/SuppliersDeliverersView";
 import UserProfileModal from "./components/UserProfileModal";
+import YaamaaAiView from "./components/YaamaaAiView";
+import AdminGiftsPanel from "./components/AdminGiftsPanel";
+import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
+import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
+import { AdminApiKeysPanel } from "./components/AdminApiKeysPanel";
+import { AdminPublishingBoard } from "./components/AdminPublishingBoard";
 import { Language, getTranslation } from "./i18n";
 import { Store, Megaphone } from "lucide-react";
 import { 
@@ -61,11 +70,11 @@ import {
 
 function SafeText({ text }: { text: string }) {
   if (!text) return null;
-  const parts = text.split(/(Taskora|TASKORA)/g);
+  const parts = text.split(/(Yaamaa|YAAMAA)/g);
   return (
     <>
       {parts.map((part, i) => {
-        if (part === "Taskora" || part === "TASKORA") {
+        if (part === "Yaamaa" || part === "YAAMAA") {
           return (
             <span key={i} translate="no" className="notranslate inline-block">
               {part}
@@ -106,16 +115,20 @@ const COUNTRIES_LIST = [
   { name: "États-Unis", flag: "🇺🇸", code: "+1", currency: "USD", methods: ["Carte Bancaire", "Virement Bancaire"] }
 ];
 
+const yaamaaLogo = "/src/assets/images/yaamaa_logo_updated_1783116905472.jpg";
+
 export default function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<string>("home");
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [initiallyOpenGiftsModal, setInitiallyOpenGiftsModal] = useState<boolean>(false);
   const [discussionFriendId, setDiscussionFriendId] = useState<string | null>(null);
+  const [isChatActive, setIsChatActive] = useState<boolean>(false);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
 
   // Language State
   const [currentLanguage, setCurrentLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem("taskora_language");
+    const saved = localStorage.getItem("yaamaa_language");
     if (saved === "fr" || saved === "en") return saved as Language;
     return navigator.language.startsWith("en") ? "en" : "fr";
   });
@@ -124,7 +137,7 @@ export default function App() {
 
   const handleLanguageChange = (lang: Language) => {
     setCurrentLanguage(lang);
-    localStorage.setItem("taskora_language", lang);
+    localStorage.setItem("yaamaa_language", lang);
   };
 
   // Global State
@@ -136,6 +149,46 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<any>(null);
+
+  // Auto-sender / Automation Sender Profile State
+  const [autoSenderName, setAutoSenderName] = useState("Yama Assistance");
+  const [autoSenderPhone, setAutoSenderPhone] = useState("+221701234567");
+  const [autoSenderAvatar, setAutoSenderAvatar] = useState("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop");
+
+  useEffect(() => {
+    if (systemMetrics?.settings) {
+      if (systemMetrics.settings.autoSenderName) setAutoSenderName(systemMetrics.settings.autoSenderName);
+      if (systemMetrics.settings.autoSenderPhone) setAutoSenderPhone(systemMetrics.settings.autoSenderPhone);
+      if (systemMetrics.settings.autoSenderAvatar) setAutoSenderAvatar(systemMetrics.settings.autoSenderAvatar);
+    }
+  }, [systemMetrics]);
+
+  const handleSaveAutoSender = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          autoSenderName,
+          autoSenderPhone,
+          autoSenderAvatar,
+          operatorId: currentUser.id
+        })
+      });
+      if (res.ok) {
+        alert("Profil émetteur automatisé (Numéro & Avatar) mis à jour avec succès !");
+        syncPlatformData(currentUser.id);
+      } else {
+        const d = await res.json();
+        alert(d.error || "Erreur lors de la mise à jour");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur de connexion.");
+    }
+  };
 
   // Boutique & Promotions State
   const [shops, setShops] = useState<any[]>([]);
@@ -149,6 +202,26 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [isReferralModalOpen, setIsReferralModalOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  
+  // Merchant Number System states
+  const [isMerchantModalOpen, setIsMerchantModalOpen] = useState<boolean>(false);
+  const [merchantPayMethod, setMerchantPayMethod] = useState<string>("MTN Mobile Money");
+  const [merchantPayPhone, setMerchantPayPhone] = useState<string>("");
+  const [merchantPayName, setMerchantPayName] = useState<string>("");
+  const [merchantStep, setMerchantStep] = useState<"form" | "processing" | "success">("form");
+  const [generatedMerchantNumber, setGeneratedMerchantNumber] = useState<string>("");
+  const [merchantWithin30Days, setMerchantWithin30Days] = useState<boolean>(true);
+  const [merchantPackTypeSelection, setMerchantPackTypeSelection] = useState<string>("premium");
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  
+  const selectedPlanObj = subscriptionPlans.find(p => p.id === merchantPackTypeSelection || p.tier === merchantPackTypeSelection);
+  const merchantSelectedPrice = selectedPlanObj 
+    ? selectedPlanObj.initialPrice 
+    : (merchantPackTypeSelection === "gold" 
+        ? (systemMetrics?.settings?.merchantGoldPrice ?? 15000) 
+        : merchantPackTypeSelection === "diamond" 
+          ? (systemMetrics?.settings?.merchantDiamondPrice ?? 35000) 
+          : (systemMetrics?.settings?.merchantPremiumPrice ?? 5000));
   
   // Advanced Auth and Verification States
   const [authScreenMode, setAuthScreenMode] = useState<"login" | "register">("login");
@@ -312,8 +385,12 @@ export default function App() {
   const [adminBaseReward, setAdminBaseReward] = useState<string>("0.20");
   const [adminDefaultCommission, setAdminDefaultCommission] = useState<string>("10");
   const [adminIsFreezingWithdrawals, setAdminIsFreezingWithdrawals] = useState<boolean>(false);
+  const [adminMerchantNumberPrice, setAdminMerchantNumberPrice] = useState<string>("5000");
+  const [adminMerchantPremiumPrice, setAdminMerchantPremiumPrice] = useState<string>("5000");
+  const [adminMerchantGoldPrice, setAdminMerchantGoldPrice] = useState<string>("15000");
+  const [adminMerchantDiamondPrice, setAdminMerchantDiamondPrice] = useState<string>("35000");
 
-  // Taskora AI Assistant state
+  // Yaamaa AI Assistant state
   const [aiChatType, setAiChatType] = useState<string>("participant_recommend");
   const [aiCustomPrompt, setAiCustomPrompt] = useState<string>("");
   const [aiResponseText, setAiResponseText] = useState<string>("");
@@ -326,7 +403,7 @@ export default function App() {
   const [critSuspendedCountries, setCritSuspendedCountries] = useState<string>("");
   const [critSuspendedCurrencies, setCritSuspendedCurrencies] = useState<string>("");
   const [adminMsg, setAdminMsg] = useState<string | null>(null);
-  const [adminSubTab, setAdminSubTab] = useState<"dashboard" | "proofs" | "finance" | "settings" | "members_registry" | "audit_logs">("dashboard");
+  const [adminSubTab, setAdminSubTab] = useState<string>("dashboard");
   const [adminChartMetric, setAdminChartMetric] = useState<"commission" | "volume">("commission");
   
   // Search and filter states for newly added Registry and Audit subtabs
@@ -336,74 +413,162 @@ export default function App() {
   const [auditActionFilter, setAuditActionFilter] = useState<string>("all");
   const [revealPasswordsId, setRevealPasswordsId] = useState<string[]>([]);
 
+  // Broadcast message automation states
+  const [broadcastCampaigns, setBroadcastCampaigns] = useState<any[]>([]);
+  const [broadcastTitle, setBroadcastTitle] = useState<string>("");
+  const [broadcastText, setBroadcastText] = useState<string>("");
+  const [broadcastMediaUrl, setBroadcastMediaUrl] = useState<string>("");
+  const [broadcastMediaType, setBroadcastMediaType] = useState<"none" | "image" | "video" | "document" | "link">("none");
+  const [broadcastMediaName, setBroadcastMediaName] = useState<string>("");
+  const [broadcastScheduleType, setBroadcastScheduleType] = useState<"immediate" | "scheduled">("immediate");
+  const [broadcastScheduledAt, setBroadcastScheduledAt] = useState<string>("");
+  const [broadcastTargetGroup, setBroadcastTargetGroup] = useState<string>("all");
+  const [broadcastCountries, setBroadcastCountries] = useState<string[]>([]);
+  const [broadcastRegion, setBroadcastRegion] = useState<string>("");
+  const [broadcastCity, setBroadcastCity] = useState<string>("");
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [isSavingBroadcast, setIsSavingBroadcast] = useState<boolean>(false);
+
+  // History & Back Button Synchronizer
+  const isPopStateRef = React.useRef(false);
+  const previousModalStateRef = React.useRef(false);
+
+  const isAnyModalOpen = authModalOpen || isReferralModalOpen || isShareModalOpen || isMerchantModalOpen || isPaymentConfirmationOpen;
+
+  useEffect(() => {
+    // Put initial state if not defined
+    if (!window.history.state) {
+      window.history.replaceState({ view: "home" }, "", "");
+    }
+
+    const handlePop = (e: PopStateEvent) => {
+      // 1. If any modal is open, back button closes the modal and keeps the current view
+      if (authModalOpen || isReferralModalOpen || isShareModalOpen || isMerchantModalOpen || isPaymentConfirmationOpen) {
+        setAuthModalOpen(false);
+        setIsReferralModalOpen(false);
+        setIsShareModalOpen(false);
+        setIsMerchantModalOpen(false);
+        setIsPaymentConfirmationOpen(false);
+        return;
+      }
+
+      // 2. Standard navigation pop
+      if (e.state && e.state.view) {
+        isPopStateRef.current = true;
+        setCurrentView(e.state.view);
+      }
+    };
+
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, [authModalOpen, isReferralModalOpen, isShareModalOpen, isMerchantModalOpen, isPaymentConfirmationOpen]);
+
+  // Push state to browser history when view changes
+  useEffect(() => {
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false;
+      return;
+    }
+    if (window.history.state?.view !== currentView) {
+      window.history.pushState({ view: currentView }, "", "");
+    }
+  }, [currentView]);
+
+  // Handle modal state changes to push/pop history
+  useEffect(() => {
+    if (isAnyModalOpen && !previousModalStateRef.current) {
+      // A modal opened: push history entry
+      window.history.pushState({ view: currentView, modal: true }, "", "");
+    } else if (!isAnyModalOpen && previousModalStateRef.current) {
+      // All modals closed: if the current state was pushed for a modal, pop it
+      if (window.history.state?.modal) {
+        window.history.back();
+      }
+    }
+    previousModalStateRef.current = isAnyModalOpen;
+  }, [isAnyModalOpen, currentView]);
+
   // Global Initializer & Data Sync
   const syncPlatformData = useCallback(async (currentUserId?: string) => {
     try {
       const [
         settingsRes, usersRes, campaignsRes, submissionsRes, transactionsRes, auditLogsRes,
-        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes
+        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes, broadcastRes, subPlansRes
       ] = await Promise.all([
-        fetch("/api/settings").then(r => r.json()),
-        fetch("/api/users").then(r => r.json()),
-        fetch("/api/campaigns").then(r => r.json()),
-        fetch("/api/submissions").then(r => r.json()),
-        fetch("/api/transactions").then(r => r.json()),
-        fetch("/api/admin/audit-logs").then(r => r.json()).catch(() => []),
-        fetch("/api/shops").then(r => r.json()).catch(() => []),
-        fetch("/api/products").then(r => r.json()).catch(() => []),
-        fetch("/api/orders").then(r => r.json()).catch(() => []),
-        fetch("/api/disputes").then(r => r.json()).catch(() => []),
-        fetch("/api/promotions").then(r => r.json()).catch(() => [])
+        fetch("/api/settings").then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch("/api/users").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/campaigns").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/submissions").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/transactions").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/admin/audit-logs").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/shops").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/products").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/orders").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/disputes").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/promotions").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/broadcast-campaigns").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/subscription-plans").then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
 
-      setSystemMetrics(settingsRes);
-      setUsers(usersRes);
-      setCampaigns(campaignsRes);
-      setSubmissions(submissionsRes);
-      setTransactions(transactionsRes);
+      setSystemMetrics(settingsRes || {});
+      setUsers(Array.isArray(usersRes) ? usersRes : []);
+      setCampaigns(Array.isArray(campaignsRes) ? campaignsRes : []);
+      setSubmissions(Array.isArray(submissionsRes) ? submissionsRes : []);
+      setTransactions(Array.isArray(transactionsRes) ? transactionsRes : []);
       setAuditLogs(Array.isArray(auditLogsRes) ? auditLogsRes : []);
-      setShops(shopsRes);
-      setProducts(productsRes);
-      setOrders(ordersRes);
-      setDisputes(disputesRes);
-      setPromoCampaigns(promoCampaignsRes);
+      setShops(Array.isArray(shopsRes) ? shopsRes : []);
+      setProducts(Array.isArray(productsRes) ? productsRes : []);
+      setOrders(Array.isArray(ordersRes) ? ordersRes : []);
+      setDisputes(Array.isArray(disputesRes) ? disputesRes : []);
+      setPromoCampaigns(Array.isArray(promoCampaignsRes) ? promoCampaignsRes : []);
+      setBroadcastCampaigns(Array.isArray(broadcastRes) ? broadcastRes : []);
+      setSubscriptionPlans(Array.isArray(subPlansRes) ? subPlansRes : []);
 
       // Setup pre-loaded admin views variables from DB state
-      if (settingsRes.settings) {
-        setCritWithdrawalFrozen(settingsRes.settings.isWithdrawalFrozen);
-        setCritPlatformFee(settingsRes.settings.platformFeePercentage);
-        setCritSuspendedCountries(settingsRes.settings.suspendedCountries.join(", "));
-        setCritSuspendedCurrencies(settingsRes.settings.suspendedCurrencies.join(", "));
-        setAdminIsFreezingWithdrawals(settingsRes.settings.isWithdrawalFrozen);
-        setAdminFeePercent(String(settingsRes.settings.platformFeePercentage ?? "10"));
-        setAdminMinWithdrawal(String(settingsRes.settings.minWithdrawalAmount ?? "10"));
-        setAdminBaseReward(String(settingsRes.settings.baseReward ?? "0.2"));
-        setAdminDefaultCommission(String(settingsRes.settings.defaultCommission ?? "10"));
+      const sRes = settingsRes as any;
+      if (sRes && sRes.settings) {
+        setCritWithdrawalFrozen(sRes.settings.isWithdrawalFrozen);
+        setCritPlatformFee(sRes.settings.platformFeePercentage);
+        setCritSuspendedCountries(sRes.settings.suspendedCountries?.join(", ") || "");
+        setCritSuspendedCurrencies(sRes.settings.suspendedCurrencies?.join(", ") || "");
+        setAdminIsFreezingWithdrawals(sRes.settings.isWithdrawalFrozen);
+        setAdminFeePercent(String(sRes.settings.platformFeePercentage ?? "10"));
+        setAdminMinWithdrawal(String(sRes.settings.minWithdrawalAmount ?? "10"));
+        setAdminBaseReward(String(sRes.settings.baseReward ?? "0.2"));
+        setAdminDefaultCommission(String(sRes.settings.defaultCommission ?? "10"));
+        setAdminMerchantNumberPrice(String(sRes.settings.merchantNumberPrice ?? "5000"));
+        setAdminMerchantPremiumPrice(String(sRes.settings.merchantPremiumPrice ?? "5000"));
+        setAdminMerchantGoldPrice(String(sRes.settings.merchantGoldPrice ?? "15000"));
+        setAdminMerchantDiamondPrice(String(sRes.settings.merchantDiamondPrice ?? "35000"));
       }
 
       // Sync Current Active User
-      const savedUserId = localStorage.getItem("taskora_logged_user_id");
+      const savedUserId = localStorage.getItem("yaamaa_logged_user_id");
       const targetId = currentUserId || savedUserId || undefined;
       if (targetId) {
-        const userDetailRes = await fetch("/api/users/current", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: targetId })
-        });
-        if (userDetailRes.ok) {
-          const detail = await userDetailRes.json();
-          setCurrentUser(detail);
-          localStorage.setItem("taskora_logged_user_id", detail.id);
-        } else {
-          setCurrentUser(null);
-          localStorage.removeItem("taskora_logged_user_id");
+        try {
+          const userDetailRes = await fetch("/api/users/current", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: targetId })
+          });
+          if (userDetailRes.ok) {
+            const detail = await userDetailRes.json();
+            setCurrentUser(detail);
+            localStorage.setItem("yaamaa_logged_user_id", detail.id);
+          } else {
+            setCurrentUser(null);
+            localStorage.removeItem("yaamaa_logged_user_id");
+          }
+        } catch {
+          // Ignore user sync error
         }
       } else {
         setCurrentUser(null);
       }
       setIsLoading(false);
     } catch (err) {
-      console.error("Taskora Platform critical synchronization failure:", err);
+      console.warn("Yaamaa Platform synchronization warning:", err);
       setIsLoading(false);
     }
   }, [currentUser?.id]);
@@ -438,6 +603,184 @@ export default function App() {
     }
   };
 
+  // Broadcast Message Automation Actions
+  const getTargetRecipientsCount = (group: string, countriesList: string[], reg: string, cit: string): number => {
+    let list = users || [];
+    // Filter out potential system/admin items
+    list = list.filter(u => u.role !== "admin" && u.role !== "founder" && u.id !== "user_admin");
+    
+    if (group === "all") return list.length;
+    if (group === "countries") {
+      if (countriesList.length === 0) return 0;
+      return list.filter(u => countriesList.includes(u.country)).length;
+    }
+    if (group === "region_city") {
+      return list.filter(u => {
+        const addr = (u.address || "").toLowerCase();
+        const matchR = reg ? addr.includes(reg.toLowerCase()) : true;
+        const matchC = cit ? addr.includes(cit.toLowerCase()) : true;
+        return matchR && matchC;
+      }).length;
+    }
+    if (group === "premium") return list.filter(u => !!u.merchantNumber).length;
+    if (group === "free") return list.filter(u => !u.merchantNumber).length;
+    if (group === "shop_owners") {
+      const owners = new Set((shops || []).map(s => s.ownerId));
+      return list.filter(u => owners.has(u.id)).length;
+    }
+    if (group === "suppliers") {
+      const phys = new Set((products || []).filter(p => p.category === "physical").map(p => p.ownerId));
+      return list.filter(u => phys.has(u.id) || (u.bio || "").toLowerCase().includes("fournisseur") || (u.name || "").toLowerCase().includes("fournisseur")).length;
+    }
+    if (group === "delivery") {
+      return list.filter(u => (u.bio || "").toLowerCase().includes("livreur") || (u.username || "").toLowerCase().includes("livre") || (u.name || "").toLowerCase().includes("livreur")).length;
+    }
+    if (group === "creators") {
+      return list.filter(u => u.level >= 10 || (u.bio || "").toLowerCase().includes("créateur") || (u.bio || "").toLowerCase().includes("creator")).length;
+    }
+    if (group === "verified") {
+      return list.filter(u => u.is2faEnabled || !!u.merchantNumber || u.level >= 5).length;
+    }
+    if (group === "new") {
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return list.filter(u => u.createdAt ? new Date(u.createdAt).getTime() > oneWeekAgo : false).length;
+    }
+    if (group === "active") {
+      const activeIds = new Set([
+        ...(transactions || []).map(t => t.userId),
+        ...(submissions || []).map(s => s.participantId)
+      ]);
+      return list.filter(u => activeIds.has(u.id)).length;
+    }
+    if (group === "inactive") {
+      const activeIds = new Set([
+        ...(transactions || []).map(t => t.userId),
+        ...(submissions || []).map(s => s.participantId)
+      ]);
+      return list.filter(u => !activeIds.has(u.id)).length;
+    }
+    return list.length;
+  };
+
+  const handleSaveBroadcastCampaign = async (campaignStatus: "draft" | "scheduled" | "sent") => {
+    if (!broadcastTitle || !broadcastText) {
+      alert("Le titre et le contenu du message sont obligatoires.");
+      return;
+    }
+    if (broadcastScheduleType === "scheduled" && !broadcastScheduledAt && campaignStatus === "scheduled") {
+      alert("Veuillez indiquer une date et une heure de planification d'envoi.");
+      return;
+    }
+    if (!currentUser) return;
+
+    setIsSavingBroadcast(true);
+    try {
+      const res = await fetch("/api/broadcast-campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingCampaignId || undefined,
+          title: broadcastTitle,
+          text: broadcastText,
+          mediaUrl: broadcastMediaUrl || undefined,
+          mediaType: broadcastMediaType,
+          mediaName: broadcastMediaName || undefined,
+          scheduleType: broadcastScheduleType,
+          scheduledAt: broadcastScheduleType === "scheduled" ? broadcastScheduledAt : undefined,
+          status: campaignStatus,
+          targeting: {
+            targetGroup: broadcastTargetGroup,
+            countries: broadcastTargetGroup === "countries" ? broadcastCountries : [],
+            region: broadcastTargetGroup === "region_city" ? broadcastRegion : "",
+            city: broadcastTargetGroup === "region_city" ? broadcastCity : ""
+          },
+          senderId: currentUser.id
+        })
+      });
+
+      if (res.ok) {
+        setBroadcastTitle("");
+        setBroadcastText("");
+        setBroadcastMediaUrl("");
+        setBroadcastMediaType("none");
+        setBroadcastMediaName("");
+        setBroadcastScheduleType("immediate");
+        setBroadcastScheduledAt("");
+        setBroadcastTargetGroup("all");
+        setBroadcastCountries([]);
+        setBroadcastRegion("");
+        setBroadcastCity("");
+        setEditingCampaignId(null);
+        alert(campaignStatus === "sent" ? "Campagne de diffusion envoyée avec succès ! 🚀" : campaignStatus === "scheduled" ? "Campagne planifiée avec succès ! 🕒" : "Brouillon sauvegardé avec succès ! 💾");
+        await syncPlatformData();
+      } else {
+        const err = await res.json();
+        alert("Erreur de sauvegarde: " + (err.error || "Erreur inconnue."));
+      }
+    } catch (e) {
+      alert("Erreur de communication avec le serveur.");
+    } finally {
+      setIsSavingBroadcast(false);
+    }
+  };
+
+  const handleSendBroadcastImmediately = async (campaignId: string) => {
+    if (!currentUser) return;
+    if (!window.confirm("Êtes-vous sûr de vouloir diffuser cette campagne immédiatement à tous les utilisateurs ciblés ?")) return;
+    try {
+      const res = await fetch(`/api/broadcast-campaigns/${campaignId}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId: currentUser.id })
+      });
+      if (res.ok) {
+        alert("Campagne diffusée avec succès ! 🚀");
+        await syncPlatformData();
+      } else {
+        const err = await res.json();
+        alert("Erreur: " + (err.error || "Impossible d'envoyer la campagne."));
+      }
+    } catch (e) {
+      alert("Erreur de communication avec le serveur.");
+    }
+  };
+
+  const handleDeleteBroadcastCampaign = async (campaignId: string) => {
+    if (!currentUser) return;
+    if (!window.confirm("Supprimer définitivement cette campagne administrative ? Cette action est irréversible.")) return;
+    try {
+      const res = await fetch(`/api/broadcast-campaigns/${campaignId}?operatorId=${currentUser.id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        alert("Campagne supprimée. 🗑️");
+        await syncPlatformData();
+      } else {
+        const err = await res.json();
+        alert("Erreur: " + (err.error || "Impossible de supprimer la campagne."));
+      }
+    } catch (e) {
+      alert("Erreur de communication avec le serveur.");
+    }
+  };
+
+  const handleLoadCampaignToForm = (camp: any) => {
+    setEditingCampaignId(camp.id);
+    setBroadcastTitle(camp.title);
+    setBroadcastText(camp.text);
+    setBroadcastMediaUrl(camp.mediaUrl || "");
+    setBroadcastMediaType(camp.mediaType || "none");
+    setBroadcastMediaName(camp.mediaName || "");
+    setBroadcastScheduleType(camp.scheduleType || "immediate");
+    setBroadcastScheduledAt(camp.scheduledAt || "");
+    setBroadcastTargetGroup(camp.targeting?.targetGroup || "all");
+    setBroadcastCountries(camp.targeting?.countries || []);
+    setBroadcastRegion(camp.targeting?.region || "");
+    setBroadcastCity(camp.targeting?.city || "");
+    const el = document.getElementById("broadcast_form_editor");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
     syncPlatformData();
 
@@ -446,13 +789,13 @@ export default function App() {
     const refCode = params.get("ref") || params.get("invite") || params.get("code");
     if (refCode) {
       setRegisterReferral(refCode);
-      sessionStorage.setItem("taskora_invite_code", refCode);
+      sessionStorage.setItem("yaamaa_invite_code", refCode);
       
-      const loggedInId = localStorage.getItem("taskora_logged_user_id");
+      const loggedInId = localStorage.getItem("yaamaa_logged_user_id");
       if (!loggedInId) {
         setAuthScreenMode("register");
         setAuthModalOpen(true);
-        setAuthSuccessMsg(`🎁 Bienvenue sur Taskora ! Vous avez été parrainé(e) avec le code "${refCode}". Créez votre compte ci-dessous pour bénéficier de commissions et bonus de bienvenue !`);
+        setAuthSuccessMsg(`🎁 Bienvenue sur Yaamaa ! Vous avez été parrainé(e) avec le code "${refCode}". Créez votre compte ci-dessous pour bénéficier de commissions et bonus de bienvenue !`);
       }
     }
   }, []);
@@ -472,7 +815,7 @@ export default function App() {
     ];
     const randomName = mockNames[Math.floor(Math.random() * mockNames.length)];
     const randomUsername = "Filleul_" + Math.random().toString(36).substring(2, 7).toUpperCase();
-    const randomEmail = `${randomUsername.toLowerCase()}@taskora-demo.com`;
+    const randomEmail = `${randomUsername.toLowerCase()}@yaamaa-demo.com`;
     const randomCountry = currentUser.country || "Sénégal";
     const randomCurrency = currentUser.currency || "XOF";
 
@@ -508,18 +851,49 @@ export default function App() {
   const handleUserChange = async (userId: string) => {
     setIsLoading(true);
     if (userId) {
-      localStorage.setItem("taskora_logged_user_id", userId);
+      localStorage.setItem("yaamaa_logged_user_id", userId);
     } else {
-      localStorage.removeItem("taskora_logged_user_id");
+      localStorage.removeItem("yaamaa_logged_user_id");
     }
     await syncPlatformData(userId);
   };
 
   // Logout handler
   const handleLogout = () => {
+    localStorage.removeItem("yaamaa_original_founder_id");
+    setImpersonatorId(null);
     setCurrentUser(null);
-    localStorage.removeItem("taskora_logged_user_id");
+    localStorage.removeItem("yaamaa_logged_user_id");
     setCurrentView("home");
+  };
+
+  const [impersonatorId, setImpersonatorId] = useState<string | null>(() => {
+    return localStorage.getItem("yaamaa_original_founder_id");
+  });
+
+  const handleFounderImpersonate = (targetUser: User) => {
+    const activeFounderId = impersonatorId || (currentUser?.role === "founder" ? currentUser.id : "user_founder");
+    localStorage.setItem("yaamaa_original_founder_id", activeFounderId);
+    setImpersonatorId(activeFounderId);
+
+    setCurrentUser(targetUser);
+    localStorage.setItem("yaamaa_logged_user_id", targetUser.id);
+    setCurrentView("home");
+    syncPlatformData(targetUser.id);
+  };
+
+  const handleReturnToFounder = () => {
+    const founderId = impersonatorId || "user_founder";
+    const founderUser = users.find(u => u.id === founderId) || users.find(u => u.role === "founder") || currentUser;
+    localStorage.removeItem("yaamaa_original_founder_id");
+    setImpersonatorId(null);
+
+    if (founderUser) {
+      setCurrentUser(founderUser);
+      localStorage.setItem("yaamaa_logged_user_id", founderUser.id);
+      setCurrentView("admin");
+      syncPlatformData(founderUser.id);
+    }
   };
 
   // Toggle user account suspension
@@ -578,7 +952,7 @@ export default function App() {
 
       setAuthSuccessMsg("Connexion réussie ✔");
       setCurrentUser(data);
-      localStorage.setItem("taskora_logged_user_id", data.id);
+      localStorage.setItem("yaamaa_logged_user_id", data.id);
       
       // Clear login input states
       setLoginEmail("");
@@ -639,9 +1013,9 @@ export default function App() {
         return;
       }
 
-      setAuthSuccessMsg("Inscription réussie ! Bienvenue sur TASKORA PRO ✔");
+      setAuthSuccessMsg("Inscription réussie ! Bienvenue sur YAAMAA PRO ✔");
       setCurrentUser(data);
-      localStorage.setItem("taskora_logged_user_id", data.id);
+      localStorage.setItem("yaamaa_logged_user_id", data.id);
 
       // Clean registration states
       setRegisterName("");
@@ -723,7 +1097,7 @@ export default function App() {
 
       setAuthSuccessMsg(`Connexion Google réussie ! Bienvenue de retour, ${data.name} ✔`);
       setCurrentUser(data);
-      localStorage.setItem("taskora_logged_user_id", data.id);
+      localStorage.setItem("yaamaa_logged_user_id", data.id);
       
       // Clean google states
       setGoogleStep("none");
@@ -786,7 +1160,7 @@ export default function App() {
 
       setAuthSuccessMsg("Compte Google créé et connecté avec succès ✔");
       setCurrentUser(data);
-      localStorage.setItem("taskora_logged_user_id", data.id);
+      localStorage.setItem("yaamaa_logged_user_id", data.id);
 
       setGoogleStep("none");
       setShowGoogleAccountsSelector(false);
@@ -848,7 +1222,7 @@ export default function App() {
       
       await syncPlatformData(data.id);
     } catch (err) {
-      setProfileError("Impossible de contacter l'API de Taskora.");
+      setProfileError("Impossible de contacter l'API de Yaamaa.");
     }
   };
 
@@ -897,7 +1271,7 @@ export default function App() {
       }, 1500);
 
     } catch (err) {
-      setEditProfileError("Impossible de contacter l'API de Taskora.");
+      setEditProfileError("Impossible de contacter l'API de Yaamaa.");
     }
   };
 
@@ -1046,7 +1420,7 @@ export default function App() {
 
       setSubmitSuccess(
         data.submission.status === "approved" 
-          ? `Succès ! Taskora AI a auto-approuvé votre soumission sans fraude. +${selectedCampaignForTask.rewardPerUser} ${currentUser.currency} crédités.`
+          ? `Succès ! Yaamaa AI a auto-approuvé votre soumission sans fraude. +${selectedCampaignForTask.rewardPerUser} ${currentUser.currency} crédités.`
           : "Preuve enregistrée ! En attente de contrôle manuel de conformité par l'annonceur."
       );
 
@@ -1069,6 +1443,11 @@ export default function App() {
     if (!currentUser) return;
     setWithdrawError(null);
     setWithdrawSuccess(null);
+
+    if (!currentUser.merchantNumber) {
+      setWithdrawError("Retrait impossible. Sans numéro marchand unique actif, vous ne pouvez pas effectuer de retraits ni percevoir de gains sur la plateforme. Veuillez acheter et activer votre numéro marchand unique.");
+      return;
+    }
 
     const amountNum = parseFloat(withdrawalAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -1299,8 +1678,8 @@ export default function App() {
       if (paymentPurpose === "campaign") {
         // First top up wallet with total campaign cost
         const detailsString = kkiapayMethod === "Carte Bancaire"
-          ? `Recharge Taskora Pay pour Campagne par Carte (${kkiapayCardName} - Visa •••• 4242)`
-          : `Recharge Taskora Pay pour Campagne par Mobile Money (${kkiapayMethod} - ${kkiapayPhone})`;
+          ? `Recharge Yaamaa Pay pour Campagne par Carte (${kkiapayCardName} - Visa •••• 4242)`
+          : `Recharge Yaamaa Pay pour Campagne par Mobile Money (${kkiapayMethod} - ${kkiapayPhone})`;
 
         const depositRes = await fetch("/api/wallet/deposit", {
           method: "POST",
@@ -1309,7 +1688,7 @@ export default function App() {
             userId: currentUser.id,
             amount: parseFloat(depositAmount),
             currency: currentUser.currency,
-            method: `Taskora Pay (${kkiapayMethod})`,
+            method: `Yaamaa Pay (${kkiapayMethod})`,
             details: detailsString,
             autoApprove: true
           })
@@ -1317,7 +1696,7 @@ export default function App() {
 
         if (!depositRes.ok) {
           const data = await depositRes.json();
-          setDepositError(data.error || "Une erreur s'est produite lors du versement Taskora Pay.");
+          setDepositError(data.error || "Une erreur s'est produite lors du versement Yaamaa Pay.");
           setIsPaymentConfirmationOpen(false);
           return;
         }
@@ -1388,8 +1767,8 @@ export default function App() {
 
       // 3. Standard Wallet Deposit
       const detailsString = kkiapayMethod === "Carte Bancaire"
-        ? `Recharge Taskora Pay par Carte (${kkiapayCardName} - Visa •••• 4242)`
-        : `Recharge Taskora Pay par Mobile Money (${kkiapayMethod} - ${kkiapayPhone})`;
+        ? `Recharge Yaamaa Pay par Carte (${kkiapayCardName} - Visa •••• 4242)`
+        : `Recharge Yaamaa Pay par Mobile Money (${kkiapayMethod} - ${kkiapayPhone})`;
 
       const res = await fetch("/api/wallet/deposit", {
         method: "POST",
@@ -1398,7 +1777,7 @@ export default function App() {
           userId: currentUser.id,
           amount: parseFloat(depositAmount),
           currency: currentUser.currency,
-          method: `Taskora Pay (${kkiapayMethod})`,
+          method: `Yaamaa Pay (${kkiapayMethod})`,
           details: detailsString,
           autoApprove: true // Instant automatic wallet credit
         })
@@ -1406,7 +1785,7 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok) {
-        setDepositError(data.error || "Une erreur s'est produite lors de la validation du paiement Taskora Pay.");
+        setDepositError(data.error || "Une erreur s'est produite lors de la validation du paiement Yaamaa Pay.");
         setIsPaymentConfirmationOpen(false);
         return;
       }
@@ -1416,7 +1795,7 @@ export default function App() {
       setDepositDetails("");
       await syncPlatformData(currentUser.id);
     } catch (err) {
-      setDepositError("Erreur de connexion avec la passerelle Taskora Pay. Veuillez réessayer.");
+      setDepositError("Erreur de connexion avec la passerelle Yaamaa Pay. Veuillez réessayer.");
       setIsPaymentConfirmationOpen(false);
     } finally {
       setIsPaymentProcessing(false);
@@ -1464,6 +1843,10 @@ export default function App() {
           minWithdrawalAmount: parseFloat(adminMinWithdrawal),
           baseReward: parseFloat(adminBaseReward),
           defaultCommission: parseFloat(adminDefaultCommission),
+          merchantNumberPrice: parseFloat(adminMerchantNumberPrice),
+          merchantPremiumPrice: parseFloat(adminMerchantPremiumPrice),
+          merchantGoldPrice: parseFloat(adminMerchantGoldPrice),
+          merchantDiamondPrice: parseFloat(adminMerchantDiamondPrice),
           operatorId: currentUser.id
         })
       });
@@ -1472,10 +1855,51 @@ export default function App() {
         setAdminMsg(`Erreur: ${data.error}`);
         return;
       }
-      setAdminMsg("Les tarifs globaux, minimums de retrait et commissions de Taskora ont été mis à jour avec privilège administratif !");
+      setAdminMsg("Les tarifs globaux, minimums de retrait et commissions de Yaamaa ont été mis à jour avec privilège administratif !");
       await syncPlatformData(currentUser.id);
     } catch (err) {
       setAdminMsg("Erreur réseau lors de l'enregistrement des paramètres administratifs.");
+    }
+  };
+
+  // Traiter l'achat du numéro marchand unique
+  const handlePurchaseMerchantNumber = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setMerchantStep("processing");
+
+    try {
+      const response = await fetch("/api/users/purchase-merchant-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          paymentMethod: merchantPayMethod,
+          paymentPhone: merchantPayPhone,
+          paymentName: merchantPayName,
+          packType: merchantPackTypeSelection
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(`Erreur: ${data.error || "Une erreur est survenue lors du paiement."}`);
+        setMerchantStep("form");
+        return;
+      }
+
+      setGeneratedMerchantNumber(data.merchantNumber);
+      setMerchantWithin30Days(data.within30Days);
+      setMerchantStep("processing");
+      
+      // Add a small nice delay for visual validation simulation
+      setTimeout(async () => {
+        setMerchantStep("success");
+        await syncPlatformData(currentUser.id);
+      }, 1800);
+    } catch (err) {
+      alert("Erreur réseau ou problème lors du traitement du paiement.");
+      setMerchantStep("form");
     }
   };
 
@@ -1580,7 +2004,7 @@ export default function App() {
     }
   };
 
-  // Run Taskora Intelligent AI Advice
+  // Run Yaamaa Intelligent AI Advice
   const triggerAiGuidance = async () => {
     setAiResponseText("");
     setIsAiLoading(true);
@@ -1601,7 +2025,7 @@ export default function App() {
         interests: "Divertissement, Réseaux Sociaux, Technologies"
       };
     } else {
-      payload = { message: aiCustomPrompt || "Qu'est ce que Taskora ?" };
+      payload = { message: aiCustomPrompt || "Qu'est ce que Yaamaa ?" };
     }
 
     try {
@@ -1615,7 +2039,7 @@ export default function App() {
       setAiResponseText(d.guide || "Aucune réponse de l'assistant.");
       setIsAiLoading(false);
     } catch (err) {
-      setAiResponseText("Échec de communication avec l'IA interne de Taskora.");
+      setAiResponseText("Échec de communication avec l'IA interne de Yaamaa.");
       setIsAiLoading(false);
     }
   };
@@ -1628,7 +2052,7 @@ export default function App() {
           <Coins className="h-6 w-6 text-emerald-600 absolute animate-pulse" />
         </div>
         <div className="text-center font-sans">
-          <h2 className="text-sm font-bold tracking-wider text-gray-900 uppercase">Synchronisation de Taskora...</h2>
+          <h2 className="text-sm font-bold tracking-wider text-gray-900 uppercase">Synchronisation de Yaamaa...</h2>
           <p className="text-xs text-gray-500 mt-1">Veuillez patienter pendant la mise en relation avec le serveur sécurisé.</p>
         </div>
       </div>
@@ -1646,11 +2070,11 @@ export default function App() {
           
           {/* PLATFORM BRAND HEADER */}
           <div className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/20">
-              <Coins className="h-7 w-7 animate-pulse text-white" />
+            <div className="mx-auto h-16 w-16 overflow-hidden rounded-2xl border border-emerald-500/30 shadow-xl shadow-emerald-500/20 bg-slate-900">
+              <img src={yaamaaLogo} alt="Yaamaa Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <h1 translate="no" className="notranslate mt-6 text-3xl font-black tracking-tight text-white font-heading">
-              Task<span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">ora</span>
+              Yaam<span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">aa</span>
               <span className="ml-1.5 px-1.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-mono font-black text-emerald-300 uppercase tracking-widest align-middle">
                 {t.edition}
               </span>
@@ -1694,7 +2118,7 @@ export default function App() {
                     value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                     className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent font-sans"
-                    placeholder="Ex: amelie@taskora.com"
+                    placeholder="Ex: amelie@yaamaa.com"
                   />
                 </div>
 
@@ -1772,7 +2196,7 @@ export default function App() {
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans"
-                      placeholder="Ex: mamadou@taskora.com"
+                      placeholder="Ex: mamadou@yaamaa.com"
                     />
                   </div>
 
@@ -1942,7 +2366,7 @@ export default function App() {
 
           {/* Slogan & Copy footer */}
           <div className="text-center text-[10.5px] text-gray-500 space-y-1">
-             <p className="font-mono uppercase tracking-widest text-[9.5px]">Taskora Secure Auth Engine &copy; 2026</p>
+             <p className="font-mono uppercase tracking-widest text-[9.5px]">Yaamaa Secure Auth Engine &copy; 2026</p>
              <p>« working space » — Plateforme de collaboration, commerce et de services sécurisés.</p>
           </div>
 
@@ -2175,27 +2599,62 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50/55 text-gray-800 selection:bg-emerald-500 selection:text-white flex flex-col font-sans overflow-x-hidden">
       
+      {/* FOUNDER IMPERSONATION BANNER */}
+      {impersonatorId && (
+        <div className="bg-gradient-to-r from-rose-900 via-purple-900 to-indigo-950 text-white px-4 py-2 flex items-center justify-between text-xs font-bold shadow-2xl z-50 sticky top-0 border-b border-rose-500/30">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">👑 Mode Fondateur Actif</span>
+            <span>• Vous consultez le compte de <strong>{currentUser?.name || currentUser?.username}</strong> (@{currentUser?.username})</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleReturnToFounder}
+            className="bg-white text-rose-950 px-3 py-1.5 rounded-xl text-xs font-black shadow-lg hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5"
+          >
+            ⬅️ Retourner à mon compte Administrateur / Fondateur
+          </button>
+        </div>
+      )}
+
+      {/* PWA INSTALLATION BANNER */}
+      <PwaInstallBanner />
+
       {/* HEADER / NAVIGATION BAR */}
-      <Navbar 
-        currentUser={currentUser}
-        usersList={users}
-        onChangeUser={handleUserChange}
-        onOpenAuth={() => {
-          setAuthScreenMode("register");
-          setAuthModalOpen(true);
-        }}
-        currentView={currentView}
-        onNavigate={(v) => {
-          setCurrentView(v);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-        onLogout={handleLogout}
-        currentLanguage={currentLanguage}
-        onChangeLanguage={handleLanguageChange}
-        onViewProfile={(uid) => setSelectedProfileUserId(uid)}
-        isMenuOpen={isMenuOpen}
-        onMenuToggle={setIsMenuOpen}
-      />
+      <div className={isChatActive ? "hidden lg:block" : "block"}>
+        <Navbar 
+          currentUser={currentUser}
+          usersList={users}
+          onChangeUser={handleUserChange}
+          onOpenAuth={() => {
+            setAuthScreenMode("register");
+            setAuthModalOpen(true);
+          }}
+          currentView={currentView}
+          onNavigate={(v) => {
+            setCurrentView(v);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onLogout={handleLogout}
+          currentLanguage={currentLanguage}
+          onChangeLanguage={handleLanguageChange}
+          onViewProfile={(uid) => setSelectedProfileUserId(uid)}
+          isMenuOpen={isMenuOpen}
+          onMenuToggle={setIsMenuOpen}
+          onOpenMerchantModal={() => {
+            if (currentUser) {
+              setMerchantPayPhone(currentUser.phone || "");
+              setMerchantPayName(currentUser.name || "");
+              setMerchantStep("form");
+              setIsMerchantModalOpen(true);
+            }
+          }}
+          onOpenVirtualGifts={() => {
+            setCurrentView("discussions");
+            setInitiallyOpenGiftsModal(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      </div>
 
       {/* EMERGENCY BULLETINS FROM THE FOUNDER SYSTEM */}
       {systemMetrics?.settings?.isWithdrawalFrozen && (
@@ -2205,10 +2664,78 @@ export default function App() {
         </div>
       )}
 
+      {/* EXHORTATION AU NUMÉRO MARCHAND (VISIBLE PARTOUT POUR LES PARTICIPANTS ET ADVERTISERS SANS NUMÉRO MARCHAND) */}
+      {currentUser && currentUser.role !== "admin" && currentUser.role !== "founder" && !currentUser.merchantNumber && (() => {
+        let remainingDays = 30;
+        if (currentUser.createdAt) {
+          const regDate = new Date(currentUser.createdAt);
+          const today = new Date();
+          const diffTime = today.getTime() - regDate.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          remainingDays = Math.max(0, 30 - diffDays);
+        }
+
+        const isPastDue = remainingDays <= 0;
+
+        return (
+          <div className={isChatActive ? "hidden lg:block" : "block"}>
+            <div className={`py-3 px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-sans tracking-wide transition border-b shadow-sm ${
+              isPastDue 
+                ? "bg-rose-50 text-rose-800 border-rose-200" 
+                : "bg-indigo-50 text-indigo-900 border-indigo-200"
+            }`} id="merchant_number_warning_banner">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl shrink-0 ${isPastDue ? "bg-rose-100 animate-pulse" : "bg-indigo-100 animate-pulse"}`}>
+                  <span className="text-base">🌟</span>
+                </div>
+                <div>
+                  <p className="font-extrabold text-sm flex items-center gap-2">
+                    {isPastDue ? (
+                      <span className="text-rose-600">Commissions de parrainage désactivées définitivement ! ⚠️</span>
+                    ) : (
+                      <span>Activez votre Numéro Marchand unique pour toucher vos gains ! 📈</span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-gray-600 mt-0.5 leading-relaxed">
+                    {isPastDue ? (
+                      <span>Vous avez dépassé le délai légal de 30 jours après votre inscription. Vous ne pouvez plus toucher de commissions d'affiliation sur vos filleuls, même en achetant un numéro marchand maintenant.</span>
+                    ) : (
+                      <span>
+                        Gagnez <strong>50% de commission immédiate</strong> sur chaque achat de numéro marchand par vos filleuls ! 
+                        Il vous reste <strong className="text-indigo-750 font-extrabold">{remainingDays} jours</strong> pour activer votre numéro marchand et conserver votre éligibilité de parrainage à vie.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMerchantPayPhone(currentUser.phone || "");
+                    setMerchantPayName(currentUser.name || "");
+                    setMerchantStep("form");
+                    setIsMerchantModalOpen(true);
+                  }}
+                  className={`px-4 py-2 font-black uppercase text-[10px] tracking-wider rounded-xl transition shadow-xs cursor-pointer ${
+                    isPastDue
+                      ? "bg-rose-600 hover:bg-rose-700 text-white"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  }`}
+                >
+                  {isPastDue ? "Acheter un Numéro" : "Activer mon Numéro"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* PRIMARY VIEWS LAYOUT */}
       {!isMenuOpen ? (
         <>
-        <main className="flex-1 pt-32 sm:pt-36">
+        <main className={`flex-1 ${isChatActive ? "pt-0 lg:pt-32 lg:sm:pt-36" : "pt-32 sm:pt-36"}`}>
 
         {/* BOUTIQUE MARKETPLACE VIEW */}
         {currentView === "boutique" && (
@@ -2218,6 +2745,7 @@ export default function App() {
             products={products}
             orders={orders}
             disputes={disputes}
+            usersList={users}
             syncPlatformData={() => syncPlatformData(currentUser?.id)}
             onNavigate={(v) => setCurrentView(v)}
             onTriggerKkiapayPayment={(amount, payload) => {
@@ -2251,6 +2779,15 @@ export default function App() {
           />
         )}
 
+        {/* SUPPLIERS & DELIVERERS MODULE */}
+        {currentView === "suppliers_deliverers" && (
+          <SuppliersDeliverersView
+            currentUser={currentUser}
+            currentLanguage={currentLanguage}
+            onNavigate={(v) => setCurrentView(v)}
+          />
+        )}
+
         {/* SOCIAL & DISCUSSION MODULE */}
         {currentView === "discussions" && currentUser && (
           <SocialView
@@ -2261,6 +2798,16 @@ export default function App() {
             onOpenProfile={() => setAuthModalOpen(true)}
             initialActiveFriendId={discussionFriendId}
             onViewProfile={(uid) => setSelectedProfileUserId(uid)}
+            onActiveConversationChange={setIsChatActive}
+            initiallyOpenGiftsModal={initiallyOpenGiftsModal}
+            onResetInitiallyOpenGiftsModal={() => setInitiallyOpenGiftsModal(false)}
+            systemMetrics={systemMetrics}
+            onNavigate={(view, subTab) => {
+              setCurrentView(view);
+              if (subTab) {
+                setWalletTab(subTab);
+              }
+            }}
           />
         )}
 
@@ -2283,8 +2830,8 @@ export default function App() {
                 </h1>
                 <p className="mt-6 text-base sm:text-lg text-gray-500 max-w-3xl mx-auto leading-relaxed">
                   {currentLanguage === "fr" 
-                    ? "Bienvenue sur Taskora, la plateforme unifiée qui révolutionne le travail indépendant, la micro-rémunération et le commerce de proximité. Que vous soyez créateur de services, vendeur de produits ou à la recherche d'activités rémunératrices, nous vous offrons un écosystème sécurisé pour valoriser votre temps et réaliser vos ambitions." 
-                    : "Welcome to Taskora, the unified ecosystem revolutionizing freelancing, micro-earnings, and digital commerce. Whether you are selling quality products, offering customized services, or completing tasks, we provide a secure hub to maximize your potential and reward your efforts."}
+                    ? "Bienvenue sur Yaamaa, la plateforme unifiée qui révolutionne le travail indépendant, la micro-rémunération et le commerce de proximité. Que vous soyez créateur de services, vendeur de produits ou à la recherche d'activités rémunératrices, nous vous offrons un écosystème sécurisé pour valoriser votre temps et réaliser vos ambitions." 
+                    : "Welcome to Yaamaa, the unified ecosystem revolutionizing freelancing, micro-earnings, and digital commerce. Whether you are selling quality products, offering customized services, or completing tasks, we provide a secure hub to maximize your potential and reward your efforts."}
                 </p>
 
                 <div className="mt-10 flex flex-wrap justify-center gap-4">
@@ -2314,11 +2861,23 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* OFFICIAL YAMA COVER BANNER SHOWCASE */}
+                <div className="mt-12 max-w-4xl mx-auto rounded-3xl overflow-hidden shadow-2xl border border-gray-150/80 relative group bg-white p-2 animate-fade-in">
+                  <div className="rounded-2xl overflow-hidden border border-gray-200/60 bg-slate-900">
+                    <img
+                      src="/src/assets/images/yaamaa_cover_1783033730508.jpg"
+                      alt="Yaamaa Official Cover Banner"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-102"
+                    />
+                  </div>
+                </div>
+
                 {/* PARRAINAGE PROMOTIONAL CARD */}
                 <div className="mt-10 max-w-3xl mx-auto bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50/50 border border-emerald-500/15 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 text-left shadow-sm animate-fade-in" id="referral_promo_banner">
                   <div className="space-y-1.5 flex-1">
                     <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
-                      <SafeText text={currentLanguage === "fr" ? "🎁 OFFRE SPÉCIALE : PARRAINAGE TASKORA" : "🎁 SPECIAL OFFER: TASKORA REFERRAL"} />
+                      <SafeText text={currentLanguage === "fr" ? "🎁 OFFRE SPÉCIALE : PARRAINAGE YAAMAA" : "🎁 SPECIAL OFFER: YAAMAA REFERRAL"} />
                     </span>
                     <h3 className="text-base font-extrabold text-gray-950 flex items-center gap-1.5">
                       {currentLanguage === "fr" ? "Gagnez des Commissions Réelles à Vie !" : "Earn Real Lifetime Commissions!"}
@@ -2442,7 +3001,7 @@ export default function App() {
               <div className="mx-auto max-w-3xl">
                 <div className="text-center mb-10">
                   <h3 className="text-xl font-bold text-gray-900">Membres les plus récompensés ce mois</h3>
-                  <p className="text-xs text-gray-500 mt-1">Retours sur expérience et performances de gains réels sur Taskora.</p>
+                  <p className="text-xs text-gray-500 mt-1">Retours sur expérience et performances de gains réels sur Yaamaa.</p>
                 </div>
 
                 <div className="bg-white border border-gray-150 rounded-2xl overflow-hidden shadow-sm">
@@ -2488,7 +3047,7 @@ export default function App() {
                     <h4 className="text-base font-bold text-gray-950 uppercase tracking-wider mb-6">Témoignages récents</h4>
                     <div className="bg-gray-50 rounded-2xl p-6 relative">
                       <p className="text-xs md:text-sm text-gray-650 italic leading-relaxed">
-                        "En tant qu'étudiante, Taskora m'a permis de financer mon abonnement de transports et mes petits extras mensuels uniquement en aimant des vidéos et en répondant à des sondages. Les virements en Mobile Money sur mon portable sont instantanés et fiables."
+                        "En tant qu'étudiante, Yaamaa m'a permis de financer mon abonnement de transports et mes petits extras mensuels uniquement en aimant des vidéos et en répondant à des sondages. Les virements en Mobile Money sur mon portable sont instantanés et fiables."
                       </p>
                       <div className="mt-5 flex items-center gap-3">
                         <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop" className="h-8 w-8 rounded-full object-cover" />
@@ -2507,7 +3066,7 @@ export default function App() {
                       <div className="border-b border-gray-100 pb-3">
                         <span className="text-xs font-bold text-gray-900 block">Comment fonctionne la détection anti-fraude ?</span>
                         <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                          Taskora AI évalue la plausibilité des preuves textuelles en temps réel avec Gemini. Nous croisons les coordonnées, repérons les captures recadrées et bloquons l'usage de VPN suspect.
+                          Yaamaa AI évalue la plausibilité des preuves textuelles en temps réel avec Gemini. Nous croisons les coordonnées, repérons les captures recadrées et bloquons l'usage de VPN suspect.
                         </p>
                       </div>
                       <div className="border-b border-gray-100 pb-3">
@@ -2562,15 +3121,17 @@ export default function App() {
               
               {/* Mission list (2/3 size) */}
               <div className="lg:col-span-2 space-y-4">
-                {campaigns.filter(c => c.status === "active" || c.status === "pending").map((camp) => {
-                  const alreadyDone = submissions.some(s => s.campaignId === camp.id && s.participantId === currentUser?.id);
-                  const isPendingReview = submissions.some(s => s.campaignId === camp.id && s.participantId === currentUser?.id && s.status === "pending");
+                 {campaigns.filter(c => c.status === "active" || c.status === "pending").map((camp) => {
+                  const userSub = submissions.find(s => s.campaignId === camp.id && s.participantId === currentUser?.id);
+                  const alreadyDone = !!userSub && userSub.status !== "disputed";
+                  const isPendingReview = !!userSub && userSub.status === "pending";
+                  const isDisputed = !!userSub && userSub.status === "disputed";
 
                   return (
                     <div 
                       key={camp.id} 
                       className={`bg-white border rounded-2xl p-5 transition hover:shadow-md relative ${
-                        alreadyDone ? "border-emerald-200 bg-emerald-50/5" : "border-gray-150"
+                        isDisputed ? "border-rose-200 bg-rose-50/5" : alreadyDone ? "border-emerald-200 bg-emerald-50/5" : "border-gray-150"
                       }`}
                     >
                       {/* Badge and Reward strip */}
@@ -2589,14 +3150,20 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Title & Descr */}
-                      <h3 className="text-sm font-bold text-gray-950 flex items-center gap-1.5">
+                       {/* Title & Descr */}
+                      <h3 className="text-sm font-bold text-gray-950 flex items-center gap-1.5 flex-wrap">
                         {camp.title}
                         {alreadyDone && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                             isPendingReview ? "bg-amber-100 text-amber-500" : "bg-emerald-100 text-emerald-600"
                           }`}>
                             {isPendingReview ? "En attente d'avis" : "Effectuée ✔"}
+                          </span>
+                        )}
+                        {isDisputed && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600 flex items-center gap-1">
+                            <AlertTriangle className="h-2.5 w-2.5 text-rose-500" />
+                            Correction requise ⚠️
                           </span>
                         )}
                       </h3>
@@ -2626,8 +3193,8 @@ export default function App() {
                         <span>Places restantes : <strong>{camp.participantsCount - camp.completedCount} places</strong></span>
                       </div>
 
-                      {/* Interaction trigger */}
-                      {!alreadyDone && camp.status === "active" && (
+                       {/* Interaction trigger */}
+                      {(!alreadyDone || isDisputed) && camp.status === "active" && (
                         <div className="mt-5 pt-3 border-t border-gray-50 flex justify-end">
                           <button
                             id={`start_mission_${camp.id}`}
@@ -2635,11 +3202,24 @@ export default function App() {
                               setSelectedCampaignForTask(camp);
                               setSubmitError(null);
                               setSubmitSuccess(null);
+                              if (isDisputed && userSub) {
+                                setSubmitProofText(userSub.proofText || "");
+                                setSubmitProofLink(userSub.proofLink || "");
+                                setSubmitProofFile(userSub.proofFileUrl || "");
+                              } else {
+                                setSubmitProofText("");
+                                setSubmitProofLink("");
+                                setSubmitProofFile("");
+                              }
                             }}
-                            className="bg-gray-950 hover:bg-gray-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5"
+                            className={`font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${
+                              isDisputed
+                                ? "bg-amber-500 hover:bg-amber-600 text-white animate-pulse"
+                                : "bg-gray-950 hover:bg-gray-800 text-white"
+                            }`}
                           >
-                            <CheckSquare className="h-3.5 w-3.5" />
-                            Réaliser la tâche
+                            {isDisputed ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckSquare className="h-3.5 w-3.5" />}
+                            {isDisputed ? "Corriger ma preuve" : "Réaliser la tâche"}
                           </button>
                         </div>
                       )}
@@ -2663,13 +3243,29 @@ export default function App() {
                     Soumettre une preuve
                   </h3>
 
-                  {selectedCampaignForTask ? (
-                    <form onSubmit={handleSubmitTaskProof} className="space-y-4">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 block">Mission Sélectionnée</span>
-                        <p className="text-xs font-bold text-gray-900 mt-1">{selectedCampaignForTask.title}</p>
-                        <p className="text-[11px] text-emerald-600 font-bold mt-0.5">Récompense : {selectedCampaignForTask.rewardPerUser} {currentUser?.currency}</p>
-                      </div>
+                  {selectedCampaignForTask ? (() => {
+                    const selectedSub = submissions.find(s => s.campaignId === selectedCampaignForTask.id && s.participantId === currentUser?.id);
+                    const isDisputed = selectedSub && selectedSub.status === "disputed";
+
+                    return (
+                      <form onSubmit={handleSubmitTaskProof} className="space-y-4">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-gray-400 block">Mission Sélectionnée</span>
+                          <p className="text-xs font-bold text-gray-900 mt-1">{selectedCampaignForTask.title}</p>
+                          <p className="text-[11px] text-emerald-600 font-bold mt-0.5">Récompense : {selectedCampaignForTask.rewardPerUser} {currentUser?.currency}</p>
+                        </div>
+
+                        {isDisputed && (
+                          <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-xl text-xs space-y-1.5" id="disputed_sub_alert">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                              <span>Correction demandée par l'annonceur</span>
+                            </div>
+                            <p className="text-gray-700 leading-normal">
+                              <strong>Raison / Instructions :</strong> "{selectedSub.adminFeedback || "Veuillez corriger votre preuve."}"
+                            </p>
+                          </div>
+                        )}
 
                       <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-[11px] text-gray-600">
                         <strong className="block text-gray-800 mb-1">Preuves Requis :</strong>
@@ -2749,7 +3345,8 @@ export default function App() {
                         </button>
                       </div>
                     </form>
-                  ) : (
+                    );
+                  })() : (
                     <div className="text-center py-10">
                       <HelpCircle className="h-8 w-8 text-gray-300 mx-auto" />
                       <p className="text-xs text-gray-400 mt-2">Cliquez sur « Réaliser la tâche » sur l'une des campagnes actives pour initier la vérification par notre IA.</p>
@@ -2937,7 +3534,7 @@ export default function App() {
                           <strong className="font-mono text-gray-900">{calculateCampaignSummary().participants} participants</strong>
                         </div>
                         <div className="flex justify-between text-xs text-gray-600">
-                          <span>Frais platefome Commission Taskora ({systemMetrics?.settings?.platformFeePercentage}%):</span>
+                          <span>Frais platefome Commission Yaamaa ({systemMetrics?.settings?.platformFeePercentage}%):</span>
                           <strong className="font-mono text-gray-900">+{calculateCampaignSummary().commission} {currentUser?.currency}</strong>
                         </div>
                         <div className="h-px bg-gray-200 my-2"></div>
@@ -3037,7 +3634,7 @@ export default function App() {
                           : "border-gray-150 hover:bg-gray-50/50 bg-white"
                       }`}
                     >
-                      <span className="text-xs font-bold text-gray-950 block">💳 Balance Interne Taskora</span>
+                      <span className="text-xs font-bold text-gray-950 block">💳 Balance Interne Yaamaa</span>
                       <p className="text-[10px] text-gray-400 mt-1">Utiliser les fonds disponibles de votre compte de simulation.</p>
                       <p className="text-xs font-extrabold text-emerald-600 mt-3">Disponible: {currentUser?.wallet.available} {currentUser?.currency}</p>
                     </button>
@@ -3051,7 +3648,7 @@ export default function App() {
                           : "border-gray-150 hover:bg-gray-50/50 bg-white"
                       }`}
                     >
-                      <span className="text-xs font-bold text-gray-650 block">🔒 Passerelle Sécurisée Taskora Pay</span>
+                      <span className="text-xs font-bold text-gray-650 block">🔒 Passerelle Sécurisée Yaamaa Pay</span>
                       <p className="text-[10px] text-gray-400 mt-1">Paiement direct sécurisé via MTN, Moov, Wave, TMoney ou Carte bancaire.</p>
                       <p className="text-xs font-extrabold text-emerald-600 mt-3">Paiement instantané direct</p>
                     </button>
@@ -3118,7 +3715,7 @@ export default function App() {
             <div className="border-b border-gray-100 pb-6 mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="font-heading text-2xl font-black tracking-tight text-gray-950">
-                  Portefeuille Financier <span translate="no" className="notranslate">Taskora</span>
+                  Portefeuille Financier <span translate="no" className="notranslate">Yaamaa</span>
                 </h1>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Suivez vos soldes, rechargez vos fonds et retirez vos gains instantanément via la passerelle de paiement d'Afrique de l'Ouest.
@@ -3128,7 +3725,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold uppercase px-2.5 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  Passerelle Officielle Taskora Pay S.A.
+                  Passerelle Officielle Yaamaa Pay S.A.
                 </span>
               </div>
             </div>
@@ -3269,7 +3866,7 @@ export default function App() {
                   <div className="border-b border-gray-100 pb-4">
                     <h3 className="text-base font-extrabold text-gray-950 flex items-center gap-2">
                       <span className="p-2 bg-emerald-50 rounded-xl text-emerald-600 text-sm">📥</span>
-                      Recharger mon solde Taskora
+                      Recharger mon solde Yaamaa
                     </h3>
                     <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                       Saisissez votre pays et votre devise locale. Les opérateurs mobiles de votre pays seront automatiquement filtrés pour démarrer l'auto-débit sécurisé.
@@ -3482,8 +4079,8 @@ export default function App() {
                     <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex gap-3 text-indigo-900 text-xs leading-relaxed max-w-4xl">
                       <span className="text-lg">🔒</span>
                       <div>
-                        <strong className="block font-black text-indigo-950">Intégration d'auto-débit sécurisé Taskora Pay West Africa</strong>
-                        Le système de dépôt Taskora intègre la technologie d'auto-débit instantané. En validant le paiement, la passerelle Taskora Pay interagit avec l'opérateur pour débiter automatiquement votre solde externe et créditer instantanément votre balance disponible.
+                        <strong className="block font-black text-indigo-950">Intégration d'auto-débit sécurisé Yaamaa Pay West Africa</strong>
+                        Le système de dépôt Yaamaa intègre la technologie d'auto-débit instantané. En validant le paiement, la passerelle Yaamaa Pay interagit avec l'opérateur pour débiter automatiquement votre solde externe et créditer instantanément votre balance disponible.
                       </div>
                     </div>
 
@@ -3529,6 +4126,39 @@ export default function App() {
                     </p>
                   </div>
 
+                  {!currentUser?.merchantNumber && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 text-rose-950 space-y-3.5 shadow-sm animate-fade-in" id="withdraw_no_merchant_warning">
+                      <div className="flex items-start gap-3">
+                        <div className="p-3 bg-rose-100 rounded-2xl text-rose-600 text-base shrink-0">
+                          🔒
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-rose-900">Retrait de gains désactivé</h4>
+                          <p className="text-xs leading-relaxed text-rose-800 font-medium">
+                            Pour des raisons de conformité réglementaire, <strong>vous devez posséder un Numéro Marchand actif pour pouvoir faire des retraits d'argent ou percevoir vos commissions</strong>.
+                          </p>
+                          <p className="text-[11px] leading-relaxed text-gray-500 mt-1">
+                            Sans numéro de base actif, vous ne pouvez ni retirer vos gains ni cumuler de l'argent via le parrainage. Activez-le pour débloquer votre solde et commencer à gagner de l'argent.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMerchantPayPhone(currentUser?.phone || "");
+                            setMerchantPayName(currentUser?.name || "");
+                            setMerchantStep("form");
+                            setIsMerchantModalOpen(true);
+                          }}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-black text-[9px] uppercase tracking-wider px-4 py-2 rounded-xl transition shadow cursor-pointer"
+                        >
+                          Acheter mon numéro marchand de base 👑
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Processing view if loading withdrawal */}
                   {isWithdrawalProcessing ? (
                     <div className="py-10 max-w-lg mx-auto flex flex-col items-center justify-center text-center space-y-6">
@@ -3573,7 +4203,7 @@ export default function App() {
                       {/* Official receipt representation */}
                       <div className="w-full bg-slate-50 border border-gray-200 rounded-3xl p-5 text-xs text-left space-y-2.5 font-sans">
                         <div className="flex justify-between border-b border-dashed border-gray-200 pb-2 mb-2">
-                          <span className="text-gray-400">Référence Taskora Pay :</span>
+                          <span className="text-gray-400">Référence Yaamaa Pay :</span>
                           <span className="font-mono font-bold text-gray-800">TX-WD-{Math.floor(Math.random() * 900000 + 100000)}</span>
                         </div>
                         <div className="flex justify-between">
@@ -3664,8 +4294,8 @@ export default function App() {
                             </div>
 
                             {/* Full scrollable searchable countries table */}
-                            <div className="lg:col-span-2 border border-gray-150 rounded-2xl bg-gray-50/50 overflow-hidden flex flex-col h-[155px]">
-                              <div className="p-3 bg-gray-100/50 border-b border-gray-150 flex items-center justify-between gap-2">
+                            <div className="lg:col-span-2 border border-gray-150 rounded-2xl bg-gray-50/50 overflow-hidden flex flex-col h-[155px] min-h-[155px] max-h-[155px] w-full shrink-0 select-none">
+                              <div className="p-3 bg-gray-100/90 backdrop-blur-xs border-b border-gray-150 flex items-center justify-between gap-2 sticky top-0 z-10 shrink-0 select-none">
                                 <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider">
                                   📋 Tableau interactif des {COUNTRIES_LIST.length} pays de versement
                                 </span>
@@ -3895,9 +4525,18 @@ export default function App() {
                       <div className="pt-2 max-w-md">
                         <button
                           type="submit"
-                          className="w-full py-4 bg-gray-950 hover:bg-gray-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                          disabled={!currentUser?.merchantNumber}
+                          className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 ${
+                            !currentUser?.merchantNumber
+                              ? "bg-gray-150 text-gray-400 cursor-not-allowed border border-gray-200"
+                              : "bg-gray-950 hover:bg-gray-800 text-white cursor-pointer"
+                          }`}
                         >
-                          📤 Valider le retrait automatique (Versement Instantané)
+                          {!currentUser?.merchantNumber ? (
+                            <>🔒 Retrait verrouillé (Numéro Marchand requis)</>
+                          ) : (
+                            <>📤 Valider le retrait automatique (Versement Instantané)</>
+                          )}
                         </button>
                       </div>
 
@@ -4053,7 +4692,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 5. TASKORA TASKORA AI COMPANION */}
+        {/* 5. YAAMAA YAAMAA AI COMPANION */}
         {currentView === "assistant" && (
           <div id="view_assistant" className="mx-auto max-w-4xl py-10 px-4 animate-fade-in">
             <div className="border-b border-gray-200 pb-6 mb-8">
@@ -4062,7 +4701,7 @@ export default function App() {
                 Intelligence Artificielle Certifiée
               </span>
               <h1 className="font-heading text-2xl font-bold tracking-tight text-gray-950 mt-1">
-                L'Assistant d'Optimisation <span translate="no" className="notranslate">Taskora</span> AI
+                L'Assistant d'Optimisation <span translate="no" className="notranslate">Yaamaa</span> AI
               </h1>
               <p className="text-xs text-gray-500 mt-1">
                 Générez automatiquement vos descriptions de campagnes, explorez les meilleures astuces ou vérifiez l'activité système.
@@ -4163,13 +4802,24 @@ export default function App() {
                   </div>
 
                   <span className="text-[9.5px] text-gray-400 block mt-8 pt-4 border-t font-mono">
-                    Audits et optimisations basés sur les données en temps réel de la plateforme Taskora.
+                    Audits et optimisations basés sur les données en temps réel de la plateforme Yaamaa.
                   </span>
                 </div>
               </div>
 
             </div>
           </div>
+        )}
+
+        {/* Yaamaa AI Personal Agent View */}
+        {currentView === "yaamaa-ai" && currentUser && (
+          <YaamaaAiView 
+            currentUser={currentUser}
+            onNavigate={(view) => setCurrentView(view)}
+            onUpdateUser={(updated) => setCurrentUser(updated)}
+            shops={shops}
+            products={products}
+          />
         )}
 
         {/* 6. ADMIN & FOUNDER CONTROL PANEL */}
@@ -4318,6 +4968,62 @@ export default function App() {
                 <Megaphone className="h-4 w-4 text-blue-500" />
                 📢 Validation Promos ({promoCampaigns.filter(p => p.status === "pending_validation").length})
               </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("broadcast")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "broadcast"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <Megaphone className="h-4 w-4 text-amber-650 animate-pulse" />
+                ✉️ Automatisation ({broadcastCampaigns.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("admin_gifts")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "admin_gifts"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🎁</span> Cadeaux & Émetteur
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("admin_subscriptions")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "admin_subscriptions"
+                    ? "border-emerald-600 text-emerald-700 bg-emerald-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🛡️</span> Badges & Abonnements
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("supervision")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "supervision"
+                    ? "border-indigo-600 text-indigo-700 bg-indigo-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🧠</span> Centre de Supervision
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("api_keys")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "api_keys"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🔑</span> Clés API & Intégrations
+              </button>
             </div>
 
             {/* TAB CONTENT: 1. DASHBOARD */}
@@ -4387,6 +5093,7 @@ export default function App() {
                     </div>
                     <div className="text-[10px] text-gray-500 flex flex-wrap gap-1">
                       <span className="bg-gray-100 px-1.5 py-0.5 rounded">Min Retrait: {systemMetrics?.settings?.minWithdrawalAmount || 10}</span>
+                      <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">Prix Numéro Marchand: {systemMetrics?.settings?.merchantNumberPrice ?? 5000} {currentUser?.currency || "XOF"}</span>
                     </div>
                   </div>
 
@@ -4400,7 +5107,7 @@ export default function App() {
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-4">
                       <div>
                         <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wider">Statistiques de Trafic & Croissance</h3>
-                        <p className="text-[11px] text-gray-400">Visualisation analytique interactive des performances de Taskora.</p>
+                        <p className="text-[11px] text-gray-400">Visualisation analytique interactive des performances de Yaamaa.</p>
                       </div>
                       <div className="flex bg-gray-100 p-0.5 rounded-lg text-[10px] font-bold">
                         <button
@@ -4684,7 +5391,7 @@ export default function App() {
                         <div className="bg-emerald-50/10 border border-emerald-500/10 p-3 rounded-xl flex items-start gap-2 text-[11px] text-gray-700">
                           <Cpu className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                           <div>
-                            <span className="font-semibold block text-[10px] text-emerald-700">Moteur Taskora Audit-AI :</span>
+                            <span className="font-semibold block text-[10px] text-emerald-700">Moteur Yaamaa Audit-AI :</span>
                             <span className="italic">"{sub.aiReport || 'Aucun rapport analytique généré.'}"</span>
                             <span className="block font-mono text-[9px] text-gray-400 mt-1">Indicateur de probabilité de fraude : <strong>{sub.fraudProbability}%</strong> (Seuil critique de tolérance : 30%)</span>
                           </div>
@@ -4870,7 +5577,7 @@ export default function App() {
                                     body: JSON.stringify({ status: "active" })
                                   });
                                   if (res.ok) {
-                                    setAdminMsg("La campagne a été approuvée et activée sur le réseau Taskora !");
+                                    setAdminMsg("La campagne a été approuvée et activée sur le réseau Yaamaa !");
                                     await syncPlatformData(currentUser?.id);
                                   }
                                 } catch(e) {}
@@ -4989,6 +5696,48 @@ export default function App() {
                             max="100"
                           />
                         </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Prix Pack Premium (XOF / Devise)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            value={adminMerchantPremiumPrice}
+                            onChange={(e) => {
+                              setAdminMerchantPremiumPrice(e.target.value);
+                              setAdminMerchantNumberPrice(e.target.value); // Sync for legacy code
+                            }}
+                            className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-mono"
+                            required
+                            min="1"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Prix Pack Or / Gold (XOF / Devise)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            value={adminMerchantGoldPrice}
+                            onChange={(e) => setAdminMerchantGoldPrice(e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-mono"
+                            required
+                            min="1"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Prix Pack Diamant / Diamond (XOF / Devise)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            value={adminMerchantDiamondPrice}
+                            onChange={(e) => setAdminMerchantDiamondPrice(e.target.value)}
+                            className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-mono"
+                            required
+                            min="1"
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -5095,7 +5844,7 @@ export default function App() {
                   <div className="bg-gradient-to-tr from-indigo-950 to-indigo-850 text-white rounded-3xl p-5 shadow-sm space-y-2">
                     <span className="text-[10px] text-indigo-300 uppercase tracking-widest block font-extrabold font-mono">Contrôles Souverains</span>
                     <p className="text-xs leading-relaxed text-indigo-150">
-                      En tant qu'opérateur de la plateforme Taskora, vous êtes habilité à promouvoir ou exclure des participants et à configurer la double-authentification administrative.
+                      En tant qu'opérateur de la plateforme Yaamaa, vous êtes habilité à promouvoir ou exclure des participants et à configurer la double-authentification administrative.
                     </p>
                   </div>
 
@@ -5594,7 +6343,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              const detailsText = `Taskora Audit Log Details:\nID: ${selectedAuditLog.id}\nAction: ${selectedAuditLog.action}\nOperator: @${selectedAuditLog.username} (${selectedAuditLog.role})\nDate: ${new Date(selectedAuditLog.timestamp).toLocaleString()}\nIP: ${selectedAuditLog.ip || "N/A"}\nDetails: ${selectedAuditLog.details}`;
+                              const detailsText = `Yaamaa Audit Log Details:\nID: ${selectedAuditLog.id}\nAction: ${selectedAuditLog.action}\nOperator: @${selectedAuditLog.username} (${selectedAuditLog.role})\nDate: ${new Date(selectedAuditLog.timestamp).toLocaleString()}\nIP: ${selectedAuditLog.ip || "N/A"}\nDetails: ${selectedAuditLog.details}`;
                               navigator.clipboard.writeText(detailsText);
                               alert("Détails copiés dans le presse-papier !");
                             }}
@@ -5940,6 +6689,54 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* 11. TABLEAU DE PUBLICATIONS ADMINISTRATIVES */}
+            {adminSubTab === "broadcast" && (
+              <AdminPublishingBoard
+                campaigns={broadcastCampaigns}
+                currentUser={currentUser}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* 12. GESTION DES CADEAUX VIRTUELS & PARAMÈTRES ÉMETTEUR */}
+            {adminSubTab === "admin_gifts" && (
+              <AdminGiftsPanel 
+                systemMetrics={systemMetrics}
+                currentUser={currentUser}
+                syncPlatformData={syncPlatformData}
+              />
+            )}
+
+            {/* 13. GESTION DES BADGES & ABONNEMENTS MARCHANDS */}
+            {adminSubTab === "admin_subscriptions" && (
+              <AdminSubscriptionsPanel
+                currentUser={currentUser}
+                currentLanguage={currentLanguage}
+                users={users}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* 14. CENTRE DE SUPERVISION INTELLIGENT */}
+            {adminSubTab === "supervision" && (
+              <AdminSupervisionPanel
+                currentUser={currentUser}
+                currentLanguage={currentLanguage}
+                users={users}
+                systemMetrics={systemMetrics}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* 15. CLÉS API & INTÉGRATIONS */}
+            {adminSubTab === "api_keys" && (
+              <AdminApiKeysPanel
+                systemMetrics={systemMetrics}
+                currentUser={currentUser}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
           </div>
         )}
 
@@ -5949,12 +6746,12 @@ export default function App() {
       <footer className="border-t border-gray-100 bg-white py-12 px-4 mt-16 text-center text-xs text-gray-500">
         <div className="mx-auto max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-left flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shadow-xs">
-              <Coins className="h-4 w-4 text-emerald-600" />
+            <div className="relative h-8 w-8 overflow-hidden rounded-xl border border-slate-200/85 shadow-xs shrink-0 bg-slate-50">
+              <img src={yaamaaLogo} alt="Yaamaa Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <div>
               <span translate="no" className="notranslate font-heading text-lg font-black tracking-tight text-slate-900 block leading-none">
-                Task<span className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">ora</span>
+                Yaam<span className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">aa</span>
               </span>
               <p className="text-[10.5px] text-gray-400 mt-1 leading-none">
                 {t.slogan} &copy; 2026. {currentLanguage === "fr" ? "Tous droits réservés." : "All rights reserved."}
@@ -6201,7 +6998,7 @@ export default function App() {
               <div className="space-y-4">
                 <div className="border-b pb-3 mb-4 flex justify-between items-center">
                   <div>
-                    <span className="font-mono text-[9px] font-bold text-emerald-600 tracking-wider block">Taskora Sandbox</span>
+                    <span className="font-mono text-[9px] font-bold text-emerald-600 tracking-wider block">Yaamaa Sandbox</span>
                     <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-widest mt-0.5">Simuler une inscription</h3>
                   </div>
                   <button 
@@ -6408,6 +7205,44 @@ export default function App() {
               </div>
             </div>
 
+            {/* Merchant Number Premium status card */}
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-150 rounded-2xl p-4 space-y-2 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-wider block">Statut Yaamaa Premium & Numéro Marchand</span>
+                  <p className="text-xs text-gray-750 font-medium mt-1">
+                    {currentUser.merchantNumber ? (
+                      <span className="text-emerald-700 font-bold flex items-center gap-1">
+                        ✨ Compte Premium Actif (Numéro : {currentUser.merchantNumber})
+                      </span>
+                    ) : (
+                      <span className="text-indigo-900">
+                        Compte Standard (Aucun numéro marchand actif)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {!currentUser.merchantNumber ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMerchantPayPhone(currentUser.phone || "");
+                      setMerchantPayName(currentUser.name || "");
+                      setMerchantStep("form");
+                      setIsMerchantModalOpen(true);
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-xl transition cursor-pointer"
+                  >
+                    Activer Maintenant 🚀
+                  </button>
+                ) : (
+                  <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg">
+                    {currentUser.merchantNumberEligible ? "Éligible Commissions" : "Inéligible (Délai dépassé)"}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Invite Links Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Unique Code card */}
@@ -6470,7 +7305,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-black text-gray-950 uppercase tracking-wider">👥 Suivi de vos Filleuls</h4>
-                  <p className="text-[10px] text-gray-400">Liste en temps réel des utilisateurs parrainés et de leur statut sur Taskora.</p>
+                  <p className="text-[10px] text-gray-400">Liste en temps réel des utilisateurs parrainés et de leur statut sur Yaamaa.</p>
                 </div>
                 <button
                   type="button"
@@ -6578,17 +7413,250 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL ACHAT NUMÉRO MARCHAND YAAMAA PREMIUM */}
+      {isMerchantModalOpen && currentUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="merchant_number_payment_modal">
+          <div className="bg-white border border-gray-150 rounded-3xl w-full max-w-md p-6 relative shadow-2xl text-left max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Close Button */}
+            {merchantStep !== "processing" && (
+              <button
+                type="button"
+                onClick={() => setIsMerchantModalOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                ✕
+              </button>
+            )}
+
+            {/* STEP 1: PAIEMENT FORM */}
+            {merchantStep === "form" && (
+              <form onSubmit={handlePurchaseMerchantNumber} className="space-y-5">
+                <div className="flex items-center gap-3 border-b pb-3">
+                  <div className="p-2.5 bg-indigo-50 rounded-2xl text-indigo-600 shrink-0">
+                    <Sparkles className="h-6 w-6 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <span className="font-mono text-[9px] font-bold text-indigo-600 uppercase tracking-widest block">Yaamaa Premium & Badges</span>
+                    <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wider">Achat du Numéro Marchand</h3>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3.5 text-[11px] text-amber-950 leading-relaxed space-y-1">
+                  <p className="font-extrabold flex items-center gap-1">🛡️ Condition Spécifique de Parrainage</p>
+                  <p>
+                    Pour toucher des commissions de 50% sur les personnes que vous parrainez, vous devez posséder un numéro marchand unique actif. Chaque numéro est strictement unique à chaque utilisateur.
+                  </p>
+                </div>
+
+                {/* GORGEOUS PACK SELECTION GRID */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-extrabold text-gray-500 uppercase block">Choisissez votre Package & Avantages</label>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {(subscriptionPlans.length > 0 ? subscriptionPlans.filter(p => p.isActive) : [
+                      { id: "premium", name: "Niveau de Base (Basic)", tier: "blue", initialPrice: 5000, description: "Accès uniquement au Numéro Marchand de Base & Badge spécial.", maxReferrals: 20, benefits: ["Badge vérifié", "Numéro unique à vie"] },
+                      { id: "gold", name: "Niveau Motivation (Gold)", tier: "gold", initialPrice: 15000, description: "Soutenez jusqu'à 500 filleuls. Produits mis en avant.", maxReferrals: 500, benefits: ["Badge Or", "500 filleuls max"] },
+                      { id: "diamond", name: "Niveau Diamant (Diamond)", tier: "diamond", initialPrice: 35000, description: "Soutenez jusqu'à 2000 filleuls. Visibilité maximale.", maxReferrals: 2000, benefits: ["Badge Diamant", "2000 filleuls max"] }
+                    ]).map((plan) => {
+                      const isSelected = merchantPackTypeSelection === plan.id || merchantPackTypeSelection === plan.tier;
+                      return (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          onClick={() => setMerchantPackTypeSelection(plan.id)}
+                          className={`p-3 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                            isSelected
+                              ? "border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-500 text-emerald-950"
+                              : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                          }`}
+                        >
+                          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-700 font-bold text-xs mt-0.5">
+                            {plan.tier === "diamond" ? "💎" : plan.tier === "gold" ? "🌟" : "✨"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[11px] font-black uppercase tracking-wider">{plan.name}</span>
+                              <span className="font-mono text-xs font-bold text-emerald-700">
+                                {plan.initialPrice?.toLocaleString()} {currentUser.currency || "XOF"}
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-gray-500 mt-1">
+                              {plan.description} Limite de parrainage : <strong className="text-gray-900">{plan.maxReferrals} filleuls</strong>.
+                              {plan.benefits && plan.benefits.length > 0 && (
+                                <span className="block text-[8.5px] text-indigo-600 mt-0.5">Avantages : {plan.benefits.join(" • ")}</span>
+                              )}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Votre Pays de Résidence (Définit le suffixe de votre numéro marchand)</label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-200 rounded-xl p-2.5 text-xs bg-gray-50 text-gray-600"
+                      value={currentUser.country || "Bénin"}
+                      disabled
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Nom Complet</label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900"
+                      value={merchantPayName}
+                      onChange={(e) => setMerchantPayName(e.target.value)}
+                      placeholder="Nom complet du titulaire"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Opérateur de Paiement Mobile</label>
+                    <select
+                      className="w-full border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 cursor-pointer"
+                      value={merchantPayMethod}
+                      onChange={(e) => setMerchantPayMethod(e.target.value)}
+                    >
+                      <option value="MTN Mobile Money">MTN Mobile Money 📱</option>
+                      <option value="Moov Money">Moov Money 📱</option>
+                      <option value="Wave Money">Wave Money 🌊</option>
+                      <option value="Orange Money">Orange Money 🍊</option>
+                      <option value="Carte Bancaire">Carte Bancaire / Kkiapay 💳</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Numéro Mobile Money de Facturation</label>
+                    <input
+                      type="tel"
+                      className="w-full border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 font-mono"
+                      value={merchantPayPhone}
+                      onChange={(e) => setMerchantPayPhone(e.target.value)}
+                      placeholder="+229 XX XX XX XX"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs text-gray-500">Prix Unique à régler :</span>
+                    <strong className="text-base text-indigo-700 font-mono">
+                      {merchantSelectedPrice} {currentUser.currency || "XOF"}
+                    </strong>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer text-center"
+                  >
+                    Valider le Paiement
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 2: PROCESSING */}
+            {merchantStep === "processing" && (
+              <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="space-y-1.5 max-w-xs">
+                  <p className="text-sm font-black text-gray-950 uppercase tracking-wider animate-pulse">Paiement en Cours...</p>
+                  <p className="text-xs text-gray-500">
+                    Une demande de débit de <span className="font-mono font-bold text-indigo-600">{merchantSelectedPrice} {currentUser.currency || "XOF"}</span> a été envoyée sur votre compte mobile.
+                  </p>
+                  <p className="text-[11px] text-indigo-700 font-medium bg-indigo-50 p-2 rounded-xl mt-2 border border-indigo-100">
+                    Veuillez composer votre code secret sur votre téléphone pour approuver l'opération.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: SUCCESS */}
+            {merchantStep === "success" && (
+              <div className="space-y-5 py-2">
+                <div className="text-center space-y-3">
+                  <div className="inline-flex p-3 bg-emerald-50 rounded-full border border-emerald-100 text-emerald-600 mx-auto animate-bounce">
+                    <CheckCircle className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-black text-emerald-800 uppercase tracking-wider">Paiement Validé ! 🎉</h3>
+                  <p className="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed">
+                    Félicitations ! Votre paiement a été reçu et vous avez désormais un accès complet à <strong className="text-emerald-700">Yaamaa Premium</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 border rounded-2xl p-4 text-center space-y-2">
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Votre Numéro Marchand Unique</span>
+                  <div className="flex items-center justify-center gap-2 bg-white border rounded-xl p-3 shadow-xs">
+                    <span className="font-mono text-base font-black tracking-widest text-indigo-700 select-all">
+                      {generatedMerchantNumber}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedMerchantNumber);
+                        alert("Numéro marchand copié avec succès !");
+                      }}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      Copier
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`p-3.5 border rounded-2xl text-[11px] leading-relaxed ${
+                  merchantWithin30Days 
+                    ? "bg-emerald-50/55 text-emerald-950 border-emerald-150" 
+                    : "bg-rose-50 text-rose-950 border-rose-150"
+                }`}>
+                  {merchantWithin30Days ? (
+                    <div className="space-y-1">
+                      <p className="font-extrabold text-emerald-800">✅ Éligibilité aux Commissions Active</p>
+                      <p>
+                        Paiement effectué dans les 30 jours requis. Vous êtes désormais éligible pour percevoir vos commissions d'affiliation de <strong>50%</strong> de manière illimitée sur les achats de numéro marchand de vos filleuls !
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="font-extrabold text-rose-800">⚠️ Éligibilité non active (Hors Délai)</p>
+                      <p>
+                        Votre numéro marchand a été activé. Cependant, étant donné que vous l'avez acheté après la période de grâce de 30 jours, vous ne percevrez pas de commissions d'affiliation de parrainage sur vos filleuls, conformément au règlement de Yaamaa.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMerchantModalOpen(false)}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md cursor-pointer text-center"
+                >
+                  Commencer à Gagner 🚀
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
       {/* DETAILED INTERACTIVE SHARE / INVITE MODAL */}
       {isShareModalOpen && currentUser && (() => {
         const shareLink = `${window.location.origin}/?ref=${currentUser.referralCode}`;
-        const shareMessage = `Rejoins-moi sur Taskora ! Gagne des commissions réelles sur tes missions, tes achats et ventes de boutique. Inscris-toi ici : ${shareLink}`;
-        const emailSubject = "Invitation exclusive à rejoindre Taskora !";
-        const emailBody = `Salut ! Je t'invite à rejoindre Taskora, une plateforme géniale pour gagner des compléments de revenus réels en réalisant des micro-missions et des ventes de boutique.
+        const shareMessage = `Rejoins-moi sur Yaamaa ! Gagne des commissions réelles sur tes missions, tes achats et ventes de boutique. Inscris-toi ici : ${shareLink}`;
+        const emailSubject = "Invitation exclusive à rejoindre Yaamaa !";
+        const emailBody = `Salut ! Je t'invite à rejoindre Yaamaa, une plateforme géniale pour gagner des compléments de revenus réels en réalisant des micro-missions et des ventes de boutique.
 
 Inscris-toi en cliquant sur mon lien d'invitation personnalisé :
 ${shareLink}
 
-À très vite sur Taskora !`;
+À très vite sur Yaamaa !`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="share_invite_modal">
@@ -6660,7 +7728,7 @@ ${shareLink}
                         onClick={async () => {
                           try {
                             await navigator.share({
-                              title: "Rejoins-moi sur Taskora !",
+                              title: "Rejoins-moi sur Yaamaa !",
                               text: shareMessage,
                               url: shareLink
                             });
@@ -6847,7 +7915,7 @@ ${shareLink}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 p-4 backdrop-blur-md animate-fade-in" id="secure_payment_modal">
           <div className="bg-[#fcfcff] border border-gray-100 rounded-3xl w-full max-w-md overflow-hidden relative shadow-2xl flex flex-col font-sans" style={{ minHeight: "530px" }}>
             
-            {/* Taskora Pay Theme Header */}
+            {/* Yaamaa Pay Theme Header */}
             <div className="bg-[#4e3beb] text-white px-5 py-4 flex items-center justify-between relative shadow-md">
               <div className="flex items-center gap-2">
                 <div className="bg-white/15 p-2 rounded-xl border border-white/10 flex items-center justify-center">
@@ -6856,7 +7924,7 @@ ${shareLink}
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-heading text-lg font-black tracking-tight translate-x-0 notranslate" translate="no">
-                      Taskora Pay<span className="text-emerald-400 font-extrabold text-[10px] ml-1 px-1.5 py-0.5 rounded-md bg-white/10 uppercase tracking-widest border border-white/5">SECURE</span>
+                      Yaamaa Pay<span className="text-emerald-400 font-extrabold text-[10px] ml-1 px-1.5 py-0.5 rounded-md bg-white/10 uppercase tracking-widest border border-white/5">SECURE</span>
                     </span>
                   </div>
                   <p className="text-[10px] text-indigo-200/80 leading-none mt-0.5">Passerelle de paiement officielle d'Afrique de l'Ouest</p>
@@ -6871,11 +7939,11 @@ ${shareLink}
               </button>
             </div>
 
-            {/* Taskora Pay Invoice Bar */}
+            {/* Yaamaa Pay Invoice Bar */}
             <div className="bg-[#f0efff] border-b border-indigo-100/50 px-5 py-3 flex justify-between items-center text-xs">
               <div className="text-indigo-900 font-medium flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Portefeuille <strong translate="no" className="notranslate">Taskora</strong></span>
+                <span>Portefeuille <strong translate="no" className="notranslate">Yaamaa</strong></span>
               </div>
               <div className="text-indigo-950 font-black text-sm">
                 {depositAmount} {currentUser?.currency}
@@ -7054,7 +8122,7 @@ ${shareLink}
                       💳 Payer {depositAmount} {currentUser?.currency}
                     </button>
                     <p className="text-[9.5px] text-gray-400 text-center mt-2">
-                      🔒 Paiements cryptés de bout en bout et protégés par Taskora Pay International S.A.
+                      🔒 Paiements cryptés de bout en bout et protégés par Yaamaa Pay International S.A.
                     </p>
                   </div>
 
@@ -7073,7 +8141,7 @@ ${shareLink}
                   <div className="space-y-2">
                     <h4 className="text-base font-extrabold text-indigo-950">Négociation de la transaction...</h4>
                     <p className="text-xs text-gray-400 max-w-xs leading-relaxed mx-auto">
-                      Taskora Pay se connecte au serveur central de l'opérateur pour initialiser l'auto-débit sécurisé sur votre compte.
+                      Yaamaa Pay se connecte au serveur central de l'opérateur pour initialiser l'auto-débit sécurisé sur votre compte.
                     </p>
                   </div>
                   <div className="w-full max-w-xs bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3 text-[10.5px] font-mono text-indigo-800 text-left space-y-1">
@@ -7174,7 +8242,7 @@ ${shareLink}
                   <div className="space-y-1.5">
                     <h4 className="text-lg font-black text-indigo-950">Paiement Approuvé ! 🎉</h4>
                     <p className="text-xs text-gray-500 max-w-xs leading-relaxed mx-auto">
-                      L'argent a quitté automatiquement votre compte externe et a été crédité sur votre solde disponible <strong translate="no" className="notranslate">Taskora</strong> instantanément.
+                      L'argent a quitté automatiquement votre compte externe et a été crédité sur votre solde disponible <strong translate="no" className="notranslate">Yaamaa</strong> instantanément.
                     </p>
                   </div>
 
@@ -7212,13 +8280,13 @@ ${shareLink}
 
             </div>
 
-            {/* Taskora Pay Footer branding */}
+            {/* Yaamaa Pay Footer branding */}
             <div className="bg-gray-50 border-t border-gray-100 px-5 py-3 flex items-center justify-between text-[10px] text-gray-400">
               <span className="flex items-center gap-1">
                 🛡️ PCI-DSS Compliant
               </span>
               <span translate="no" className="notranslate text-[#4e3beb] font-black">
-                taskorapay.com
+                yaamaapay.com
               </span>
             </div>
 
