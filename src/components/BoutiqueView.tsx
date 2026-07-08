@@ -51,6 +51,7 @@ interface BoutiqueViewProps {
   onTriggerKkiapayPayment?: (amount: number, payload: any) => void;
   onViewProfile?: (userId: string) => void;
   onStartChat?: (userId: string) => void;
+  onOpenMerchantModal?: () => void;
 }
 
 export default function BoutiqueView({
@@ -64,10 +65,52 @@ export default function BoutiqueView({
   onNavigate,
   onTriggerKkiapayPayment,
   onViewProfile,
-  onStartChat
+  onStartChat,
+  onOpenMerchantModal
 }: BoutiqueViewProps) {
   // Navigation inside Boutique
   const [boutiqueTab, setBoutiqueTab] = useState<"marketplace" | "seller_dashboard" | "my_purchases">("marketplace");
+
+  // Active Subscription Countdown & Warning Modal State
+  const [showChangeSubWarning, setShowChangeSubWarning] = useState(false);
+  const [subscriptionTimeLeft, setSubscriptionTimeLeft] = useState<{ days: number; months: number; hours: number; expiresStr: string }>(() => {
+    if (!currentUser?.merchantNumber) return { days: 0, months: 0, hours: 0, expiresStr: "" };
+    const purchasedAt = currentUser.merchantNumberPurchasedAt ? new Date(currentUser.merchantNumberPurchasedAt) : new Date();
+    const expiresAt = new Date(purchasedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const diffMs = expiresAt.getTime() - now.getTime();
+    const totalDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    const months = Math.floor(totalDays / 30);
+    const days = totalDays % 30;
+    const hours = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+    return {
+      days,
+      months,
+      hours,
+      expiresStr: expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+    };
+  });
+
+  React.useEffect(() => {
+    if (!currentUser?.merchantNumber) return;
+    const timer = setInterval(() => {
+      const purchasedAt = currentUser.merchantNumberPurchasedAt ? new Date(currentUser.merchantNumberPurchasedAt) : new Date();
+      const expiresAt = new Date(purchasedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const diffMs = expiresAt.getTime() - now.getTime();
+      const totalDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      const months = Math.floor(totalDays / 30);
+      const days = totalDays % 30;
+      const hours = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+      setSubscriptionTimeLeft({
+        days,
+        months,
+        hours,
+        expiresStr: expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [currentUser]);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -1294,35 +1337,93 @@ export default function BoutiqueView({
                 </div>
               </div>
 
-              {/* STATUS DE VISIBILITÉ DE LA BOUTIQUE */}
-              {(!currentUser?.merchantPackType || (currentUser?.merchantPackType !== "gold" && currentUser?.merchantPackType !== "diamond")) && (
-                <div className="bg-amber-50 border border-amber-200 p-4.5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans shadow-xs" id="boutique_package_warning_banner">
-                  <div className="space-y-1">
-                    <p className="text-xs font-black text-amber-950 flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                      Visibilité limitée sur le catalogue public (Marketplace)
-                    </p>
-                    <p className="text-[11px] text-amber-900 leading-relaxed max-w-3xl">
-                      Actuellement, vos produits sont visibles uniquement sur votre page de boutique privée ou pour vous-même. Pour que vos produits soient publiés et recherchables sur le <strong>Catalogue public (Marketplace)</strong> de Yaamaa, vous devez posséder un <strong>Pack Or (Gold)</strong> ou un <strong>Pack Diamant (Diamond)</strong>.
-                    </p>
+              {/* STATUS DE VISIBILITÉ DE LA BOUTIQUE OU ABONNEMENT ACTIF AVEC COMPTEUR */}
+              {currentUser?.merchantNumber ? (
+                <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-indigo-950 text-white p-5 rounded-3xl shadow-xl space-y-4 font-sans border border-emerald-500/30 animate-fade-in" id="active_subscription_countdown_card">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md text-emerald-400">
+                        <Sparkles className="h-6 w-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-300 font-mono">Abonnement Yaamaa Premium Actif</span>
+                          <span className="bg-emerald-400/20 text-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                            {currentUser.merchantPackType === "diamond" ? "💎 Diamant" : currentUser.merchantPackType === "gold" ? "🌟 Or (Motivation)" : "✨ Base"}
+                          </span>
+                        </div>
+                        <h4 className="text-base font-black tracking-tight mt-0.5 flex items-center gap-2">
+                          Numéro Marchand : <span className="font-mono text-cyan-300 bg-black/30 px-2.5 py-0.5 rounded-xl">{currentUser.merchantNumber}</span>
+                        </h4>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowChangeSubWarning(true)}
+                      className="bg-white/15 hover:bg-white/25 text-white font-extrabold text-[11px] py-2 px-4 rounded-xl border border-white/20 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Changer d'abonnement
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (onNavigate) {
-                        onNavigate("home");
-                        setTimeout(() => {
-                          const triggerBtn = document.getElementById("open_merchant_button") || document.getElementById("navbar_notif_button");
-                          if (triggerBtn) {
-                            (triggerBtn as HTMLElement).click();
-                          }
-                        }, 500);
-                      }
-                    }}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] py-1.5 px-3.5 rounded-xl whitespace-nowrap transition cursor-pointer self-stretch sm:self-auto text-center shadow-xs"
-                  >
-                    Devenir Marchand Or / Diamant
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-black/30 backdrop-blur-md p-3.5 rounded-2xl border border-white/10 text-center">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Temps Restant</span>
+                      <span className="font-mono text-lg font-black text-emerald-400 mt-1 block">
+                        {subscriptionTimeLeft.months} mois, {subscriptionTimeLeft.days} j
+                      </span>
+                      <span className="text-[9px] text-gray-400">({subscriptionTimeLeft.hours}h restantes)</span>
+                    </div>
+
+                    <div className="bg-black/30 backdrop-blur-md p-3.5 rounded-2xl border border-white/10 text-center">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Date d'Expiration</span>
+                      <span className="font-mono text-sm font-bold text-white mt-1 block">
+                        {subscriptionTimeLeft.expiresStr}
+                      </span>
+                      <span className="text-[9px] text-emerald-400">Renouvellement automatique actif</span>
+                    </div>
+
+                    <div className="bg-black/30 backdrop-blur-md p-3.5 rounded-2xl border border-white/10 text-center">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Avantages Attribués</span>
+                      <span className="font-bold text-xs text-amber-300 mt-1 block">
+                        {currentUser.merchantPackType === "diamond" ? "Visibilité Maximale + 2000 filleuls" : currentUser.merchantPackType === "gold" ? "Mise en avant + 500 filleuls" : "Badge vérifié + Numéro unique"}
+                      </span>
+                      <span className="text-[9px] text-cyan-300">Accès Marketplace ouvert</span>
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                (!currentUser?.merchantPackType || (currentUser?.merchantPackType !== "gold" && currentUser?.merchantPackType !== "diamond")) && (
+                  <div className="bg-amber-50 border border-amber-200 p-4.5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans shadow-xs" id="boutique_package_warning_banner">
+                    <div className="space-y-1">
+                      <p className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                        Visibilité limitée sur le catalogue public (Marketplace)
+                      </p>
+                      <p className="text-[11px] text-amber-900 leading-relaxed max-w-3xl">
+                        Actuellement, vos produits sont visibles uniquement sur votre page de boutique privée ou pour vous-même. Pour que vos produits soient publiés et recherchables sur le <strong>Catalogue public (Marketplace)</strong> de Yaamaa, vous devez posséder un <strong>Pack Or (Gold)</strong> ou un <strong>Pack Diamant (Diamond)</strong>.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (onNavigate) {
+                          onNavigate("home");
+                          setTimeout(() => {
+                            const triggerBtn = document.getElementById("open_merchant_button") || document.getElementById("navbar_notif_button");
+                            if (triggerBtn) {
+                              (triggerBtn as HTMLElement).click();
+                            }
+                          }, 500);
+                        }
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] py-1.5 px-3.5 rounded-xl whitespace-nowrap transition cursor-pointer self-stretch sm:self-auto text-center shadow-xs"
+                    >
+                      Devenir Marchand Or / Diamant
+                    </button>
+                  </div>
+                )
               )}
 
               {/* SHARE OPTIONS PANEL */}
@@ -2773,6 +2874,57 @@ export default function BoutiqueView({
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* WARNING MODAL FOR CHANGING SUBSCRIPTION */}
+      {showChangeSubWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="change_subscription_warning_modal">
+          <div className="bg-white border border-gray-150 rounded-3xl w-full max-w-md p-6 relative shadow-2xl text-left space-y-5">
+            <div className="flex items-center gap-3 border-b pb-3">
+              <div className="p-2.5 bg-rose-50 rounded-2xl text-rose-600 shrink-0">
+                <AlertTriangle className="h-6 w-6 animate-pulse" />
+              </div>
+              <div>
+                <span className="font-mono text-[9px] font-bold text-rose-600 uppercase tracking-widest block">Attention • Changement de Formule</span>
+                <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wider">Abonnement Actif Déjà en Cours</h3>
+              </div>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-950 leading-relaxed space-y-2">
+              <p className="font-extrabold">
+                Vous possédez actuellement un abonnement et un numéro marchand actif (<span className="font-mono text-indigo-700">{currentUser?.merchantNumber}</span>).
+              </p>
+              <p>
+                En choisissant de changer d'abonnement, <strong className="text-rose-900 underline">vous perdrez votre abonnement actif actuel et l'ancien numéro associé</strong> au profit de la nouvelle formule que vous allez sélectionner et activer.
+              </p>
+              <p className="text-[11px] font-medium text-gray-700">
+                Voulez-vous vraiment continuer et remplacer votre abonnement actuel ?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowChangeSubWarning(false)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer text-center"
+              >
+                Non, Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChangeSubWarning(false);
+                  if (onOpenMerchantModal) {
+                    onOpenMerchantModal();
+                  }
+                }}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer text-center"
+              >
+                Oui, Continuer 🚀
+              </button>
+            </div>
           </div>
         </div>
       )}

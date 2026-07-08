@@ -47,6 +47,14 @@ export interface User {
   yaamaaAiNotifications?: YaamaaAiNotification[];
   status?: "online" | "offline" | "unavailable";
   language?: "fr" | "en";
+  notifications?: Array<{
+    id: string;
+    title: string;
+    desc: string;
+    time: string;
+    read?: boolean;
+    linkView?: string;
+  }>;
 }
 
 export type MissionType =

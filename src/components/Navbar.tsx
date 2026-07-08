@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { User, UserRole } from "../types";
 import { Language, getTranslation } from "../i18n";
 
-const yaamaaLogo = "/logo.jpg";
+import yaamaaLogo from "../assets/images/yaamaa_logo_updated_1783116905472.jpg";
 
 import { 
   Coins, 
@@ -70,6 +70,16 @@ interface NavbarProps {
   onMenuToggle?: (open: boolean) => void;
   onOpenMerchantModal?: () => void;
   onOpenVirtualGifts?: () => void;
+  notifications?: Array<{
+    id: string;
+    title: string;
+    desc: string;
+    time: string;
+    read?: boolean;
+    linkView?: string;
+  }>;
+  onNotificationClick?: (notif: { id: string; linkView?: string }) => void;
+  onMarkAllRead?: () => void;
 }
 
 function SafeText({ text }: { text: string }) {
@@ -105,11 +115,22 @@ export default function Navbar({
   isMenuOpen,
   onMenuToggle,
   onOpenMerchantModal,
-  onOpenVirtualGifts
+  onOpenVirtualGifts,
+  notifications: propNotifications,
+  onNotificationClick,
+  onMarkAllRead
 }: NavbarProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showOtherOptionsList, setShowOtherOptionsList] = useState(false);
+
+  const notifications = propNotifications && propNotifications.length > 0 ? propNotifications : [
+    { id: "1", title: "Mission Validée ! 🎉", desc: "Votre preuve pour 'Abonnement YouTube' a été approuvée.", time: "Il y a 2 min", read: false, linkView: "missions" },
+    { id: "2", title: "Retrait traité ✅", desc: "Votre retrait de 15,000 XOF a été encaissé avec succès.", time: "Il y a 1 h", read: false, linkView: "wallet" },
+    { id: "3", title: "Alerte de Sécurité 2FA 🔒", desc: "Activez la double authentification pour sécuriser votre solde.", time: "Il y a 1 j", read: false, linkView: "dashboard" }
+  ];
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   React.useEffect(() => {
     if (isMenuOpen !== undefined && isMenuOpen !== showOtherOptionsList) {
@@ -215,12 +236,6 @@ export default function Navbar({
   };
 
   const t = getTranslation(currentLanguage);
-
-  const notifications = [
-    { id: 1, title: "Mission Validée ! 🎉", desc: "Votre preuve pour 'Abonnement YouTube' a été approuvée.", time: "Il y a 2 min" },
-    { id: 2, title: "Retrait traité ✅", desc: "Votre retrait de 15,000 XOF a été encuissé avec succès.", time: "Il y a 1 h" },
-    { id: 3, title: "Alerte de Sécurité 2FA 🔒", desc: "Activez la double authentification pour sécuriser votre solde.", time: "Il y a 1 j" }
-  ];
 
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
@@ -438,29 +453,78 @@ export default function Navbar({
               <button
                 id="navbar_notif_button"
                 onClick={() => handleToggleNotification(!showNotification)}
-                className="p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-950 rounded-lg transition relative"
+                className="p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-950 rounded-lg transition relative cursor-pointer"
+                title="Notifications"
               >
                 <Bell className="h-4.5 w-4.5" />
-                <span className="absolute top-1 right-1 flex h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white shadow-xs animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
 
               {showNotification && (
-                <div id="navbar_notif_dropdown" className="absolute right-0 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-2 shadow-xl animate-fade-in z-50">
-                  <div className="flex items-center justify-between border-b border-gray-50 px-2 py-1.5">
-                    <span className="text-xs font-bold text-gray-900">{t.notifications}</span>
-                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-700">3 {t.new_notifs}</span>
+                <div id="navbar_notif_dropdown" className="absolute right-0 mt-2 w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl animate-fade-in z-50">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-gray-900 uppercase tracking-wider">{t.notifications}</span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700">
+                        {unreadCount} non lue(s)
+                      </span>
+                    </div>
+                    {unreadCount > 0 && onMarkAllRead && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMarkAllRead();
+                        }}
+                        className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg transition cursor-pointer"
+                        title="Marquer toutes comme lues"
+                      >
+                        Tout marquer comme lu
+                      </button>
+                    )}
                   </div>
-                  <div className="divide-y divide-gray-50 max-h-60 overflow-y-auto">
-                    {notifications.map((notif) => (
-                      <div key={notif.id} className="p-2 hover:bg-gray-50 transition rounded-lg text-[11px]">
-                        <p className="font-bold text-gray-900 flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                          {notif.title}
-                        </p>
-                        <p className="text-gray-500 text-[10px] mt-0.5 leading-snug">{notif.desc}</p>
-                        <span className="text-[9px] text-gray-400 mt-1 block font-mono">{notif.time}</span>
+                  <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto space-y-1">
+                    {notifications && notifications.length > 0 ? (
+                      notifications.map((notif: any) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => {
+                            setShowNotification(false);
+                            if (onNotificationClick) {
+                              onNotificationClick(notif);
+                            }
+                          }}
+                          className={`p-2.5 hover:bg-emerald-50/50 transition rounded-xl cursor-pointer text-xs ${notif.read ? 'opacity-75' : 'bg-emerald-50/20 font-semibold'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-extrabold text-gray-900 flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              {notif.title}
+                            </p>
+                            {!notif.read && (
+                              <span className="h-2 w-2 rounded-full bg-rose-500"></span>
+                            )}
+                          </div>
+                          <p className="text-gray-600 text-[11px] mt-1 leading-relaxed">{notif.desc}</p>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-[9px] text-gray-400 font-mono">{notif.time}</span>
+                            {notif.linkView && (
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 hover:underline">
+                                Voir <ChevronRight className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-6 text-center text-gray-400 text-xs font-medium">
+                        Aucune notification pour le moment.
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}

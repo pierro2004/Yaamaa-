@@ -115,7 +115,7 @@ const COUNTRIES_LIST = [
   { name: "États-Unis", flag: "🇺🇸", code: "+1", currency: "USD", methods: ["Carte Bancaire", "Virement Bancaire"] }
 ];
 
-const yaamaaLogo = "/logo.jpg";
+import yaamaaLogo from "./assets/images/yaamaa_logo_updated_1783116905472.jpg";
 
 export default function App() {
   // Navigation State
@@ -351,6 +351,68 @@ export default function App() {
       setEditProfileSuccess(null);
     }
   }, [authModalOpen, currentUser]);
+
+  // Initialize default notifications if not present for connected user
+  useEffect(() => {
+    if (currentUser && (!currentUser.notifications || currentUser.notifications.length === 0)) {
+      const defaultNotifs = [
+        {
+          id: "notif_welcome",
+          title: "Bienvenue sur Yaamaa ! 🚀",
+          desc: "Votre compte est connecté. Explorez les missions et gagnez vos premiers gains.",
+          time: "À l'instant",
+          read: false,
+          linkView: "missions"
+        },
+        {
+          id: "notif_referral",
+          title: "Prime de Parrainage & Code Promo 🌟",
+          desc: `Votre code parrain ${currentUser.referralCode || "YAAMAA"} est actif. Partagez-le pour gagner des commissions sur chaque membre.`,
+          time: "Il y a 5 min",
+          read: false,
+          linkView: "wallet"
+        },
+        {
+          id: "notif_community",
+          title: "Invitation Communauté Yaamaa 🤝",
+          desc: "Découvrez le fil d'actualité social et échangez avec la communauté active.",
+          time: "Il y a 30 min",
+          read: false,
+          linkView: "social"
+        }
+      ];
+      if (currentUser.merchantNumber) {
+        defaultNotifs.unshift({
+          id: "notif_merchant_active",
+          title: "Abonnement Marchand Actif ✨",
+          desc: `Votre numéro ${currentUser.merchantNumber} est activé sur la Marketplace. Vos produits sont visibles du public !`,
+          time: "Il y a 1 h",
+          read: false,
+          linkView: "boutique"
+        });
+      }
+      setCurrentUser(prev => prev ? { ...prev, notifications: defaultNotifs } : null);
+    }
+  }, [currentUser?.id, currentUser?.merchantNumber]);
+
+  const handleNotificationClick = (notif: { id: string; linkView?: string }) => {
+    if (!currentUser) return;
+    const updatedNotifs = (currentUser.notifications || []).map(n => 
+      n.id === notif.id ? { ...n, read: true } : n
+    );
+    setCurrentUser(prev => prev ? { ...prev, notifications: updatedNotifs } : null);
+
+    if (notif.linkView) {
+      setCurrentView(notif.linkView);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    if (!currentUser) return;
+    const updatedNotifs = (currentUser.notifications || []).map(n => ({ ...n, read: true }));
+    setCurrentUser(prev => prev ? { ...prev, notifications: updatedNotifs } : null);
+  };
 
   // Deposit States
   const [depositAmount, setDepositAmount] = useState<string>("");
@@ -2653,6 +2715,9 @@ export default function App() {
             setInitiallyOpenGiftsModal(true);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
+          notifications={currentUser?.notifications}
+          onNotificationClick={handleNotificationClick}
+          onMarkAllRead={handleMarkAllNotificationsRead}
         />
       </div>
 
@@ -2766,6 +2831,14 @@ export default function App() {
             }}
             onViewProfile={(uid) => setSelectedProfileUserId(uid)}
             onStartChat={handleStartChat}
+            onOpenMerchantModal={() => {
+              if (currentUser) {
+                setMerchantPayPhone(currentUser.phone || "");
+                setMerchantPayName(currentUser.name || "");
+                setMerchantStep("form");
+                setIsMerchantModalOpen(true);
+              }
+            }}
           />
         )}
 

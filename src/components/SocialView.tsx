@@ -2623,53 +2623,7 @@ export default function SocialView({
       }, 1000);
       setRecordingIntervalId(interval);
 
-      // SILENCE DETECTION FOR AUTO-SENDING
-      try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        const silenceAudioCtx = new AudioCtx();
-        silenceAudioCtxRef.current = silenceAudioCtx;
-        const source = silenceAudioCtx.createMediaStreamSource(stream);
-        const analyser = silenceAudioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        let silenceStart: number | null = null;
-        const SILENCE_THRESHOLD = 5; // average frequency magnitude threshold for silence
-        const SILENCE_DURATION_MS = 1800; // 1.8 seconds of silence to auto-send
-
-        // Check volume every 200ms
-        const silenceInterval = setInterval(() => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
-          }
-          const avgVolume = sum / bufferLength;
-
-          // If volume is below threshold, it's silent
-          if (avgVolume < SILENCE_THRESHOLD) {
-            if (silenceStart === null) {
-              silenceStart = Date.now();
-            } else if (Date.now() - silenceStart > SILENCE_DURATION_MS) {
-              // Automatically stop and send because user finished speaking!
-              clearInterval(silenceInterval);
-              silenceIntervalIdRef.current = null;
-              stopAndSendVoice();
-              showToast("Message envoyé automatiquement (fin de parole) 🎙️");
-            }
-          } else {
-            // User is speaking, reset silence timer
-            silenceStart = null;
-          }
-        }, 200);
-
-        silenceIntervalIdRef.current = silenceInterval;
-      } catch (audioErr) {
-        console.warn("Could not start silence detection:", audioErr);
-      }
       
     } catch (err) {
       console.warn("Error accessing actual microphone, starting high-fidelity simulated fallback:", err);
@@ -2719,7 +2673,7 @@ export default function SocialView({
     setRecordingIntervalId(null);
   };
 
-  const stopAndSendVoice = () => {
+  const stopAndStageVoice = () => {
     if (recordingIntervalId) {
       clearInterval(recordingIntervalId);
     }
@@ -2737,16 +2691,14 @@ export default function SocialView({
     const finalDuration = recordingDuration === 0 ? 3 : recordingDuration;
 
     if (isVirtualRecording) {
-      // Programmatically synthesize high-fidelity playable WAV tone
       const base64Audio = generateSyntheticAudioBase64(finalDuration);
-      
-      handleSendMessage({
-        text: `Message vocal (${finalDuration}s) [Démo] 🎙️`,
-        voiceUrl: base64Audio,
-        voiceDuration: finalDuration
+      setStagedAttachment({
+        type: "voice",
+        url: base64Audio,
+        duration: finalDuration,
+        name: `Message vocal (${finalDuration}s)`
       });
-      
-      showToast("Message vocal virtuel envoyé ! 🚀");
+      showToast("Enregistrement vocal terminé. Cliquez sur Envoyer pour l'expédier ! 🎙️");
       setIsRecording(false);
       setIsVirtualRecording(false);
       setRecordingDuration(0);
@@ -2769,15 +2721,13 @@ export default function SocialView({
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Audio = reader.result as string;
-        
-        // DIRECTLY SEND VOICE NOTE (Instead of staging it!)
-        handleSendMessage({
-          text: `Message vocal (${finalDuration}s) 🎙️`,
-          voiceUrl: base64Audio,
-          voiceDuration: finalDuration
+        setStagedAttachment({
+          type: "voice",
+          url: base64Audio,
+          duration: finalDuration,
+          name: `Message vocal (${finalDuration}s)`
         });
-        
-        showToast("Message vocal envoyé ! 🚀");
+        showToast("Enregistrement vocal terminé. Cliquez sur Envoyer pour l'expédier ! 🎙️");
       };
       reader.readAsDataURL(audioBlob);
       
@@ -4337,9 +4287,6 @@ export default function SocialView({
                 >
                   <Gift className="h-6.5 w-6.5 text-white animate-pulse group-hover:rotate-12 transition-transform" />
                 </button>
-                <span className="bg-slate-900/95 text-pink-300 font-black text-[9px] px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-lg border border-pink-500/20 select-none uppercase tracking-wider text-center max-w-[85px]">
-                  Cadeau 🎁
-                </span>
               </div>
             )}
 
@@ -4359,9 +4306,6 @@ export default function SocialView({
                 >
                   <Gift className="h-6.5 w-6.5 text-white animate-pulse group-hover:rotate-12 transition-transform" />
                 </button>
-                <span className="bg-slate-900/95 text-teal-300 font-black text-[9px] px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-lg border border-teal-500/20 select-none uppercase tracking-wider text-center max-w-[85px]">
-                  Donateur 🎁
-                </span>
               </div>
             )}
 
@@ -4947,10 +4891,10 @@ export default function SocialView({
                   </button>
                   <button
                     type="button"
-                    onClick={stopAndSendVoice}
+                    onClick={stopAndStageVoice}
                     className="bg-white hover:bg-slate-100 text-emerald-800 font-extrabold px-3 py-1.5 rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1"
                   >
-                    Envoyer Vocal
+                    Valider l'enregistrement
                   </button>
                 </div>
               </div>
@@ -5255,7 +5199,7 @@ export default function SocialView({
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (isRecording) {
-                      stopAndSendVoice();
+                      stopAndStageVoice();
                     } else {
                       handleSendMessage();
                     }
@@ -5280,7 +5224,7 @@ export default function SocialView({
                   {/* VOCAL MICRO RECORD DIRECT BUTTON */}
                   <button
                     type="button"
-                    onClick={isRecording ? stopAndSendVoice : startRecording}
+                    onClick={isRecording ? stopAndStageVoice : startRecording}
                     className={`p-2 sm:p-2.5 rounded-xl border shrink-0 cursor-pointer transition active:scale-95 ${
                       isRecording 
                         ? "bg-rose-50/50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse" 
@@ -5304,47 +5248,23 @@ export default function SocialView({
                     </button>
                   )}
 
-                  {/* VIRTUAL GIFT BUTTON (IN DIRECT MESSAGE) */}
-                  {activeTab === "dm" && activeFriend && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGiftRecipientId(activeFriend.id);
-                        setGiftCatalogTab("send");
-                        setShowGiftCatalogModal(true);
-                      }}
-                      className="p-2 sm:p-2.5 rounded-xl border bg-pink-50 border-pink-200 hover:bg-pink-100 text-pink-700 hover:text-pink-800 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
-                      title="Envoyer un cadeau virtuel premium"
-                    >
-                      <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-pink-600" />
-                      <span className="inline">Cadeau</span>
-                    </button>
-                  )}
-
-                  {/* VIRTUAL GIFT BUTTON (IN COMMUNITY/FORUM) */}
-                  {activeTab === "communities" && activeCommunity && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGiftRecipientId(activeCommunity.creatorId || null);
-                        setGiftCatalogTab("send");
-                        setShowGiftCatalogModal(true);
-                      }}
-                      className="p-2 sm:p-2.5 rounded-xl border bg-teal-50 border-teal-200 hover:bg-teal-100 text-teal-700 hover:text-teal-850 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
-                      title="Envoyer un cadeau au créateur / membre"
-                    >
-                      <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-600" />
-                      <span className="inline">Cadeau</span>
-                    </button>
-                  )}
-
-                  <input
-                    type="text"
-                    value={isRecording ? `Message vocal (durée: ${recordingDuration}s)...` : newMsgText}
+                  <textarea
+                    rows={1}
+                    value={isRecording ? `Message vocal en cours (durée: ${recordingDuration}s)... Cliquez sur le micro pour arrêter.` : newMsgText}
                     onChange={(e) => !isRecording && handleTextareaChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.ctrlKey) {
+                        e.preventDefault();
+                        if (isRecording) {
+                          stopAndStageVoice();
+                        } else {
+                          handleSendMessage();
+                        }
+                      }
+                    }}
                     disabled={isRecording}
-                    placeholder={isRecording ? "Enregistrement vocal en cours..." : "Tapez un message..."}
-                    className={`flex-1 min-w-0 border focus:outline-none rounded-xl px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold transition ${
+                    placeholder={isRecording ? "Enregistrement vocal en cours..." : "Tapez un message (Entrée pour la ligne suivante)..."}
+                    className={`flex-1 min-w-0 border focus:outline-none rounded-xl px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold transition min-h-[42px] max-h-[140px] overflow-y-auto resize-none ${
                       isRecording 
                         ? "bg-rose-50/50 border-rose-200 text-rose-750 placeholder-rose-400 select-none cursor-not-allowed" 
                         : "bg-slate-50 border-gray-200 focus:border-emerald-300 focus:bg-white text-gray-800"
@@ -6529,6 +6449,25 @@ export default function SocialView({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Gift Button in Call */}
+              {activeCall.status === "active" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const opponentId = activeCall.callerId === currentUser.id ? activeCall.receiverId : activeCall.callerId;
+                    setGiftRecipientId(opponentId);
+                    setGiftCatalogTab("send");
+                    setShowGiftCatalogModal(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-lg shadow-pink-500/20"
+                  id="btn_gift_in_call"
+                  title="Envoyer un cadeau au correspondant"
+                >
+                  <Gift className="h-3.5 w-3.5 animate-pulse text-white" />
+                  Cadeau 🎁
+                </button>
+              )}
+
               {/* Invite button */}
               {activeCall.status === "active" && (
                 <button

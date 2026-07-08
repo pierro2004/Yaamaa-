@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   X, Download, Share, PlusSquare, Menu, Smartphone, Check, HelpCircle, Laptop
 } from "lucide-react";
+import yaamaaLogo from "../assets/images/yaamaa_logo_updated_1783116905472.jpg";
 
 interface InstallPwaModalProps {
   isOpen: boolean;
@@ -130,9 +131,9 @@ export default function InstallPwaModal({ isOpen, onClose }: InstallPwaModalProp
           {/* Logo & Intro */}
           <div className="flex flex-col items-center text-center space-y-2">
             <img 
-              src="/logo.jpg" 
+              src={yaamaaLogo} 
               alt="Yaamaa Logo" 
-              className="h-16 w-16 rounded-2xl shadow-md border border-slate-200" 
+              className="h-16 w-16 rounded-2xl shadow-md border border-slate-200 object-cover" 
             />
             <h4 className="text-xs font-black text-slate-800">
               Yaamaa Social & Tasks
