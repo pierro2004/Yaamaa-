@@ -82,9 +82,30 @@ export interface User {
     title: string;
     desc: string;
     time: string;
+    timestamp?: string;
     read?: boolean;
+    priority?: "info" | "standard" | "important" | "urgent" | "critical";
+    category?: "communication" | "account" | "wallet" | "merchant" | "referral" | "gifts" | "publications" | "moderation" | "admin";
     linkView?: string;
   }>;
+  notificationPreferences?: {
+    calls: boolean;
+    messages: boolean;
+    gifts: boolean;
+    payments: boolean;
+    promotions: boolean;
+    officialAnnouncements: boolean;
+    groupActivity: boolean;
+    reminders: boolean;
+    securityAlerts: boolean;
+    soundEnabled: boolean;
+    soundVolume: number;
+    soundRingtoneCall: string;
+    soundRingtoneMsg: string;
+    soundRingtoneGift: string;
+    soundRingtonePayment: string;
+    soundRingtoneAlert: string;
+  };
 }
 
 export type MissionType =
@@ -752,6 +773,50 @@ export interface CallRecord {
   isEncrypted: boolean;
   recordingUrl?: string;
 }
+
+export type ModerationCategory = "supplier" | "deliverer" | "api_integration" | "account_verification" | "other";
+export type ModerationStatus = "pending" | "under_review" | "more_info_requested" | "approved" | "rejected" | "suspended";
+export type ModerationUrgency = "normal" | "urgent" | "flagged";
+
+export interface InternalComment {
+  id: string;
+  adminId: string;
+  adminUsername: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface ActionHistoryItem {
+  id: string;
+  adminId: string;
+  adminUsername: string;
+  action: string;
+  oldStatus: string;
+  newStatus: string;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface ModerationFile {
+  id: string;
+  category: ModerationCategory;
+  title: string;
+  applicantId: string;
+  applicantUsername: string;
+  applicantName: string;
+  applicantAvatar: string;
+  createdAt: string;
+  status: ModerationStatus;
+  urgency: ModerationUrgency;
+  assignedAdminId?: string;
+  assignedAdminUsername?: string;
+  supportingDocuments: Array<{ title: string; url: string; type?: string }>;
+  applicantInfo: Record<string, any>;
+  internalComments: InternalComment[];
+  actionHistory: ActionHistoryItem[];
+  rejectionReason?: string;
+}
+
 
 
 

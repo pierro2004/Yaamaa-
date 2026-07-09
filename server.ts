@@ -33,7 +33,8 @@ import {
   SubscriptionNotification,
   BadgeTier,
   SupervisionIncident,
-  SupervisionReport
+  SupervisionReport,
+  ModerationFile
 } from "./src/types";
 import { ALL_COUNTRIES } from "./src/countries";
 
@@ -79,6 +80,7 @@ interface AppState {
   subscriptionNotifications?: SubscriptionNotification[];
   supervisionIncidents?: SupervisionIncident[];
   supervisionReports?: SupervisionReport[];
+  moderationFiles?: ModerationFile[];
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -702,6 +704,117 @@ const SEED_SUPPLIER_REVIEWS: SupplierDelivererReview[] = [
   }
 ];
 
+const SEED_MODERATION_FILES: ModerationFile[] = [
+  {
+    id: "mod_1",
+    category: "supplier",
+    title: "Candidature Fournisseur Électronique Pro",
+    applicantId: "user_aminata",
+    applicantUsername: "aminata_tech",
+    applicantName: "Aminata Diallo",
+    applicantAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop",
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    status: "pending",
+    urgency: "urgent",
+    supportingDocuments: [
+      { title: "Registre de Commerce (RCCM)", url: "https://example.com/rccm_aminata.pdf", type: "pdf" },
+      { title: "Pièce d'Identité Nationale", url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2", type: "image" }
+    ],
+    applicantInfo: {
+      companyName: "Dakar Tech & Supplies SARL",
+      ninea: "009847291",
+      address: "Avenue Bourguiba, Dakar",
+      activity: "Import-export de matériel informatique"
+    },
+    internalComments: [
+      { id: "comm_1", adminId: "user_founder", adminUsername: "Fondateur", text: "Vérifier la validité du NINEA auprès du service fiscal.", createdAt: new Date(Date.now() - 3600000 * 2).toISOString() }
+    ],
+    actionHistory: [
+      { id: "act_1", adminId: "user_founder", adminUsername: "Fondateur", action: "Création dossier", oldStatus: "-", newStatus: "pending", createdAt: new Date(Date.now() - 3600000 * 5).toISOString() }
+    ]
+  },
+  {
+    id: "mod_2",
+    category: "deliverer",
+    title: "Demande de Partenariat Livreur Express",
+    applicantId: "user_moussa",
+    applicantUsername: "moussa_express",
+    applicantName: "Moussa Ndiaye",
+    applicantAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+    status: "under_review",
+    urgency: "normal",
+    assignedAdminId: "user_admin",
+    assignedAdminUsername: "Superviseur Admin",
+    supportingDocuments: [
+      { title: "Permis de Conduire A1", url: "https://images.unsplash.com/photo-1557804506-669a67965ba0", type: "image" },
+      { title: "Assurance Moto", url: "https://example.com/assurance_moussa.pdf", type: "pdf" }
+    ],
+    applicantInfo: {
+      vehicleType: "Moto Scooter 125cc",
+      plateNumber: "DK-4829-X",
+      zone: "Plateau & Almadies, Dakar"
+    },
+    internalComments: [],
+    actionHistory: [
+      { id: "act_2", adminId: "user_admin", adminUsername: "Superviseur Admin", action: "Changement de statut", oldStatus: "pending", newStatus: "under_review", comment: "Examen des pièces d'assurance en cours.", createdAt: new Date(Date.now() - 3600000 * 12).toISOString() }
+    ]
+  },
+  {
+    id: "mod_3",
+    category: "api_integration",
+    title: "Demande d'Accès API Partenaire Paiement",
+    applicantId: "user_dev",
+    applicantUsername: "fintech_lead",
+    applicantName: "Jean-Marc Kouassi",
+    applicantAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150&auto=format&fit=crop",
+    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
+    status: "more_info_requested",
+    urgency: "flagged",
+    supportingDocuments: [
+      { title: "Architecture Technique OAuth2", url: "https://example.com/arch_oauth.pdf", type: "pdf" }
+    ],
+    applicantInfo: {
+      appName: "PayGateway West Africa",
+      webhookUrl: "https://api.paygateway.africa/webhook/yaamaa",
+      scope: "payments, merchants"
+    },
+    internalComments: [
+      { id: "comm_2", adminId: "user_founder", adminUsername: "Fondateur", text: "Demander l'URL de test Sandbox et le certificat SSL de production.", createdAt: new Date(Date.now() - 3600000 * 30).toISOString() }
+    ],
+    actionHistory: [
+      { id: "act_3", adminId: "user_founder", adminUsername: "Fondateur", action: "Demande d'informations", oldStatus: "pending", newStatus: "more_info_requested", comment: "Certificat SSL manquant.", createdAt: new Date(Date.now() - 3600000 * 30).toISOString() }
+    ]
+  },
+  {
+    id: "mod_4",
+    category: "account_verification",
+    title: "Vérification de Compte Célébrité / Artiste",
+    applicantId: "user_artist",
+    applicantUsername: "waly_ballago",
+    applicantName: "Waly Seck Officiel",
+    applicantAvatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=150&auto=format&fit=crop",
+    createdAt: new Date(Date.now() - 3600000 * 72).toISOString(),
+    status: "approved",
+    urgency: "normal",
+    assignedAdminId: "user_founder",
+    assignedAdminUsername: "Fondateur",
+    supportingDocuments: [
+      { title: "Pièce d'Identité & Contrat de Management", url: "https://example.com/id_waly.pdf", type: "pdf" }
+    ],
+    applicantInfo: {
+      category: "Artiste / Musicien",
+      socialProfile: "instagram.com/walyseck"
+    },
+    internalComments: [
+      { id: "comm_3", adminId: "user_founder", adminUsername: "Fondateur", text: "Identité vérifiée et validée.", createdAt: new Date(Date.now() - 3600000 * 60).toISOString() }
+    ],
+    actionHistory: [
+      { id: "act_4", adminId: "user_founder", adminUsername: "Fondateur", action: "Approbation", oldStatus: "pending", newStatus: "approved", comment: "Badge Diamant / Vérifié attribué.", createdAt: new Date(Date.now() - 3600000 * 60).toISOString() }
+    ]
+  }
+];
+
 const SEED_MISSION_REQUESTS: MissionRequest[] = [];
 
 const SEED_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -1103,6 +1216,10 @@ function loadState(): AppState {
         state.supervisionReports = SEED_SUPERVISION_REPORTS;
         updated = true;
       }
+      if (!state.moderationFiles) {
+        state.moderationFiles = useDemoSeed ? SEED_MODERATION_FILES : [];
+        updated = true;
+      }
 
       if (updated) {
         fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
@@ -1137,7 +1254,8 @@ function loadState(): AppState {
     userSubscriptions: SEED_USER_SUBSCRIPTIONS,
     subscriptionNotifications: [],
     supervisionIncidents: SEED_SUPERVISION_INCIDENTS,
-    supervisionReports: SEED_SUPERVISION_REPORTS
+    supervisionReports: SEED_SUPERVISION_REPORTS,
+    moderationFiles: useDemoSeed ? SEED_MODERATION_FILES : []
   };
   saveState(freshState);
   return freshState;
@@ -4322,6 +4440,136 @@ app.post("/api/founder/backup/restore", (req, res) => {
     return res.status(500).json({ error: "Échec de la restauration de la base de données de Yaamaa." });
   }
 });
+
+// ==========================================
+// 🛡️ MODERATION & VALIDATION CENTER API
+// ==========================================
+app.get("/api/moderation/files", (req, res) => {
+  const { userId, category, status, search } = req.query;
+  const user = appState.users.find(u => u.id === userId);
+  
+  if (!user || (user.role !== "admin" && user.role !== "founder")) {
+    return res.status(403).json({ error: "Accès refusé. Réservé aux administrateurs autorisés." });
+  }
+
+  let files = appState.moderationFiles || [];
+  
+  if (category && category !== "all") {
+    files = files.filter(f => f.category === category);
+  }
+  if (status && status !== "all") {
+    files = files.filter(f => f.status === status);
+  }
+  if (search) {
+    const q = (search as string).toLowerCase();
+    files = files.filter(f => f.title.toLowerCase().includes(q) || f.applicantUsername.toLowerCase().includes(q) || f.applicantName.toLowerCase().includes(q));
+  }
+
+  const allFiles = appState.moderationFiles || [];
+  const stats = {
+    totalPending: allFiles.filter(f => f.status === "pending").length,
+    approved: allFiles.filter(f => f.status === "approved").length,
+    rejected: allFiles.filter(f => f.status === "rejected").length,
+    underReview: allFiles.filter(f => f.status === "under_review").length,
+    urgent: allFiles.filter(f => f.urgency === "urgent" && f.status === "pending").length,
+    flagged: allFiles.filter(f => f.urgency === "flagged" || f.status === "more_info_requested").length
+  };
+
+  res.json({ files, stats, categories: ["supplier", "deliverer", "api_integration", "account_verification", "other"] });
+});
+
+app.post("/api/moderation/files/:id/action", (req, res) => {
+  const { id } = req.params;
+  const { operatorId, action, status, comment, rejectionReason, assignedAdminId } = req.body;
+
+  const operator = appState.users.find(u => u.id === operatorId);
+  if (!operator || (operator.role !== "admin" && operator.role !== "founder")) {
+    return res.status(403).json({ error: "Accès refusé. Privilèges administratifs requis." });
+  }
+
+  const file = (appState.moderationFiles || []).find(f => f.id === id);
+  if (!file) return res.status(404).json({ error: "Dossier de modération introuvable." });
+
+  const oldStatus = file.status;
+
+  if (action === "update_status" && status) {
+    file.status = status;
+  } else if (action === "approve") {
+    file.status = "approved";
+    file.rejectionReason = undefined;
+  } else if (action === "reject") {
+    file.status = "rejected";
+    file.rejectionReason = rejectionReason || "Dossier rejeté par l'administration";
+  } else if (action === "request_info") {
+    file.status = "more_info_requested";
+    if (comment) {
+      file.internalComments.push({
+        id: "comm_" + Date.now(),
+        adminId: operator.id,
+        adminUsername: operator.username,
+        text: `[Infos demandées] ${comment}`,
+        createdAt: new Date().toISOString()
+      });
+    }
+  } else if (action === "suspend") {
+    file.status = "suspended";
+  } else if (action === "assign" && assignedAdminId) {
+    const assignedAdmin = appState.users.find(u => u.id === assignedAdminId);
+    file.assignedAdminId = assignedAdminId;
+    file.assignedAdminUsername = assignedAdmin ? assignedAdmin.username : "Inconnu";
+  }
+
+  if (comment && action !== "request_info") {
+    file.internalComments.push({
+      id: "comm_" + Date.now(),
+      adminId: operator.id,
+      adminUsername: operator.username,
+      text: comment,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  file.actionHistory.unshift({
+    id: "act_" + Date.now(),
+    adminId: operator.id,
+    adminUsername: operator.username,
+    action: action,
+    oldStatus,
+    newStatus: file.status,
+    comment: comment || rejectionReason,
+    createdAt: new Date().toISOString()
+  });
+
+  createAuditLog(
+    operator.id,
+    operator.username,
+    operator.role,
+    "Modération & Validation",
+    `Dossier #${file.id} (${file.title}) mis à jour. Action: ${action}, Statut: ${oldStatus} -> ${file.status}`,
+    req
+  );
+
+  const applicant = appState.users.find(u => u.id === file.applicantId);
+  if (applicant) {
+    if (!applicant.notifications) applicant.notifications = [];
+    let notifText = `Votre dossier de modération "${file.title}" a changé de statut : ${file.status}.`;
+    if (file.status === "approved") notifText = `Félicitations ! Votre dossier "${file.title}" a été approuvé.`;
+    else if (file.status === "rejected") notifText = `Votre dossier "${file.title}" a été refusé. Motif : ${file.rejectionReason || "Non spécifié"}.`;
+    else if (file.status === "more_info_requested") notifText = `Des informations complémentaires sont requises pour votre dossier "${file.title}".`;
+
+    applicant.notifications.unshift({
+      id: "notif_mod_" + Date.now(),
+      title: "Centre de Modération Yaamaa",
+      desc: notifText,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    });
+  }
+
+  saveState(appState);
+  res.json({ success: true, file, files: appState.moderationFiles });
+});
+
 
 
 // 7. YAAMAA AI (GEMINI ENGINE BACKEND SERVICE)

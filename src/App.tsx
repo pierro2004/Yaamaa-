@@ -31,6 +31,9 @@ import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
 import { AdminApiKeysPanel } from "./components/AdminApiKeysPanel";
 import { AdminPublishingBoard } from "./components/AdminPublishingBoard";
+import { ModerationCenterModal } from "./components/ModerationCenterModal";
+import { NotificationCenterModal } from "./components/NotificationCenterModal";
+import { NotificationSettingsModal } from "./components/NotificationSettingsModal";
 import { Language, getTranslation } from "./i18n";
 import { Store, Megaphone } from "lucide-react";
 import { 
@@ -416,6 +419,9 @@ export default function App() {
     const updatedNotifs = (currentUser.notifications || []).map(n => ({ ...n, read: true }));
     setCurrentUser(prev => prev ? { ...prev, notifications: updatedNotifs } : null);
   };
+
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
 
   // Deposit States
   const [depositAmount, setDepositAmount] = useState<string>("");
@@ -2830,6 +2836,8 @@ export default function App() {
           onNotificationClick={handleNotificationClick}
           onMarkAllRead={handleMarkAllNotificationsRead}
           onOpenCallModal={() => setIsCallModalOpen(true)}
+          onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
+          onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
         />
       </div>
 
@@ -5200,6 +5208,17 @@ export default function App() {
               </button>
               <button
                 type="button"
+                onClick={() => setAdminSubTab("moderation")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "moderation"
+                    ? "border-emerald-600 text-emerald-700 bg-emerald-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🛡️</span> Centre de Modération
+              </button>
+              <button
+                type="button"
                 onClick={() => setAdminSubTab("api_keys")}
                 className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
                   adminSubTab === "api_keys"
@@ -6922,6 +6941,14 @@ export default function App() {
                 users={users}
                 systemMetrics={systemMetrics}
                 onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* CENTRE DE MODÉRATION ET DE VALIDATION */}
+            {adminSubTab === "moderation" && (
+              <ModerationCenterModal
+                currentUser={currentUser}
+                onClose={() => setAdminSubTab("dashboard")}
               />
             )}
 
@@ -8677,6 +8704,28 @@ ${shareLink}
           onHostAction={handleHostAction}
           callHistory={callHistory}
           onRefreshCalls={fetchCallHistory}
+        />
+      )}
+
+      {/* NOTIFICATION CENTER MODAL */}
+      {isNotificationCenterOpen && currentUser && (
+        <NotificationCenterModal
+          currentUser={currentUser}
+          onClose={() => setIsNotificationCenterOpen(false)}
+          onUpdateUser={(updated) => setCurrentUser(updated)}
+          onNavigateView={(v) => {
+            setCurrentView(v);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      )}
+
+      {/* NOTIFICATION & SOUND SETTINGS MODAL */}
+      {isNotificationSettingsOpen && currentUser && (
+        <NotificationSettingsModal
+          currentUser={currentUser}
+          onClose={() => setIsNotificationSettingsOpen(false)}
+          onUpdateUser={(updated) => setCurrentUser(updated)}
         />
       )}
 

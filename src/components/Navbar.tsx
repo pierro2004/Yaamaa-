@@ -82,6 +82,8 @@ interface NavbarProps {
   onNotificationClick?: (notif: { id: string; linkView?: string }) => void;
   onMarkAllRead?: () => void;
   onOpenCallModal?: () => void;
+  onOpenNotificationCenter?: () => void;
+  onOpenNotificationSettings?: () => void;
 }
 
 function SafeText({ text }: { text: string }) {
@@ -121,7 +123,9 @@ export default function Navbar({
   notifications: propNotifications,
   onNotificationClick,
   onMarkAllRead,
-  onOpenCallModal
+  onOpenCallModal,
+  onOpenNotificationCenter,
+  onOpenNotificationSettings
 }: NavbarProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -541,6 +545,29 @@ export default function Navbar({
                         Aucune notification pour le moment.
                       </div>
                     )}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNotification(false);
+                        if (onOpenNotificationCenter) onOpenNotificationCenter();
+                      }}
+                      className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-extrabold rounded-xl transition text-center cursor-pointer"
+                    >
+                      Centre de notifications
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNotification(false);
+                        if (onOpenNotificationSettings) onOpenNotificationSettings();
+                      }}
+                      className="py-1.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold rounded-xl transition text-center cursor-pointer"
+                      title="Paramètres"
+                    >
+                      ⚙️
+                    </button>
                   </div>
                 </div>
               )}
