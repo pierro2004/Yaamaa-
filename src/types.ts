@@ -69,6 +69,13 @@ export interface User {
   merchantNumberEligible?: boolean;
   merchantPackType?: "premium" | "gold" | "diamond";
   createdAt?: string;
+  privacySettings?: {
+    isProfilePrivate?: boolean;
+    hideMerchantNumber?: boolean;
+    hideJoinDate?: boolean;
+    hidePublications?: boolean;
+    hideHistory?: boolean;
+  };
   yaamaaAiActive?: boolean;
   yaamaaAiExpiresAt?: string;
   yaamaaAiSettings?: YaamaaAiSettings;

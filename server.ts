@@ -1700,7 +1700,7 @@ app.put("/api/users/:id", (req, res) => {
   const { id } = req.params;
   const { 
     is2faEnabled, isSuspended, wallet, level, xp, country, currency, role,
-    username, name, email, avatar, phone, address, password, language
+    username, name, email, avatar, phone, address, password, language, privacySettings
   } = req.body;
   
   const user = appState.users.find(u => u.id === id);
@@ -1723,6 +1723,7 @@ app.put("/api/users/:id", (req, res) => {
   if (xp !== undefined) user.xp = xp;
   if (role !== undefined) user.role = role;
   if (language !== undefined) user.language = language;
+  if (privacySettings !== undefined) user.privacySettings = privacySettings;
   
   // New profile fields
   if (name !== undefined) user.name = name.trim();

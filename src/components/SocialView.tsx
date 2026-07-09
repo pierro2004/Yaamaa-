@@ -710,21 +710,26 @@ export default function SocialView({
     setSearchResults([]);
     const query = searchQuery.trim();
     if (!query) {
-      setSearchError("Veuillez saisir un nom, un identifiant ou un numéro.");
+      setSearchError("Veuillez saisir un nom, un identifiant ou un numéro de marchand.");
       return;
     }
     try {
+      const cleanQuery = query.toLowerCase().replace(/[^a-z0-9]/g, '');
       const found = usersList.filter(u => 
         u.id !== currentUser.id && 
-        (u.username.toLowerCase().includes(query.toLowerCase()) || 
-         u.name.toLowerCase().includes(query.toLowerCase()) || 
-         (u.merchantNumber && u.merchantNumber.toLowerCase().includes(query.toLowerCase())) ||
-         u.phone?.includes(query))
+        (
+          u.username.toLowerCase().includes(query.toLowerCase()) || 
+          u.name.toLowerCase().includes(query.toLowerCase()) || 
+          (u.merchantNumber && u.merchantNumber.toLowerCase().includes(query.toLowerCase())) ||
+          (u.merchantNumber && u.merchantNumber.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanQuery)) ||
+          (u.phone && u.phone.includes(query)) ||
+          u.id.toLowerCase() === query.toLowerCase()
+        )
       );
       if (found.length > 0) {
         setSearchResults(found);
       } else {
-        setSearchError("Aucun membre trouvé avec ces critères.");
+        setSearchError("Aucun membre ou marchand trouvé avec ce numéro ou nom.");
       }
     } catch (err) {
       setSearchError("Erreur lors de la recherche.");
@@ -6112,27 +6117,60 @@ export default function SocialView({
                       const isFriend = friends.some(f => f.id === resUser.id);
                       const isPending = pendingRequests.some(r => r.senderId === currentUser.id && r.receiverId === resUser.id) || sentRequests.some(r => r.senderId === currentUser.id && r.receiverId === resUser.id);
                       return (
-                        <div key={resUser.id} className="p-3 bg-slate-50 rounded-2xl border border-gray-150 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5 truncate min-w-0">
-                            <img src={resUser.avatar} className="h-9 w-9 rounded-xl object-cover border" />
-                            <div className="truncate">
-                              <p className="font-extrabold text-xs text-gray-900">@{resUser.username}</p>
-                              <p className="text-[9.5px] text-gray-450 truncate">{resUser.name} • {resUser.phone || "Aucun numéro"}</p>
+                        <div key={resUser.id} className="p-3.5 bg-slate-50 rounded-2xl border border-gray-150 flex flex-col gap-2.5 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5 truncate min-w-0 cursor-pointer" onClick={() => { if (onViewProfile) onViewProfile(resUser.id); setShowSearchModal(false); }}>
+                              <img src={resUser.avatar} className="h-10 w-10 rounded-xl object-cover border" />
+                              <div className="truncate">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-extrabold text-xs text-gray-900">@{resUser.username}</p>
+                                  {resUser.merchantNumber && <MerchantBadge tier={resUser.merchantPackType} size="xs" />}
+                                </div>
+                                <p className="text-[10px] text-gray-600 truncate">{resUser.name}</p>
+                                {resUser.merchantNumber && (
+                                  <p className="text-[9.5px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                                    Numéro Marchand: {resUser.merchantNumber}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          {isFriend ? (
-                            <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-lg font-bold">Ami</span>
-                          ) : isPending ? (
-                            <span className="text-[9px] bg-amber-100 text-amber-800 px-2 py-1 rounded-lg font-bold">En attente</span>
-                          ) : (
+                          
+                          <div className="flex items-center gap-1.5 pt-1.5 border-t border-gray-200/60 justify-end">
                             <button
                               type="button"
-                              onClick={() => handleAddSearchedFriend(resUser.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg active:scale-95 transition"
+                              onClick={() => {
+                                if (onViewProfile) onViewProfile(resUser.id);
+                                setShowSearchModal(false);
+                              }}
+                              className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold rounded-lg transition cursor-pointer"
                             >
-                              Ajouter
+                              Profil
                             </button>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveFriendId(resUser.id);
+                                setShowSearchModal(false);
+                              }}
+                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer shadow-xs"
+                            >
+                              Écrire
+                            </button>
+                            {isFriend ? (
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg font-bold">Ami</span>
+                            ) : isPending ? (
+                              <span className="text-[9px] bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg font-bold">En attente</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAddSearchedFriend(resUser.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg active:scale-95 transition cursor-pointer shadow-xs"
+                              >
+                                Ajouter contact
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

@@ -93,8 +93,13 @@ export function SupabaseIntegrationModal({ onClose }: SupabaseIntegrationModalPr
                   Récupérez vos clés API sur Supabase
                 </div>
                 <p className="text-gray-600 pl-8">
-                  Connectez-vous à votre tableau de bord <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-emerald-600 underline font-semibold inline-flex items-center gap-1">Supabase <ExternalLink className="h-3 w-3" /></a>, ouvrez votre projet &gt; <b>Project Settings</b> &gt; <b>API</b>. Vous y trouverez votre <code className="bg-gray-200 px-1 py-0.5 rounded text-[11px]">Project URL</code> et votre clé <code className="bg-gray-200 px-1 py-0.5 rounded text-[11px]">anon / public</code>.
+                  Connectez-vous à votre tableau de bord <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-emerald-600 underline font-semibold inline-flex items-center gap-1">Supabase <ExternalLink className="h-3 w-3" /></a>, ouvrez votre projet &gt; <b>Project Settings</b> &gt; <b>API</b>.
                 </p>
+                <div className="pl-8 text-gray-600 space-y-1 pt-1">
+                  <p>• <b>Nouvelle interface ("Clés API publiques et secrètes")</b> : Vous y trouverez votre <b>Clé publiable</b> (qui commence par <code className="bg-gray-200 px-1 py-0.5 rounded text-[11px]">sb_publishable_...</code>).</p>
+                  <p>• <b>Ancienne interface ("Clés API héritage anon et service_role")</b> : Vous y trouverez votre clé <code className="bg-gray-200 px-1 py-0.5 rounded text-[11px]">anon public</code> traditionnelle.</p>
+                  <p className="text-emerald-700 font-semibold mt-1">💡 Vous pouvez utiliser l'une ou l'autre de ces deux clés pour la variable <code className="bg-emerald-100 px-1 py-0.5 rounded">VITE_SUPABASE_ANON_KEY</code> sur Vercel !</p>
+                </div>
               </div>
 
               <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">

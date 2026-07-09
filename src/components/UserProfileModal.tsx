@@ -19,7 +19,8 @@ import {
   ExternalLink,
   ChevronRight,
   User as UserIcon,
-  Star
+  Star,
+  Lock
 } from "lucide-react";
 
 interface UserProfileModalProps {
@@ -45,13 +46,56 @@ export default function UserProfileModal({
   campaignsList,
   currentLanguage
 }: UserProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<"about" | "publications" | "shop" | "campaigns">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "publications" | "shop" | "campaigns" | "privacy">("about");
   const [publications, setPublications] = useState<any[]>([]);
   const [isLoadingPubs, setIsLoadingPubs] = useState(false);
 
   const t = getTranslation(currentLanguage);
 
   const user = usersList.find((u) => u.id === userId);
+
+  const [isProfilePrivate, setIsProfilePrivate] = useState(user?.privacySettings?.isProfilePrivate ?? false);
+  const [hideMerchantNumber, setHideMerchantNumber] = useState(user?.privacySettings?.hideMerchantNumber ?? false);
+  const [hideJoinDate, setHideJoinDate] = useState(user?.privacySettings?.hideJoinDate ?? false);
+  const [hidePublications, setHidePublications] = useState(user?.privacySettings?.hidePublications ?? false);
+  const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
+  const [privacySuccessMsg, setPrivacySuccessMsg] = useState<string | null>(null);
+
+  const handleSavePrivacy = async () => {
+    if (!user) return;
+    setIsSavingPrivacy(true);
+    setPrivacySuccessMsg(null);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          privacySettings: {
+            isProfilePrivate,
+            hideMerchantNumber,
+            hideJoinDate,
+            hidePublications,
+          }
+        })
+      });
+      if (res.ok) {
+        setPrivacySuccessMsg(currentLanguage === "fr" ? "Paramètres de confidentialité mis à jour avec succès !" : "Privacy settings updated successfully!");
+        setTimeout(() => setPrivacySuccessMsg(null), 3000);
+      }
+    } catch (err) {
+      console.error("Error saving privacy", err);
+    } finally {
+      setIsSavingPrivacy(false);
+    }
+  };
+
+  const currentUserObj = usersList.find(u => u.id === currentUserId);
+  const isAdminOrFounder = currentUserObj?.role === "admin" || currentUserObj?.role === "founder";
+  const isSelf = currentUserId === user?.id;
+  const isPrivate = user?.privacySettings?.isProfilePrivate && !isAdminOrFounder && !isSelf;
+  const hideMerchant = (user?.privacySettings?.hideMerchantNumber || isPrivate) && !isAdminOrFounder && !isSelf;
+  const hideJoin = (user?.privacySettings?.hideJoinDate || isPrivate) && !isAdminOrFounder && !isSelf;
+  const hidePubs = (user?.privacySettings?.hidePublications || isPrivate) && !isAdminOrFounder && !isSelf;
 
   // Fetch publications (group messages) for this user from backend
   useEffect(() => {
@@ -155,7 +199,7 @@ export default function UserProfileModal({
                 <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border tracking-widest leading-none ${getRoleColor(user.role)}`}>
                   {getRoleLabel(user.role)}
                 </span>
-                {user.merchantNumber && (
+                {user.merchantNumber && !hideMerchant && (
                   <MerchantBadge tier={user.merchantPackType} size="sm" showLabel={true} />
                 )}
               </div>
@@ -166,10 +210,12 @@ export default function UserProfileModal({
                   <MapPin className="h-3.5 w-3.5 text-emerald-500" />
                   {user.country}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  {currentLanguage === "fr" ? "Inscrit en 2026" : "Joined in 2026"}
-                </span>
+                {!hideJoin && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : (currentLanguage === "fr" ? "Inscrit en 2026" : "Joined in 2026")}
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5 font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 text-[10px]">
                   <Award className="h-3.5 w-3.5" />
                   Niveau {user.level}
@@ -236,10 +282,121 @@ export default function UserProfileModal({
             <Megaphone className="h-4 w-4" />
             {currentLanguage === "fr" ? `Campagnes (${userPromos.length + userTasks.length})` : `Campaigns (${userPromos.length + userTasks.length})`}
           </button>
+
+          {currentUserId === user.id && (
+            <button
+              onClick={() => setActiveTab("privacy")}
+              className={`py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 transition relative flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === "privacy" ? "border-emerald-500 text-emerald-700" : "border-transparent text-gray-500 hover:text-gray-900"
+              }`}
+            >
+              <Lock className="h-4 w-4" />
+              {currentLanguage === "fr" ? "Confidentialité 🔒" : "Privacy 🔒"}
+            </button>
+          )}
         </div>
 
         {/* TAB BODY SCROLLABLE AREA */}
         <div className="p-6 overflow-y-auto max-h-[350px] bg-slate-50/50 flex-grow">
+          
+          {/* PRIVATE PROFILE BANNER */}
+          {isPrivate && (
+            <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-950 flex items-start gap-3 shadow-xs">
+              <Lock className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-extrabold text-xs">Profil Privé</p>
+                <p className="text-[11px] text-amber-800">
+                  Cet utilisateur a choisi de configurer son profil en mode privé. Ses informations personnelles, son numéro marchand et ses publications sont masqués.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* PRIVACY TAB (Self Only) */}
+          {activeTab === "privacy" && currentUserId === user.id && (
+            <div className="space-y-4 animate-fade-in bg-white p-5 rounded-3xl border border-gray-100 shadow-xs">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-gray-900 tracking-wider">Gestion de la Confidentialité du Profil</h4>
+                  <p className="text-[11px] text-gray-500">Décidez quelles informations sont publiques ou masquées pour les autres membres.</p>
+                </div>
+              </div>
+
+              {privacySuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold">
+                  {privacySuccessMsg}
+                </div>
+              )}
+
+              <div className="space-y-3 pt-2">
+                <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-gray-200 cursor-pointer hover:bg-slate-100 transition">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-xs text-gray-900">Rendre tout mon profil Privé</p>
+                    <p className="text-[10px] text-gray-500">Les autres membres ne pourront voir ni vos infos, ni vos publications, ni votre numéro marchand.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isProfilePrivate}
+                    onChange={(e) => setIsProfilePrivate(e.target.checked)}
+                    className="h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-gray-200 cursor-pointer hover:bg-slate-100 transition">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-xs text-gray-900">Masquer mon Numéro Marchand</p>
+                    <p className="text-[10px] text-gray-500">Empêcher les autres utilisateurs de voir votre numéro marchand sur votre profil.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={hideMerchantNumber}
+                    onChange={(e) => setHideMerchantNumber(e.target.checked)}
+                    className="h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-gray-200 cursor-pointer hover:bg-slate-100 transition">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-xs text-gray-900">Masquer ma Date d'inscription</p>
+                    <p className="text-[10px] text-gray-500">Cacher la date ou l'année d'inscription sur votre profil public.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={hideJoinDate}
+                    onChange={(e) => setHideJoinDate(e.target.checked)}
+                    className="h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-gray-200 cursor-pointer hover:bg-slate-100 transition">
+                  <div className="space-y-0.5">
+                    <p className="font-extrabold text-xs text-gray-900">Masquer mes Publications & Historique</p>
+                    <p className="text-[10px] text-gray-500">Empêcher la consultation de vos publications de groupe et de votre historique depuis votre profil.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={hidePublications}
+                    onChange={(e) => setHidePublications(e.target.checked)}
+                    className="h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                </label>
+              </div>
+
+              <div className="pt-3 flex justify-end">
+                <button
+                  type="button"
+                  disabled={isSavingPrivacy}
+                  onClick={handleSavePrivacy}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase px-5 py-2.5 rounded-xl transition shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingPrivacy ? "Enregistrement..." : "Enregistrer les préférences"}
+                </button>
+              </div>
+            </div>
+          )}
           
           {/* ABOUT TAB */}
           {activeTab === "about" && (
@@ -284,8 +441,8 @@ export default function UserProfileModal({
                 </div>
               </div>
 
-              {/* ZONE MARCHAND (If user has merchantNumber) */}
-              {user.merchantNumber && (
+              {/* ZONE MARCHAND (If user has merchantNumber and not hidden) */}
+              {user.merchantNumber && !hideMerchant && (
                 <div className="bg-gradient-to-br from-indigo-50/60 to-purple-50/60 border border-indigo-150 p-5 rounded-3xl space-y-4 shadow-xs" id="user_profile_merchant_credentials_block">
                   <div className="flex items-center gap-2 border-b border-indigo-100/60 pb-2.5">
                     <Award className="h-5 w-5 text-indigo-600 animate-pulse" />
@@ -375,7 +532,13 @@ export default function UserProfileModal({
           {/* PUBLICATIONS TAB */}
           {activeTab === "publications" && (
             <div className="space-y-4 animate-fade-in">
-              {isLoadingPubs ? (
+              {hidePubs ? (
+                <div className="text-center py-12 bg-white rounded-2xl border border-gray-100 p-6 space-y-2">
+                  <Lock className="h-8 w-8 text-amber-500 mx-auto" />
+                  <p className="text-xs font-bold text-gray-800">Publications masquées</p>
+                  <p className="text-[11px] text-gray-500">Cet utilisateur a configuré ses publications en mode privé.</p>
+                </div>
+              ) : isLoadingPubs ? (
                 <div className="text-center py-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto"></div>
                   <p className="text-xs text-gray-400 mt-2">Chargement des publications...</p>
