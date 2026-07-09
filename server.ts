@@ -96,6 +96,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
   merchantGoldPrice: 15000,
   merchantDiamondPrice: 35000,
   giftPointsConversionRate: 0.01,
+  referralProgramEnabled: true,
+  referralEligibleTypes: ["merchant_number", "product_purchase"],
+  referralCommissionMode: "percentage",
+  referralCommissionValue: 50,
+  referralMaxEarningsCap: 1000000,
+  referralMaxReferralsPerUser: 100,
   autoSenderName: "Yama Assistance",
   autoSenderPhone: "+221701234567",
   autoSenderAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
@@ -4021,6 +4027,12 @@ app.post("/api/admin/settings", (req, res) => {
     autoSenderPhone,
     autoSenderAvatar,
     apiKeys,
+    referralProgramEnabled,
+    referralEligibleTypes,
+    referralCommissionMode,
+    referralCommissionValue,
+    referralMaxEarningsCap,
+    referralMaxReferralsPerUser,
     operatorId 
   } = req.body;
 
@@ -4046,6 +4058,12 @@ app.post("/api/admin/settings", (req, res) => {
   if (autoSenderPhone !== undefined) appState.settings.autoSenderPhone = autoSenderPhone;
   if (autoSenderAvatar !== undefined) appState.settings.autoSenderAvatar = autoSenderAvatar;
   if (apiKeys !== undefined) appState.settings.apiKeys = apiKeys;
+  if (referralProgramEnabled !== undefined) appState.settings.referralProgramEnabled = referralProgramEnabled;
+  if (referralEligibleTypes !== undefined) appState.settings.referralEligibleTypes = referralEligibleTypes;
+  if (referralCommissionMode !== undefined) appState.settings.referralCommissionMode = referralCommissionMode;
+  if (referralCommissionValue !== undefined) appState.settings.referralCommissionValue = parseFloat(referralCommissionValue);
+  if (referralMaxEarningsCap !== undefined) appState.settings.referralMaxEarningsCap = parseFloat(referralMaxEarningsCap);
+  if (referralMaxReferralsPerUser !== undefined) appState.settings.referralMaxReferralsPerUser = parseInt(referralMaxReferralsPerUser, 10);
 
   // Synchronize user_admin profile with autoSender details for real-time contact rendering
   const userAdmin = appState.users.find(u => u.id === "user_admin");
@@ -4146,32 +4164,119 @@ app.delete("/api/admin/campaigns/:id", (req, res) => {
 });
 
 
-// 6. SUPERADMIN (FOUNDER) OPERATIONS
-// Nominate / Revoke Admin roles
+// 6. SUPERADMIN (FOUNDER) & ADVANCED RBAC OPERATIONS
+// Nominate / Revoke Admin roles with custom permissions
 app.post("/api/founder/admin/manage", (req, res) => {
-  const { targetUserId, action, operatorId } = req.body;
+  const { targetUserId, action, operatorId, adminPermissions, customRoleTitle } = req.body;
 
   const founder = appState.users.find(u => u.id === operatorId);
-  if (!founder || founder.role !== "founder") {
-    return res.status(403).json({ error: "Accès refusé. Seul le Fondateur suprême de Yaamaa peut ajuster les rôles critiques." });
+  if (!founder || (founder.role !== "founder" && founder.role !== "admin")) {
+    return res.status(403).json({ error: "Accès refusé. Privilèges insuffisants pour gérer les administrateurs." });
+  }
+
+  // If regular admin, check if they have createAdmins / manageRolesAndPermissions permission
+  if (founder.role === "admin" && founder.id !== "user_founder") {
+    const perms = founder.adminPermissions;
+    if (perms && !perms.createAdmins && !perms.manageRolesAndPermissions) {
+      return res.status(403).json({ error: "Vous n'avez pas l'autorisation d'administrer les rôles et permissions." });
+    }
   }
 
   const target = appState.users.find(u => u.id === targetUserId);
   if (!target) return res.status(404).json({ error: "Utilisateur cible introuvable." });
 
-  if (target.id === founder.id) {
-    return res.status(400).json({ error: "Opération interdite sur votre propre compte." });
+  if (target.id === founder.id && action === "demote") {
+    return res.status(400).json({ error: "Interdit de rétrograder votre propre compte." });
   }
 
   if (action === "promote") {
     target.role = "admin";
+    if (adminPermissions) {
+      target.adminPermissions = adminPermissions;
+    } else {
+      // Default full permissions for new admin if none provided
+      target.adminPermissions = {
+        manageUsers: true,
+        managePublications: true,
+        manageVirtualGifts: true,
+        manageBadges: true,
+        manageApi: true,
+        managePayments: true,
+        manageWithdrawals: true,
+        manageWallets: true,
+        blockWallets: true,
+        unblockWallets: true,
+        manageMerchantNumbers: true,
+        manageSubscriptions: true,
+        manageStatistics: true,
+        accessReports: true,
+        viewAuditLogs: true,
+        generalSettings: true,
+        createAdmins: false,
+        deleteAdmins: false,
+        manageRolesAndPermissions: false
+      };
+    }
   } else if (action === "demote") {
     target.role = "participant";
+    target.adminPermissions = undefined;
+  } else if (action === "update_permissions") {
+    if (adminPermissions) {
+      target.adminPermissions = adminPermissions;
+    }
+  } else if (action === "suspend_admin") {
+    target.isSuspended = true;
+  } else if (action === "reactivate_admin") {
+    target.isSuspended = false;
   }
 
   saveState(appState);
-  createAuditLog(operatorId, founder.username, "founder", "Gestion Roles", `${action === 'promote' ? 'Promotion' : 'Révocation'} de l'utilisateur @${target.username} au rang d'Admin`, req);
-  res.json({ user: target });
+  createAuditLog(operatorId, founder.username, founder.role, "Gestion Admin", `Action "${action}" exécutée sur l'administrateur @${target.username}`, req);
+  res.json({ user: target, users: appState.users });
+});
+
+// Wallet Blocking / Unblocking endpoint with full security checks
+app.post("/api/admin/wallets/block", (req, res) => {
+  const { targetUserId, operatorId, action, reason, durationDays, internalComment } = req.body;
+
+  const operator = appState.users.find(u => u.id === operatorId);
+  if (!operator || (operator.role !== "admin" && operator.role !== "founder")) {
+    return res.status(403).json({ error: "Accès refusé. Privilèges administratifs requis." });
+  }
+
+  if (operator.role === "admin" && operator.id !== "user_founder") {
+    const perms = operator.adminPermissions;
+    if (perms) {
+      if (action === "block" && !perms.blockWallets && !perms.manageWallets) {
+        return res.status(403).json({ error: "Vous n'avez pas l'autorisation de bloquer les portefeuilles." });
+      }
+      if (action === "unblock" && !perms.unblockWallets && !perms.manageWallets) {
+        return res.status(403).json({ error: "Vous n'avez pas l'autorisation de débloquer les portefeuilles." });
+      }
+    }
+  }
+
+  const target = appState.users.find(u => u.id === targetUserId);
+  if (!target) return res.status(404).json({ error: "Utilisateur cible introuvable." });
+
+  if (action === "block") {
+    target.walletBlock = {
+      isBlocked: true,
+      reason: reason || "Violation des conditions d'utilisation financières",
+      blockedByAdminId: operator.id,
+      blockedByUsername: operator.username,
+      blockedAt: new Date().toISOString(),
+      durationDays: durationDays ? Number(durationDays) : undefined,
+      internalComment: internalComment || "Bloqué temporairement par décision administrative"
+    };
+    createAuditLog(operatorId, operator.username, operator.role, "Blocage Portefeuille", `Portefeuille de @${target.username} bloqué. Motif: ${reason}`, req);
+  } else if (action === "unblock") {
+    target.walletBlock = undefined;
+    createAuditLog(operatorId, operator.username, operator.role, "Déblocage Portefeuille", `Portefeuille de @${target.username} débloqué et réactivé.`, req);
+  }
+
+  saveState(appState);
+  res.json({ success: true, targetUser: target });
 });
 
 // Critical System Switches

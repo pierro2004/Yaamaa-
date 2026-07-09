@@ -12,7 +12,9 @@ import {
   SystemSettings, 
   MissionType,
   AuditLog,
-  SubscriptionPlan
+  SubscriptionPlan,
+  CallRecord,
+  CallType
 } from "./types";
 import { ALL_COUNTRIES, getCurrencyForCountry } from "./countries";
 import Navbar from "./components/Navbar";
@@ -23,6 +25,7 @@ import SocialView from "./components/SocialView";
 import SuppliersDeliverersView from "./components/SuppliersDeliverersView";
 import UserProfileModal from "./components/UserProfileModal";
 import YaamaaAiView from "./components/YaamaaAiView";
+import { AudioVideoCallModal } from "./components/AudioVideoCallModal";
 import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
@@ -451,6 +454,11 @@ export default function App() {
   const [adminMerchantPremiumPrice, setAdminMerchantPremiumPrice] = useState<string>("5000");
   const [adminMerchantGoldPrice, setAdminMerchantGoldPrice] = useState<string>("15000");
   const [adminMerchantDiamondPrice, setAdminMerchantDiamondPrice] = useState<string>("35000");
+  const [adminReferralEnabled, setAdminReferralEnabled] = useState<boolean>(true);
+  const [adminReferralMode, setAdminReferralMode] = useState<"percentage" | "fixed">("percentage");
+  const [adminReferralValue, setAdminReferralValue] = useState<string>("50");
+  const [adminReferralMaxCap, setAdminReferralMaxCap] = useState<string>("1000000");
+  const [adminReferralMaxReferrals, setAdminReferralMaxReferrals] = useState<string>("100");
 
   // Yaamaa AI Assistant state
   const [aiChatType, setAiChatType] = useState<string>("participant_recommend");
@@ -490,6 +498,99 @@ export default function App() {
   const [broadcastCity, setBroadcastCity] = useState<string>("");
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [isSavingBroadcast, setIsSavingBroadcast] = useState<boolean>(false);
+
+  // Audio & Video Call System States
+  const [isCallModalOpen, setIsCallModalOpen] = useState<boolean>(false);
+  const [activeCall, setActiveCall] = useState<CallRecord | null>(null);
+  const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
+
+  const handleInitiateCall = async (targetUserId: string, type: CallType) => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch("/api/social/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callerId: currentUser.id,
+          receiverId: targetUserId,
+          type
+        })
+      });
+      if (res.ok) {
+        const call = await res.json();
+        setActiveCall(call);
+        setIsCallModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Error initiating call:", err);
+    }
+  };
+
+  const handleEndCall = async (callId: string) => {
+    try {
+      await fetch(`/api/social/calls/${callId}/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser?.id })
+      });
+      setActiveCall(null);
+      fetchCallHistory();
+    } catch (err) {
+      console.error("Error ending call:", err);
+    }
+  };
+
+  const handleAcceptCall = async (callId: string) => {
+    try {
+      const res = await fetch(`/api/social/calls/${callId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser?.id })
+      });
+      if (res.ok) {
+        const call = await res.json();
+        setActiveCall(call);
+        setIsCallModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Error accepting call:", err);
+    }
+  };
+
+  const handleHostAction = async (callId: string, action: string, targetUserId?: string) => {
+    try {
+      const res = await fetch(`/api/social/calls/${callId}/host-action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId: currentUser?.id, action, targetUserId })
+      });
+      if (res.ok) {
+        const call = await res.json();
+        setActiveCall(call);
+      }
+    } catch (err) {
+      console.error("Error with host action:", err);
+    }
+  };
+
+  const fetchCallHistory = async () => {
+    try {
+      const res = await fetch(`/api/social/calls?userId=${currentUser?.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.history) setCallHistory(data.history);
+        if (data.activeCall) setActiveCall(data.activeCall);
+      }
+    } catch (err) {
+      console.error("Error fetching call history:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchCallHistory();
+    }
+  }, [currentUser?.id]);
 
   // History & Back Button Synchronizer
   const isPopStateRef = React.useRef(false);
@@ -602,6 +703,11 @@ export default function App() {
         setAdminMerchantPremiumPrice(String(sRes.settings.merchantPremiumPrice ?? "5000"));
         setAdminMerchantGoldPrice(String(sRes.settings.merchantGoldPrice ?? "15000"));
         setAdminMerchantDiamondPrice(String(sRes.settings.merchantDiamondPrice ?? "35000"));
+        setAdminReferralEnabled(sRes.settings.referralProgramEnabled !== false);
+        setAdminReferralMode(sRes.settings.referralCommissionMode || "percentage");
+        setAdminReferralValue(String(sRes.settings.referralCommissionValue ?? "50"));
+        setAdminReferralMaxCap(String(sRes.settings.referralMaxEarningsCap ?? "1000000"));
+        setAdminReferralMaxReferrals(String(sRes.settings.referralMaxReferralsPerUser ?? "100"));
       }
 
       // Sync Current Active User
@@ -1909,6 +2015,11 @@ export default function App() {
           merchantPremiumPrice: parseFloat(adminMerchantPremiumPrice),
           merchantGoldPrice: parseFloat(adminMerchantGoldPrice),
           merchantDiamondPrice: parseFloat(adminMerchantDiamondPrice),
+          referralProgramEnabled: adminReferralEnabled,
+          referralCommissionMode: adminReferralMode,
+          referralCommissionValue: parseFloat(adminReferralValue),
+          referralMaxEarningsCap: parseFloat(adminReferralMaxCap),
+          referralMaxReferralsPerUser: parseInt(adminReferralMaxReferrals, 10),
           operatorId: currentUser.id
         })
       });
@@ -2718,6 +2829,7 @@ export default function App() {
           notifications={currentUser?.notifications}
           onNotificationClick={handleNotificationClick}
           onMarkAllRead={handleMarkAllNotificationsRead}
+          onOpenCallModal={() => setIsCallModalOpen(true)}
         />
       </div>
 
@@ -5097,6 +5209,17 @@ export default function App() {
               >
                 <span className="text-sm">🔑</span> Clés API & Intégrations
               </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("referral_program")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "referral_program"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🤝</span> Parrainage & Commissions
+              </button>
             </div>
 
             {/* TAB CONTENT: 1. DASHBOARD */}
@@ -6810,6 +6933,180 @@ export default function App() {
                 onRefreshData={() => syncPlatformData(currentUser?.id)}
               />
             )}
+
+            {/* 16. SYSTÈMES DE PARRAINAGE ET COMMISSIONS */}
+            {adminSubTab === "referral_program" && (
+              <div id="admin_tab_referral_program" className="space-y-8 animate-fade-in">
+                <div className="bg-white border rounded-3xl p-8 space-y-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6">
+                    <div>
+                      <h2 className="text-lg font-black text-gray-950 flex items-center gap-2">
+                        <span>🤝</span> Système Automatique de Parrainage & Commissions
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Configurez les règles de versement instantané des commissions de parrainage sans intervention manuelle.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${adminReferralEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {adminReferralEnabled ? '● Programme Actif' : '○ Programme Désactivé'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* STATS OVERVIEW */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="bg-amber-50/50 border border-amber-200/60 rounded-2xl p-5 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">Total Commissions Versées</span>
+                      <p className="text-2xl font-black text-amber-950 font-mono">
+                        {transactions.filter(t => t.type === "referral_bonus").reduce((sum, t) => sum + t.amount, 0).toLocaleString()} {currentUser?.currency || 'XOF'}
+                      </p>
+                    </div>
+                    <div className="bg-emerald-50/50 border border-emerald-200/60 rounded-2xl p-5 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Filleuls Enregistrés</span>
+                      <p className="text-2xl font-black text-emerald-950 font-mono">
+                        {users.filter(u => u.referredBy).length.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-indigo-50/50 border border-indigo-200/60 rounded-2xl p-5 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800">Transactions Bonus</span>
+                      <p className="text-2xl font-black text-indigo-950 font-mono">
+                        {transactions.filter(t => t.type === "referral_bonus").length.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CONFIG FORM */}
+                  <form onSubmit={handleSaveAdminSettings} className="space-y-6 pt-4 border-t">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border">
+                        <div>
+                          <label className="text-xs font-bold text-gray-900 block">Activer le Programme de Parrainage</label>
+                          <span className="text-[10px] text-gray-500">Autorise le calcul et le versement automatique des commissions.</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={adminReferralEnabled}
+                          onChange={(e) => setAdminReferralEnabled(e.target.checked)}
+                          className="h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div className="p-4 bg-gray-50 rounded-2xl border">
+                        <label className="text-xs font-bold text-gray-900 block mb-1">Mode de Calcul de la Commission</label>
+                        <select
+                          value={adminReferralMode}
+                          onChange={(e) => setAdminReferralMode(e.target.value as "percentage" | "fixed")}
+                          className="w-full border border-gray-200 rounded-xl p-2.5 text-xs font-mono bg-white"
+                        >
+                          <option value="percentage">Pourcentage (%) du montant de l'achat</option>
+                          <option value="fixed">Montant fixe par parrainage</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                          {adminReferralMode === "percentage" ? "Taux de Commission (%)" : "Montant Fixe de Commission"}
+                        </label>
+                        <input
+                          type="number"
+                          step={adminReferralMode === "percentage" ? "1" : "100"}
+                          value={adminReferralValue}
+                          onChange={(e) => setAdminReferralValue(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl p-3 text-xs font-mono"
+                          required
+                          min="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">Plafond Maximum de Gains par Parrain</label>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={adminReferralMaxCap}
+                          onChange={(e) => setAdminReferralMaxCap(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl p-3 text-xs font-mono"
+                          required
+                          min="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">Limite Max de Filleuls par Membre</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={adminReferralMaxReferrals}
+                          onChange={(e) => setAdminReferralMaxReferrals(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl p-3 text-xs font-mono"
+                          required
+                          min="1"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-amber-600/25 transition cursor-pointer"
+                      >
+                        Enregistrer les Paramètres de Parrainage
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* PAID COMMISSIONS HISTORY TABLE */}
+                  <div className="space-y-4 pt-6 border-t">
+                    <h3 className="text-sm font-black text-gray-950 flex items-center gap-2">
+                      <span>📜</span> Historique Récent des Commissions Versées
+                    </h3>
+                    <div className="overflow-x-auto border rounded-2xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 border-b text-gray-500 uppercase font-bold text-[10px]">
+                          <tr>
+                            <th className="p-3">ID Transaction</th>
+                            <th className="p-3">Bénéficiaire (Parrain)</th>
+                            <th className="p-3">Montant</th>
+                            <th className="p-3">Méthode / Origine</th>
+                            <th className="p-3">Détails</th>
+                            <th className="p-3">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {transactions.filter(t => t.type === "referral_bonus").slice(0, 20).map(tx => {
+                            const recipient = users.find(u => u.id === tx.userId);
+                            return (
+                              <tr key={tx.id} className="hover:bg-gray-50/50">
+                                <td className="p-3 font-mono font-bold text-gray-900">{tx.id}</td>
+                                <td className="p-3 font-medium text-gray-900">
+                                  {recipient ? `@${recipient.username}` : tx.userId}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-emerald-600">
+                                  +{tx.amount.toLocaleString()} {tx.currency}
+                                </td>
+                                <td className="p-3 text-gray-600">{tx.method}</td>
+                                <td className="p-3 text-gray-600 max-w-xs truncate">{tx.details}</td>
+                                <td className="p-3 text-gray-400 font-mono text-[10px]">
+                                  {new Date(tx.createdAt).toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {transactions.filter(t => t.type === "referral_bonus").length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-gray-400">
+                                Aucune commission de parrainage versée pour le moment.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -8365,6 +8662,22 @@ ${shareLink}
 
           </div>
         </div>
+      )}
+
+      {/* AUDIO & VIDEO COMMUNICATION MODAL */}
+      {isCallModalOpen && currentUser && (
+        <AudioVideoCallModal
+          currentUser={currentUser}
+          usersList={users}
+          activeCall={activeCall}
+          onClose={() => setIsCallModalOpen(false)}
+          onInitiateCall={handleInitiateCall}
+          onEndCall={handleEndCall}
+          onAcceptCall={handleAcceptCall}
+          onHostAction={handleHostAction}
+          callHistory={callHistory}
+          onRefreshCalls={fetchCallHistory}
+        />
       )}
 
     </div>

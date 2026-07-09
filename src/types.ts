@@ -30,6 +30,36 @@ export interface User {
   giftPointsEarned?: number; // points earned from receiving gifts
   is2faEnabled: boolean;
   isSuspended: boolean;
+  walletBlock?: {
+    isBlocked: boolean;
+    reason: string;
+    blockedByAdminId: string;
+    blockedByUsername: string;
+    blockedAt: string;
+    durationDays?: number;
+    internalComment?: string;
+  };
+  adminPermissions?: {
+    manageUsers: boolean;
+    managePublications: boolean;
+    manageVirtualGifts: boolean;
+    manageBadges: boolean;
+    manageApi: boolean;
+    managePayments: boolean;
+    manageWithdrawals: boolean;
+    manageWallets: boolean;
+    blockWallets: boolean;
+    unblockWallets: boolean;
+    manageMerchantNumbers: boolean;
+    manageSubscriptions: boolean;
+    manageStatistics: boolean;
+    accessReports: boolean;
+    viewAuditLogs: boolean;
+    generalSettings: boolean;
+    createAdmins: boolean;
+    deleteAdmins: boolean;
+    manageRolesAndPermissions: boolean;
+  };
   friendIds?: string[];
   address?: string;
   bio?: string;
@@ -239,6 +269,12 @@ export interface SystemSettings {
   rechargePacks?: RechargePack[];
   withdrawalPacks?: WithdrawalPack[];
   apiKeys?: ApiKey[];
+  referralProgramEnabled?: boolean;
+  referralEligibleTypes?: string[];
+  referralCommissionMode?: "fixed" | "percentage";
+  referralCommissionValue?: number;
+  referralMaxEarningsCap?: number;
+  referralMaxReferralsPerUser?: number;
 }
 
 // ==========================================
@@ -464,6 +500,10 @@ export interface CallParticipant {
   micOn: boolean;
   facingMode: "user" | "environment";
   isMutedByHost?: boolean;
+  isMuted?: boolean;
+  isCameraOff?: boolean;
+  isHandRaised?: boolean;
+  isSpeaking?: boolean;
 }
 
 export interface CallSession {
@@ -693,6 +733,24 @@ export interface SupervisionReport {
   activeUsersCount: number;
   growthRate: number;
   details: string;
+}
+
+export type CallType = "audio_single" | "video_single" | "audio_group" | "video_group" | "audio_meeting" | "video_meeting";
+export type CallStatus = "answered" | "missed" | "declined" | "cancelled" | "ongoing" | "completed";
+
+export interface CallRecord {
+  id: string;
+  type: CallType;
+  creatorId: string;
+  creatorName: string;
+  creatorAvatar: string;
+  participants: CallParticipant[];
+  startedAt: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  status: CallStatus;
+  isEncrypted: boolean;
+  recordingUrl?: string;
 }
 
 

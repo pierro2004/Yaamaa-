@@ -47,6 +47,7 @@ import {
   Calendar,
   Mail,
   Phone,
+  Video,
   Award,
   FileText,
   Search,
@@ -80,6 +81,7 @@ interface NavbarProps {
   }>;
   onNotificationClick?: (notif: { id: string; linkView?: string }) => void;
   onMarkAllRead?: () => void;
+  onOpenCallModal?: () => void;
 }
 
 function SafeText({ text }: { text: string }) {
@@ -118,7 +120,8 @@ export default function Navbar({
   onOpenVirtualGifts,
   notifications: propNotifications,
   onNotificationClick,
-  onMarkAllRead
+  onMarkAllRead,
+  onOpenCallModal
 }: NavbarProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -447,6 +450,19 @@ export default function Navbar({
                 <option value="en">EN</option>
               </select>
             </div>
+
+            {/* CALLS & MEETINGS BUTTON */}
+            {onOpenCallModal && (
+              <button
+                type="button"
+                onClick={onOpenCallModal}
+                className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition shadow-sm hover:shadow flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                title="Appels & Réunions Audio/Vidéo Yaamaa"
+              >
+                <Video className="w-4 h-4" />
+                <span className="hidden md:inline">Appels & Réunions</span>
+              </button>
+            )}
 
             {/* NOTIFICATION BUTTON */}
             <div className="relative">
