@@ -34,6 +34,8 @@ import { AdminPublishingBoard } from "./components/AdminPublishingBoard";
 import { ModerationCenterModal } from "./components/ModerationCenterModal";
 import { NotificationCenterModal } from "./components/NotificationCenterModal";
 import { NotificationSettingsModal } from "./components/NotificationSettingsModal";
+import { SupabaseIntegrationModal } from "./components/SupabaseIntegrationModal";
+import { ProjectExportModal } from "./components/ProjectExportModal";
 import { Language, getTranslation } from "./i18n";
 import { Store, Megaphone } from "lucide-react";
 import { 
@@ -422,6 +424,8 @@ export default function App() {
 
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isUsbExportModalOpen, setIsUsbExportModalOpen] = useState(false);
 
   // Deposit States
   const [depositAmount, setDepositAmount] = useState<string>("");
@@ -2838,6 +2842,8 @@ export default function App() {
           onOpenCallModal={() => setIsCallModalOpen(true)}
           onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
           onOpenNotificationSettings={() => setIsNotificationSettingsOpen(true)}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          onOpenUsbExportModal={() => setIsUsbExportModalOpen(true)}
         />
       </div>
 
@@ -8726,6 +8732,20 @@ ${shareLink}
           currentUser={currentUser}
           onClose={() => setIsNotificationSettingsOpen(false)}
           onUpdateUser={(updated) => setCurrentUser(updated)}
+        />
+      )}
+
+      {/* SUPABASE INTEGRATION MODAL */}
+      {isSupabaseModalOpen && (
+        <SupabaseIntegrationModal
+          onClose={() => setIsSupabaseModalOpen(false)}
+        />
+      )}
+
+      {/* PROJECT EXPORT MODAL FOR USB KEY */}
+      {isUsbExportModalOpen && (
+        <ProjectExportModal
+          onClose={() => setIsUsbExportModalOpen(false)}
         />
       )}
 

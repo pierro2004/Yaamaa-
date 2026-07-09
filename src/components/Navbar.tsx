@@ -84,6 +84,8 @@ interface NavbarProps {
   onOpenCallModal?: () => void;
   onOpenNotificationCenter?: () => void;
   onOpenNotificationSettings?: () => void;
+  onOpenSupabaseModal?: () => void;
+  onOpenUsbExportModal?: () => void;
 }
 
 function SafeText({ text }: { text: string }) {
@@ -125,7 +127,9 @@ export default function Navbar({
   onMarkAllRead,
   onOpenCallModal,
   onOpenNotificationCenter,
-  onOpenNotificationSettings
+  onOpenNotificationSettings,
+  onOpenSupabaseModal,
+  onOpenUsbExportModal
 }: NavbarProps) {
   const [showNotification, setShowNotification] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -791,6 +795,24 @@ export default function Navbar({
                       >
                         <UserIcon className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                         {currentLanguage === "fr" ? "Mon Portfolio 💼" : "My Portfolio 💼"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          if (onOpenSupabaseModal) onOpenSupabaseModal();
+                        }}
+                        className="w-full text-left px-2 py-1.5 hover:bg-emerald-50 rounded-lg flex items-center gap-2 text-emerald-700 font-bold transition cursor-pointer"
+                      >
+                        <span>🗄️ Relier à Supabase</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          if (onOpenUsbExportModal) onOpenUsbExportModal();
+                        }}
+                        className="w-full text-left px-2 py-1.5 hover:bg-emerald-50 rounded-lg flex items-center gap-2 text-emerald-700 font-bold transition cursor-pointer"
+                      >
+                        <span>💾 Fichiers pour Clé USB</span>
                       </button>
                       <button
                         id="pfp_option_logout"
