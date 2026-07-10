@@ -324,6 +324,7 @@ export default function App() {
   const [newProfileName, setNewProfileName] = useState<string>("");
   const [newProfileUsername, setNewProfileUsername] = useState<string>("");
   const [newProfileEmail, setNewProfileEmail] = useState<string>("");
+  const [newProfilePassword, setNewProfilePassword] = useState<string>("");
   const [newProfilePhone, setNewProfilePhone] = useState<string>("");
   const [newProfileRole, setNewProfileRole] = useState<"participant" | "advertiser">("participant");
   const [newProfileCountry, setNewProfileCountry] = useState<string>("France");
@@ -1377,6 +1378,7 @@ export default function App() {
           name: newProfileName,
           username: newProfileUsername,
           email: newProfileEmail,
+          password: newProfilePassword,
           phone: newProfilePhone,
           role: newProfileRole,
           country: newProfileCountry,
@@ -1395,6 +1397,7 @@ export default function App() {
       setNewProfileName("");
       setNewProfileUsername("");
       setNewProfileEmail("");
+      setNewProfilePassword("");
       setNewProfilePhone("");
       setNewProfileReferral("");
       
@@ -7450,15 +7453,27 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-gray-650 uppercase">Téléphone</label>
+                      <label className="text-[10px] font-bold text-gray-650 uppercase">Mot de passe</label>
                       <input
-                        type="tel"
-                        value={newProfilePhone}
-                        onChange={(e) => setNewProfilePhone(e.target.value)}
+                        type="password"
+                        required
+                        value={newProfilePassword}
+                        onChange={(e) => setNewProfilePassword(e.target.value)}
                         className="w-full mt-1 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        placeholder="+336..."
+                        placeholder="••••••••"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-650 uppercase">Téléphone</label>
+                    <input
+                      type="tel"
+                      value={newProfilePhone}
+                      onChange={(e) => setNewProfilePhone(e.target.value)}
+                      className="w-full mt-1 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="+336..."
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

@@ -1366,9 +1366,11 @@ app.post("/api/users/login", (req, res) => {
 app.post("/api/users/register", (req, res) => {
   let { name, username, email, phone, role, country, currency, referredBy, password } = req.body;
   
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Veuillez renseigner votre Nom, votre E-mail et votre Mot de passe." });
+  if (!name || !email) {
+    return res.status(400).json({ error: "Veuillez renseigner votre Nom et votre E-mail." });
   }
+
+  const userPassword = password || "123456";
 
   // Default to founder promo code BOSS2026 if not specified (Google search / direct download default)
   const defaultReferredBy = referredBy || "BOSS2026";
@@ -1395,7 +1397,7 @@ app.post("/api/users/register", (req, res) => {
   const newUser: User = {
     id: "user_" + Date.now(),
     email,
-    password,
+    password: userPassword,
     phone: phone || "",
     name,
     username,
