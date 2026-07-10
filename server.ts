@@ -51,8 +51,21 @@ const ai = GEMINI_API_KEY
     })
   : null;
 
-const STATE_FILE = path.join(process.cwd(), "data_state.json");
-const BACKUP_FILE = path.join(process.cwd(), "data_state_backup.json");
+const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true" || process.env.NODE_ENV === "production";
+const tmpDir = isVercel ? '/tmp' : process.cwd();
+const STATE_FILE = path.join(tmpDir, "data_state.json");
+const BACKUP_FILE = path.join(tmpDir, "data_state_backup.json");
+
+if (isVercel && !fs.existsSync(STATE_FILE)) {
+  const rootState = path.join(process.cwd(), "data_state.json");
+  if (fs.existsSync(rootState)) {
+    try {
+      fs.copyFileSync(rootState, STATE_FILE);
+    } catch (e) {
+      console.error("Failed to copy state to /tmp:", e);
+    }
+  }
+}
 
 // Define Initial State Schema
 interface AppState {
