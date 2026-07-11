@@ -21,6 +21,31 @@ export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, on
     onUpdateUser({ ...currentUser, notifications: updated });
   };
 
+  const handleRespondYaamaaChat = async (notifId: string, approved: boolean) => {
+    try {
+      const res = await fetch("/api/yaamaa-chat/respond-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, approved })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // update notification read status and add new message to inbox
+        const updated = notifications.map(n => n.id === notifId ? {
+          ...n,
+          read: true,
+          desc: approved ? "✅ Tentative de connexion autorisée. Code de sécurité généré dans votre boîte de réception." : "❌ Tentative de connexion refusée."
+        } : n);
+        onUpdateUser({ 
+          ...currentUser, 
+          notifications: updated 
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleMarkAllRead = () => {
     const updated = notifications.map(n => ({ ...n, read: true }));
     onUpdateUser({ ...currentUser, notifications: updated });
@@ -190,27 +215,48 @@ export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, on
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    {notif.linkView && onNavigateView && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onNavigateView(notif.linkView);
-                        }}
-                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-extrabold flex items-center gap-1 transition cursor-pointer"
-                      >
-                        Voir <ExternalLink className="h-3 w-3" />
-                      </button>
-                    )}
-                    {!notif.read && (
-                      <button
-                        type="button"
-                        onClick={() => handleMarkAsRead(notif.id)}
-                        className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-emerald-600 transition cursor-pointer"
-                        title="Marquer comme lu"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
+                    {notif.title.includes("Yaamaa Chat") && !notif.read ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRespondYaamaaChat(notif.id, true)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                        >
+                          <Check className="h-3.5 w-3.5" /> OUI
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRespondYaamaaChat(notif.id, false)}
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" /> NON
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {notif.linkView && onNavigateView && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onNavigateView(notif.linkView);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-extrabold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            Voir <ExternalLink className="h-3 w-3" />
+                          </button>
+                        )}
+                        {!notif.read && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkAsRead(notif.id)}
+                            className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-emerald-600 transition cursor-pointer"
+                            title="Marquer comme lu"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        )}
+                      </>
                     )}
                     <button
                       type="button"

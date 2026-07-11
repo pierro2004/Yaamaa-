@@ -25,6 +25,7 @@ import SocialView from "./components/SocialView";
 import SuppliersDeliverersView from "./components/SuppliersDeliverersView";
 import UserProfileModal from "./components/UserProfileModal";
 import YaamaaAiView from "./components/YaamaaAiView";
+import YaamaaChatView from "./components/YaamaaChatView";
 import { AudioVideoCallModal } from "./components/AudioVideoCallModal";
 import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
@@ -5021,6 +5022,27 @@ export default function App() {
             onUpdateUser={(updated) => setCurrentUser(updated)}
             shops={shops}
             products={products}
+          />
+        )}
+
+        {/* Yaamaa Chat Secondary App Integration View */}
+        {currentView === "yaamaa-chat" && (
+          <YaamaaChatView 
+            currentUser={currentUser}
+            usersList={users}
+            onBackToMain={() => setCurrentView("home")}
+            onLoginSuccess={(user) => {
+              setCurrentUser(user);
+              localStorage.setItem("yaamaa_logged_user_id", user.id);
+            }}
+            onTriggerApproval={async (merchantNumber) => {
+              const res = await fetch("/api/yaamaa-chat/verify-merchant", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ merchantNumber })
+              });
+              return await res.json();
+            }}
           />
         )}
 

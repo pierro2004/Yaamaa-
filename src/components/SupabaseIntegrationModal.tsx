@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Database, CheckCircle2, AlertCircle, ExternalLink, Key, Copy, Check, X } from "lucide-react";
+import { Database, CheckCircle2, AlertCircle, ExternalLink, Key, Copy, Check, X, Activity, Server, ShieldCheck } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { runSupabaseDiagnostics, SupabaseDiagnosticResult } from "../lib/supabaseDiagnostics";
 
 interface SupabaseIntegrationModalProps {
   onClose: () => void;
@@ -8,7 +9,7 @@ interface SupabaseIntegrationModalProps {
 
 export function SupabaseIntegrationModal({ onClose }: SupabaseIntegrationModalProps) {
   const [copied, setCopied] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string; details?: SupabaseDiagnosticResult } | null>(null);
   const [testing, setTesting] = useState(false);
 
   const handleCopy = (text: string, keyName: string) => {
@@ -18,29 +19,25 @@ export function SupabaseIntegrationModal({ onClose }: SupabaseIntegrationModalPr
   };
 
   const handleTestConnection = async () => {
-    if (!supabase) {
-      setTestResult({ success: false, message: "Supabase n'est pas configuré. Veuillez définir VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY sur Vercel." });
-      return;
-    }
     setTesting(true);
     setTestResult(null);
     try {
-      // Test query to supabase health/ping or auth
-      const { data, error } = await supabase.from('_health_check').select('*').limit(1);
-      // Even if table doesn't exist, if connection is reachable error will be relation missing rather than network error
-      if (error && error.code === 'PGRST116' || !error || error.message.includes("does not exist")) {
-        setTestResult({ success: true, message: "Connexion réussie avec succès à votre projet Supabase !" });
-      } else if (error) {
-        setTestResult({ success: true, message: "Connexion établie avec Supabase (Erreur table optionnelle : " + error.message + ")" });
-      } else {
-        setTestResult({ success: true, message: "Connexion établie avec succès !" });
-      }
+      const diag = await runSupabaseDiagnostics();
+      setTestResult({
+        success: diag.reachable,
+        message: diag.summary,
+        details: diag
+      });
     } catch (err: any) {
-      setTestResult({ success: false, message: "Erreur de connexion : " + (err.message || "Impossible de joindre Supabase") });
+      setTestResult({
+        success: false,
+        message: "Erreur lors du diagnostic : " + (err.message || "Erreur inconnue")
+      });
     } finally {
       setTesting(false);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
@@ -167,8 +164,25 @@ export function SupabaseIntegrationModal({ onClose }: SupabaseIntegrationModalPr
           </div>
 
           {testResult && (
-            <div className={`p-3 rounded-xl border text-xs font-semibold ${testResult.success ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-rose-50 text-rose-800 border-rose-200"}`}>
-              {testResult.message}
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${testResult.success ? "bg-emerald-50 text-emerald-900 border-emerald-200" : "bg-rose-50 text-rose-900 border-rose-200"}`}>
+              <div className="font-extrabold flex items-center gap-2">
+                {testResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
+                <span>{testResult.message}</span>
+              </div>
+              {testResult.details && (
+                <div className="pt-2 border-t border-emerald-200/60 grid grid-cols-2 gap-2 text-[11px] font-mono">
+                  <div>• URL configurée : <span className={testResult.details.urlConfigured ? "text-emerald-700 font-bold" : "text-rose-600 font-bold"}>{testResult.details.urlConfigured ? "Oui" : "Non"}</span></div>
+                  <div>• Clé configurée : <span className={testResult.details.keyConfigured ? "text-emerald-700 font-bold" : "text-rose-600 font-bold"}>{testResult.details.keyConfigured ? "Oui" : "Non"}</span></div>
+                  <div>• Format URL : <span className={testResult.details.urlFormatValid ? "text-emerald-700 font-bold" : "text-rose-600 font-bold"}>{testResult.details.urlFormatValid ? "Valide" : "Invalide"}</span></div>
+                  <div>• Format Clé : <span className={testResult.details.keyFormatValid ? "text-emerald-700 font-bold" : "text-rose-600 font-bold"}>{testResult.details.keyFormatValid ? "Valide" : "Invalide"}</span></div>
+                  {testResult.details.statusCode !== undefined && (
+                    <div>• Code HTTP : <span className="font-bold text-slate-800">{testResult.details.statusCode}</span></div>
+                  )}
+                  {testResult.details.latencyMs !== undefined && (
+                    <div>• Latence API : <span className="font-bold text-slate-800">{testResult.details.latencyMs} ms</span></div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

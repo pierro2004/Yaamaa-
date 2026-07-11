@@ -94,6 +94,7 @@ interface AppState {
   supervisionIncidents?: SupervisionIncident[];
   supervisionReports?: SupervisionReport[];
   moderationFiles?: ModerationFile[];
+  nextMerchantSequence?: number;
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -192,7 +193,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
 function ensureAdminMerchantNumber(u: User) {
   if (u && (u.role === "admin" || u.role === "founder")) {
     if (!u.merchantNumber) {
-      u.merchantNumber = u.role === "founder" ? "DIAMOND-FOUNDER-001" : "ADMIN-VIP-001";
+      u.merchantNumber = u.role === "founder" ? "YA0000000001FR" : "YA0000000002FR";
     }
     if (!u.merchantPackType) {
       u.merchantPackType = "diamond";
@@ -220,7 +221,7 @@ const SEED_USERS: User[] = [
     country: "France",
     currency: "EUR",
     referralCode: "BOSS2026",
-    merchantNumber: "DIAMOND-FOUNDER-001",
+    merchantNumber: "YA0000000001FR",
     merchantPackType: "diamond",
     merchantNumberEligible: true,
     merchantNumberPurchasedAt: "2026-01-01T00:00:00Z",
@@ -242,7 +243,7 @@ const SEED_USERS: User[] = [
     country: "France",
     currency: "EUR",
     referralCode: "CELINE_A",
-    merchantNumber: "ADMIN-VIP-001",
+    merchantNumber: "YA0000000002FR",
     merchantPackType: "diamond",
     merchantNumberEligible: true,
     merchantNumberPurchasedAt: "2026-01-01T00:00:00Z",
@@ -1480,6 +1481,78 @@ app.post("/api/users/register", (req, res) => {
   res.json(newUser);
 });
 
+// Yaamaa Chat API endpoints
+app.post("/api/yaamaa-chat/verify-merchant", (req, res) => {
+  const { merchantNumber } = req.body;
+  if (!merchantNumber) {
+    return res.status(400).json({ error: "Numéro marchand requis." });
+  }
+
+  const cleanNum = merchantNumber.trim().toUpperCase();
+  const user = appState.users.find(u => u.merchantNumber && u.merchantNumber.toUpperCase() === cleanNum);
+
+  if (!user) {
+    return res.status(404).json({ error: "Ce numéro marchand n'existe pas dans la base de données Yaamaa." });
+  }
+
+  const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  if (!user.notifications) {
+    user.notifications = [];
+  }
+
+  user.notifications.unshift({
+    id: "notif_chat_" + Date.now(),
+    title: "Tentative de connexion Yaamaa Chat 🔐",
+    desc: `Une demande de connexion a été initiée depuis Yaamaa Chat pour votre numéro marchand (${user.merchantNumber}). Code de sécurité: ${generatedCode}.`,
+    time: "À l'instant",
+    read: false,
+    priority: "critical",
+    category: "security",
+    linkView: "chat"
+  });
+
+  saveState(appState);
+  res.json({ success: true, user, code: generatedCode });
+});
+
+app.get("/api/yaamaa-chat/check-status", (req, res) => {
+  const { userId } = req.query;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+  res.json({ 
+    approved: user.yaamaaChatApproved ?? false, 
+    rejected: user.yaamaaChatRejected ?? false,
+    approvedAt: user.yaamaaChatApprovedAt || null 
+  });
+});
+
+app.post("/api/yaamaa-chat/respond-approval", (req, res) => {
+  const { userId, approved } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+  user.yaamaaChatApproved = Boolean(approved);
+  user.yaamaaChatRejected = !Boolean(approved);
+  user.yaamaaChatApprovedAt = new Date().toISOString();
+
+  if (approved) {
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: "notif_code_" + Date.now(),
+      title: "Code de Connexion Yaamaa Chat 🔑",
+      desc: `Vous avez autorisé la connexion. Votre code d'accès sécurisé pour Yaamaa Chat est : 849201.`,
+      time: "À l'instant",
+      read: false,
+      priority: "critical",
+      category: "security"
+    });
+  }
+
+  saveState(appState);
+  res.json({ success: true, approved });
+});
+
 // Achat de numéro marchand unique et commissions de parrainage associées
 app.post("/api/users/purchase-merchant-number", (req, res) => {
   const { userId, paymentMethod, paymentPhone, paymentName, packType } = req.body;
@@ -1545,16 +1618,27 @@ app.post("/api/users/purchase-merchant-number", (req, res) => {
   );
   const countryCode = countryData ? countryData.code.toUpperCase() : "BJ";
 
-  // Génération d'un numéro marchand unique de format 10 chiffres + code pays (ex: 1234567890BJ)
+  // Génération d'un numéro marchand unique et séquentiel au format YA + 10 chiffres + Code Pays (ex: YA0000000001BJ)
+  if (!appState.nextMerchantSequence) {
+    appState.nextMerchantSequence = 1;
+    appState.users.forEach(u => {
+      if (u.merchantNumber && u.merchantNumber.startsWith("YA")) {
+        const numPart = u.merchantNumber.substring(2, 12);
+        const parsed = parseInt(numPart, 10);
+        if (!isNaN(parsed) && parsed >= appState.nextMerchantSequence!) {
+          appState.nextMerchantSequence = parsed + 1;
+        }
+      }
+    });
+  }
+
   let generatedNumber = "";
   let isUnique = false;
   let attempts = 0;
-  while (!isUnique && attempts < 200) {
-    let digits = "";
-    for (let i = 0; i < 10; i++) {
-      digits += Math.floor(Math.random() * 10).toString();
-    }
-    const candidate = `${digits}${countryCode}`;
+  while (!isUnique && attempts < 1000) {
+    const seq = appState.nextMerchantSequence++;
+    const digits = String(seq).padStart(10, '0');
+    const candidate = `YA${digits}${countryCode}`;
     const duplicate = appState.users.some(u => u.merchantNumber === candidate);
     if (!duplicate) {
       generatedNumber = candidate;
@@ -1564,11 +1648,9 @@ app.post("/api/users/purchase-merchant-number", (req, res) => {
   }
 
   if (!generatedNumber) {
-    let fallbackDigits = "";
-    for (let i = 0; i < 10; i++) {
-      fallbackDigits += Math.floor(Math.random() * 10).toString();
-    }
-    generatedNumber = `${fallbackDigits}${countryCode}`;
+    const fallbackSeq = appState.nextMerchantSequence++;
+    const fallbackDigits = String(fallbackSeq).padStart(10, '0');
+    generatedNumber = `YA${fallbackDigits}${countryCode}`;
   }
 
   user.merchantNumber = generatedNumber;
@@ -6336,6 +6418,9 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    app.get("/chat", (req, res) => {
+      res.sendFile(path.join(distPath, "chat.html"));
+    });
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });

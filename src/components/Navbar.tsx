@@ -52,7 +52,8 @@ import {
   FileText,
   Search,
   Download,
-  Truck
+  Truck,
+  ExternalLink
 } from "lucide-react";
 import InstallPwaModal from "./InstallPwaModal";
 
@@ -1229,6 +1230,32 @@ export default function Navbar({
                       {currentUser?.yaamaaAiActive && (
                         <span className="absolute top-2 right-2 flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                       )}
+                    </button>
+
+                    {/* Yaamaa Chat Independent App */}
+                    <button
+                      id="menu_list_btn_yaamaa_chat"
+                      onClick={() => {
+                        handleOptionSelect(() => {});
+                        window.open("/chat", "_blank");
+                      }}
+                      className="group flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/80 to-teal-50/50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/60 transition-all text-left cursor-pointer relative shadow-sm"
+                    >
+                      <div className="flex items-center gap-3.5 truncate">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition">
+                          <MessageSquare className="h-5.5 w-5.5" />
+                        </div>
+                        <div className="truncate">
+                          <span className="block text-xs font-black text-slate-900 group-hover:text-emerald-700 transition font-heading flex items-center gap-1.5">
+                            {currentLanguage === "fr" ? "Yaamaa Chat 💬" : "Yaamaa Chat 💬"}
+                            <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.2 rounded-full font-mono uppercase tracking-wider">Séparé</span>
+                          </span>
+                          <span className="block text-[10.5px] text-emerald-800/80 font-mono mt-0.5 truncate">
+                            {currentLanguage === "fr" ? "Ouvrir l'application autonome" : "Open standalone app"}
+                          </span>
+                        </div>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-emerald-600 shrink-0 ml-2" />
                     </button>
 
                     {/* Sécurité */}

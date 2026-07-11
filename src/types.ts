@@ -92,9 +92,12 @@ export interface User {
     timestamp?: string;
     read?: boolean;
     priority?: "info" | "standard" | "important" | "urgent" | "critical";
-    category?: "communication" | "account" | "wallet" | "merchant" | "referral" | "gifts" | "publications" | "moderation" | "admin";
+    category?: "communication" | "account" | "wallet" | "merchant" | "referral" | "gifts" | "publications" | "moderation" | "admin" | "security";
     linkView?: string;
   }>;
+  yaamaaChatApproved?: boolean;
+  yaamaaChatRejected?: boolean;
+  yaamaaChatApprovedAt?: string;
   notificationPreferences?: {
     calls: boolean;
     messages: boolean;
