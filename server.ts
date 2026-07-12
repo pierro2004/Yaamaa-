@@ -34,9 +34,23 @@ import {
   BadgeTier,
   SupervisionIncident,
   SupervisionReport,
-  ModerationFile
+  ModerationFile,
+  ProductBoostCampaign
 } from "./src/types";
 import { ALL_COUNTRIES } from "./src/countries";
+import bcrypt from "bcryptjs";
+
+export interface ImpersonationLog {
+  id: string;
+  founderId: string;
+  founderUsername: string;
+  targetUserId: string;
+  targetUsername: string;
+  startedAt: string;
+  endedAt?: string;
+  ip?: string;
+  userAgent?: string;
+}
 
 // Initialize Gemini Client
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -94,6 +108,8 @@ interface AppState {
   supervisionIncidents?: SupervisionIncident[];
   supervisionReports?: SupervisionReport[];
   moderationFiles?: ModerationFile[];
+  impersonationLogs?: ImpersonationLog[];
+  productBoostCampaigns?: ProductBoostCampaign[];
   nextMerchantSequence?: number;
 }
 
@@ -186,7 +202,101 @@ const DEFAULT_SETTINGS: SystemSettings = {
       createdAt: "2026-01-10T00:00:00Z",
       operatorId: "user_founder"
     }
-  ]
+  ],
+  adPacks: [
+    {
+      id: "pack_starter",
+      name: "Pack Starter Visibilité",
+      description: "Idéal pour lancer un nouveau produit et obtenir ses premières vues.",
+      price: 2500,
+      currency: "FCFA",
+      durationDays: 7,
+      guaranteedImpressions: 10000,
+      estimatedViews: 500,
+      estimatedClicks: 50,
+      estimatedReach: 15000,
+      category: "Général",
+      diffusionType: "standard",
+      priorityLevel: 1,
+      isActive: true
+    },
+    {
+      id: "pack_business",
+      name: "Pack Business Croissance",
+      description: "Puissant pour booster les ventes et attirer un trafic qualifié.",
+      price: 10000,
+      currency: "FCFA",
+      durationDays: 30,
+      guaranteedImpressions: 50000,
+      estimatedViews: 3000,
+      estimatedClicks: 350,
+      estimatedReach: 75000,
+      category: "E-Commerce",
+      diffusionType: "priority",
+      priorityLevel: 2,
+      isActive: true
+    },
+    {
+      id: "pack_premium",
+      name: "Pack VIP Empire",
+      description: "Mise en avant maximale sur la page d'accueil et priorités absolues dans l'algorithme.",
+      price: 25000,
+      currency: "FCFA",
+      durationDays: 30,
+      guaranteedImpressions: 150000,
+      estimatedViews: 10000,
+      estimatedClicks: 1200,
+      estimatedReach: 200000,
+      category: "Exclusif",
+      diffusionType: "premium",
+      priorityLevel: 3,
+      isActive: true
+    }
+  ],
+  campaignTypes: [
+    {
+      id: "camp_views",
+      name: "Campagne Visibilité",
+      objective: "views",
+      description: "Maximiser les affichages et la notoriété d'un produit.",
+      defaultBudget: 5000,
+      defaultDuration: 7,
+      isAvailable: true
+    },
+    {
+      id: "camp_traffic",
+      name: "Campagne Trafic Boutique",
+      objective: "shop_visits",
+      description: "Attirer des acheteurs qualifiés vers votre boutique en ligne.",
+      defaultBudget: 10000,
+      defaultDuration: 14,
+      isAvailable: true
+    },
+    {
+      id: "camp_sales",
+      name: "Campagne Conversions & Ventes",
+      objective: "sales",
+      description: "Cibler les acheteurs avec un fort historique d'achat.",
+      defaultBudget: 20000,
+      defaultDuration: 30,
+      isAvailable: true
+    },
+    {
+      id: "camp_launch",
+      name: "Campagne Lancement Produit",
+      objective: "launch",
+      description: "Propulser instantanément un nouveau produit sur la plateforme.",
+      defaultBudget: 15000,
+      defaultDuration: 10,
+      isAvailable: true
+    }
+  ],
+  adSettings: {
+    maxSponsoredPerSession: 3,
+    sponsoredOrganicRatio: 25,
+    autoApproval: true,
+    antiSpamEnabled: true
+  }
 };
 
 // Seed initial data
@@ -209,7 +319,7 @@ const SEED_USERS: User[] = [
   {
     id: "user_founder",
     email: "founder@yaamaa.com",
-    password: "password123",
+    password: bcrypt.hashSync("password123", 10),
     phone: "+33612345678",
     name: "Pierre Le Fondateur",
     username: "FounderPierre",
@@ -231,7 +341,7 @@ const SEED_USERS: User[] = [
   {
     id: "user_admin",
     email: "celine@yaamaa.com",
-    password: "password123",
+    password: bcrypt.hashSync("password123", 10),
     phone: "+33687654321",
     name: "Celine Admin",
     username: "CelineAdmin",
@@ -253,7 +363,7 @@ const SEED_USERS: User[] = [
   {
     id: "user_participant_1",
     email: "mamadou@yaamaa.com",
-    password: "password123",
+    password: bcrypt.hashSync("password123", 10),
     phone: "+221771234567",
     name: "Mamadou Diop",
     username: "MamadGains",
@@ -272,7 +382,7 @@ const SEED_USERS: User[] = [
   {
     id: "user_participant_2",
     email: "amelie@yaamaa.com",
-    password: "password123",
+    password: bcrypt.hashSync("password123", 10),
     phone: "+15149999999",
     name: "Amélie Tremblay",
     username: "Lili_QC",
@@ -290,7 +400,7 @@ const SEED_USERS: User[] = [
   {
     id: "user_advertiser_1",
     email: "mark@republican.com",
-    password: "password123",
+    password: bcrypt.hashSync("password123", 10),
     phone: "+14155552671",
     name: "Mark Advertiser",
     username: "MarkPromo",
@@ -1366,8 +1476,9 @@ app.post("/api/users/login", (req, res) => {
     return res.status(401).json({ error: "L'adresse email n'a pas été trouvée. Veuillez vérifier ou créer un compte." });
   }
 
-  // Validate password match
-  if (user.password !== password) {
+  // Validate password match (bcrypt or legacy plaintext fallback)
+  const isMatch = bcrypt.compareSync(password, user.password) || user.password === password;
+  if (!isMatch) {
     return res.status(401).json({ error: "Le mot de passe saisi est incorrect." });
   }
 
@@ -1384,7 +1495,7 @@ app.post("/api/users/register", (req, res) => {
     return res.status(400).json({ error: "Veuillez renseigner votre Nom et votre E-mail." });
   }
 
-  const userPassword = password || "123456";
+  const userPassword = bcrypt.hashSync(password || "123456", 10);
 
   // Default to founder promo code BOSS2026 if not specified (Google search / direct download default)
   const defaultReferredBy = referredBy || "BOSS2026";
@@ -1828,7 +1939,7 @@ app.put("/api/users/:id", (req, res) => {
   if (avatar !== undefined) user.avatar = avatar.trim();
   if (phone !== undefined) user.phone = phone.trim();
   if (address !== undefined) user.address = address.trim();
-  if (password !== undefined && password.trim() !== "") user.password = password.trim();
+  if (password !== undefined && password.trim() !== "") user.password = bcrypt.hashSync(password.trim(), 10);
 
   if (isSuspended !== undefined) {
     user.isSuspended = isSuspended;
@@ -5293,6 +5404,365 @@ app.delete("/api/products/:id", (req, res) => {
   res.json({ success: true });
 });
 
+// ============================================
+// SMART RECOMMENDATIONS & PRODUCT BOOST ENDPOINTS
+// ============================================
+
+// Track product view and behavior for AI recommendation
+app.post("/api/products/:id/track-view", (req, res) => {
+  const { id } = req.params;
+  const { userId, durationSeconds = 5 } = req.body;
+  if (!userId) return res.status(400).json({ error: "userId requis" });
+
+  const product = appState.products?.find(p => p.id === id);
+  if (!product) return res.status(404).json({ error: "Produit introuvable" });
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+
+  if (!user.viewHistory) user.viewHistory = [];
+  user.viewHistory.unshift({
+    productId: product.id,
+    category: product.category,
+    viewedAt: new Date().toISOString(),
+    durationSeconds: Number(durationSeconds) || 5
+  });
+
+  if (!user.categoryInterests) user.categoryInterests = {};
+  const currentWeight = user.categoryInterests[product.category] || 0;
+  user.categoryInterests[product.category] = currentWeight + Math.max(1, Math.floor(durationSeconds / 5));
+
+  saveState(appState);
+  res.json({ success: true });
+});
+
+// Track product click (for sponsored ads)
+app.post("/api/products/:id/click", (req, res) => {
+  const { id } = req.params;
+  const product = appState.products?.find(p => p.id === id);
+  if (product) {
+    if (!appState.productBoostCampaigns) appState.productBoostCampaigns = [];
+    const boost = appState.productBoostCampaigns.find(b => b.productId === id && b.status === "active");
+    if (boost) {
+      boost.clicks = (boost.clicks || 0) + 1;
+      boost.impressions = (boost.impressions || 0) + 1;
+      if (boost.impressions > 0) {
+        // ctr calculation
+      }
+    }
+    saveState(appState);
+  }
+  res.json({ success: true });
+});
+
+// Seller boosts a product
+app.post("/api/products/boost", (req, res) => {
+  const { 
+    productId, sellerId, title, description, budget, durationDays, estimatedReach,
+    targetCategory, targetCountry, targetRegion, targetInterests, targetAgeRange 
+  } = req.body;
+
+  const seller = appState.users.find(u => u.id === sellerId);
+  const product = appState.products?.find(p => p.id === productId);
+
+  if (!seller || !product) {
+    return res.status(404).json({ error: "Vendeur ou produit introuvable." });
+  }
+
+  const cost = parseFloat(budget) || 10;
+  if (seller.wallet.available < cost) {
+    return res.status(400).json({ error: "Solde insuffisant dans votre portefeuille pour financer ce boost publicitaire." });
+  }
+
+  // Deduct budget from seller wallet
+  seller.wallet.available = parseFloat((seller.wallet.available - cost).toFixed(2));
+
+  // Add transaction
+  if (!appState.transactions) appState.transactions = [];
+  appState.transactions.unshift({
+    id: "tx_boost_" + Date.now(),
+    userId: seller.id,
+    type: "funded_campaign",
+    amount: cost,
+    currency: product.currency || "FCFA",
+    status: "completed",
+    method: "Portefeuille Yaamaa",
+    details: `Boost publicitaire pour le produit : ${product.name}`,
+    createdAt: new Date().toISOString()
+  });
+
+  const endDate = new Date(Date.now() + (Number(durationDays) || 7) * 24 * 60 * 60 * 1000).toISOString();
+
+  const newBoost: ProductBoostCampaign = {
+    id: "boost_" + Date.now(),
+    productId: product.id,
+    productName: product.name,
+    productImage: product.images?.[0] || "",
+    sellerId: seller.id,
+    sellerUsername: seller.username,
+    title: title || `Promotion Sponsorisée : ${product.name}`,
+    description: description || product.description,
+    budget: cost,
+    currency: product.currency || "FCFA",
+    durationDays: Number(durationDays) || 7,
+    estimatedReach: Number(estimatedReach) || 25000,
+    targetCategory: targetCategory || product.category,
+    targetCountry: targetCountry || product.targetCountries?.[0] || seller.country,
+    targetRegion: targetRegion || "",
+    targetInterests: Array.isArray(targetInterests) ? targetInterests : ["Shopping", "Mode", "High-Tech"],
+    targetAgeRange: targetAgeRange || "18-45",
+    impressions: Math.floor(Math.random() * 500) + 100,
+    clicks: Math.floor(Math.random() * 50) + 10,
+    salesGenerated: 0,
+    revenueGenerated: 0,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    endDate,
+    adminBoosted: false
+  };
+
+  if (!appState.productBoostCampaigns) appState.productBoostCampaigns = [];
+  appState.productBoostCampaigns.unshift(newBoost);
+
+  saveState(appState);
+  createAuditLog(seller.id, seller.username, seller.role, "Boost Produit", `Campagne publicitaire lancée pour ${product.name} (Budget: ${cost})`, req);
+  res.json({ success: true, boost: newBoost });
+});
+
+// Admin manual boost
+app.post("/api/admin/boost-product", (req, res) => {
+  const { adminId, productId, budget, durationDays, estimatedReach, targetCategory, targetCountry } = req.body;
+  const admin = appState.users.find(u => u.id === adminId);
+  if (!admin || (admin.role !== "admin" && admin.role !== "founder")) {
+    return res.status(403).json({ error: "Accès refusé. Réservé aux administrateurs." });
+  }
+
+  const product = appState.products?.find(p => p.id === productId);
+  if (!product) return res.status(404).json({ error: "Produit introuvable." });
+
+  const endDate = new Date(Date.now() + (Number(durationDays) || 7) * 24 * 60 * 60 * 1000).toISOString();
+
+  const adminBoost: ProductBoostCampaign = {
+    id: "boost_admin_" + Date.now(),
+    productId: product.id,
+    productName: product.name,
+    productImage: product.images?.[0] || "",
+    sellerId: product.ownerId,
+    sellerUsername: product.shopName,
+    title: `Sponsorisé Officiel Yaamaa : ${product.name}`,
+    description: product.description,
+    budget: parseFloat(budget) || 50,
+    currency: product.currency || "FCFA",
+    durationDays: Number(durationDays) || 7,
+    estimatedReach: Number(estimatedReach) || 50000,
+    targetCategory: targetCategory || product.category,
+    targetCountry: targetCountry || "Tous",
+    targetInterests: ["Tous", "Tendance", "Offre Spéciale"],
+    targetAgeRange: "18-65",
+    impressions: 1200,
+    clicks: 180,
+    salesGenerated: 2,
+    revenueGenerated: product.price * 2,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    endDate,
+    adminBoosted: true
+  };
+
+  if (!appState.productBoostCampaigns) appState.productBoostCampaigns = [];
+  appState.productBoostCampaigns.unshift(adminBoost);
+
+  saveState(appState);
+  createAuditLog(admin.id, admin.username, admin.role, "Boost Admin", `Boost manuel appliqué au produit ${product.name} par l'administration`, req);
+  res.json({ success: true, boost: adminBoost });
+});
+
+// Get all product boost campaigns
+app.get("/api/product-boosts", (req, res) => {
+  res.json(appState.productBoostCampaigns || []);
+});
+
+// Update boost status
+app.put("/api/product-boosts/:id/status", (req, res) => {
+  const { id } = req.params;
+  const { status, adminId } = req.body;
+  const boost = appState.productBoostCampaigns?.find(b => b.id === id);
+  if (!boost) return res.status(404).json({ error: "Campagne de boost introuvable." });
+
+  boost.status = status;
+  saveState(appState);
+  res.json({ success: true, boost });
+});
+
+// Admin Ad Packs CRUD
+app.get("/api/admin/ad-packs", (req, res) => {
+  res.json(appState.settings.adPacks || DEFAULT_SETTINGS.adPacks || []);
+});
+
+app.post("/api/admin/ad-packs", (req, res) => {
+  const { name, description, price, currency, durationDays, guaranteedImpressions, estimatedViews, estimatedClicks, estimatedReach, category, diffusionType, priorityLevel, isActive } = req.body;
+  if (!appState.settings.adPacks) appState.settings.adPacks = [];
+  const newPack: AdPack = {
+    id: "pack_" + Date.now(),
+    name: name || "Nouveau Pack",
+    description: description || "",
+    price: parseFloat(price) || 5000,
+    currency: currency || "FCFA",
+    durationDays: parseInt(durationDays) || 7,
+    guaranteedImpressions: parseInt(guaranteedImpressions) || 10000,
+    estimatedViews: parseInt(estimatedViews) || 500,
+    estimatedClicks: parseInt(estimatedClicks) || 50,
+    estimatedReach: parseInt(estimatedReach) || 15000,
+    category: category || "Général",
+    diffusionType: diffusionType || "standard",
+    priorityLevel: parseInt(priorityLevel) || 1,
+    isActive: isActive !== false
+  };
+  appState.settings.adPacks.push(newPack);
+  saveState(appState);
+  res.json({ success: true, pack: newPack });
+});
+
+app.put("/api/admin/ad-packs/:id", (req, res) => {
+  const { id } = req.params;
+  const packs = appState.settings.adPacks || DEFAULT_SETTINGS.adPacks || [];
+  const pack = packs.find(p => p.id === id);
+  if (!pack) return res.status(404).json({ error: "Pack introuvable." });
+  Object.assign(pack, req.body);
+  saveState(appState);
+  res.json({ success: true, pack });
+});
+
+app.delete("/api/admin/ad-packs/:id", (req, res) => {
+  const { id } = req.params;
+  if (!appState.settings.adPacks) appState.settings.adPacks = DEFAULT_SETTINGS.adPacks || [];
+  appState.settings.adPacks = appState.settings.adPacks.filter(p => p.id !== id);
+  saveState(appState);
+  res.json({ success: true });
+});
+
+// Admin Campaign Types CRUD
+app.get("/api/admin/campaign-types", (req, res) => {
+  res.json(appState.settings.campaignTypes || DEFAULT_SETTINGS.campaignTypes || []);
+});
+
+app.post("/api/admin/campaign-types", (req, res) => {
+  const { name, objective, description, defaultBudget, defaultDuration, isAvailable } = req.body;
+  if (!appState.settings.campaignTypes) appState.settings.campaignTypes = [];
+  const newType: CampaignTypeConfig = {
+    id: "camp_type_" + Date.now(),
+    name: name || "Nouveau Type",
+    objective: objective || "views",
+    description: description || "",
+    defaultBudget: parseFloat(defaultBudget) || 5000,
+    defaultDuration: parseInt(defaultDuration) || 7,
+    isAvailable: isAvailable !== false
+  };
+  appState.settings.campaignTypes.push(newType);
+  saveState(appState);
+  res.json({ success: true, campaignType: newType });
+});
+
+app.put("/api/admin/campaign-types/:id", (req, res) => {
+  const { id } = req.params;
+  const types = appState.settings.campaignTypes || DEFAULT_SETTINGS.campaignTypes || [];
+  const ct = types.find(t => t.id === id);
+  if (!ct) return res.status(404).json({ error: "Type de campagne introuvable." });
+  Object.assign(ct, req.body);
+  saveState(appState);
+  res.json({ success: true, campaignType: ct });
+});
+
+app.delete("/api/admin/campaign-types/:id", (req, res) => {
+  const { id } = req.params;
+  if (!appState.settings.campaignTypes) appState.settings.campaignTypes = DEFAULT_SETTINGS.campaignTypes || [];
+  appState.settings.campaignTypes = appState.settings.campaignTypes.filter(t => t.id !== id);
+  saveState(appState);
+  res.json({ success: true });
+});
+
+// Admin Ad Settings
+app.get("/api/admin/ad-settings", (req, res) => {
+  res.json(appState.settings.adSettings || DEFAULT_SETTINGS.adSettings || { maxSponsoredPerSession: 3, sponsoredOrganicRatio: 25, autoApproval: true, antiSpamEnabled: true });
+});
+
+app.put("/api/admin/ad-settings", (req, res) => {
+  if (!appState.settings.adSettings) appState.settings.adSettings = { maxSponsoredPerSession: 3, sponsoredOrganicRatio: 25, autoApproval: true, antiSpamEnabled: true };
+  Object.assign(appState.settings.adSettings, req.body);
+  saveState(appState);
+  res.json({ success: true, adSettings: appState.settings.adSettings });
+});
+
+// Smart Recommendation Engine (Alibaba / TikTok / Facebook inspired)
+app.get("/api/recommendations/:userId", (req, res) => {
+  const { userId } = req.params;
+  const user = appState.users.find(u => u.id === userId);
+  const products = appState.products || [];
+  const activeBoosts = (appState.productBoostCampaigns || []).filter(b => b.status === "active");
+
+  // Calculate product scores (Ranking Algorithm)
+  // Factors: views, likes, favorites, cartAdds, sales, rating, conversion rate, recency, regional popularity
+  const scoredProducts = products.filter(p => p.isApproved && !p.isBanned).map(prod => {
+    const views = Math.max(1, prod.salesCount * 5 + 10);
+    const likes = prod.salesCount * 2 + 5;
+    const favorites = prod.salesCount * 3 + 2;
+    const cartAdds = prod.salesCount * 4 + 3;
+    const purchases = prod.salesCount;
+    const rating = prod.rating || 5.0;
+    const conversionRate = purchases / views;
+    
+    // Freshness (days since creation)
+    const daysOld = Math.max(0, (Date.now() - new Date(prod.createdAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24));
+    const freshnessBonus = Math.max(0, 20 - daysOld * 2);
+
+    let baseScore = (views * 0.5) + (likes * 2) + (favorites * 3) + (cartAdds * 4) + (purchases * 15) + (rating * 10) + (conversionRate * 100) + freshnessBonus;
+
+    // Personalization boost if user has category interests or view history
+    if (user) {
+      if (user.categoryInterests && user.categoryInterests[prod.category]) {
+        baseScore += user.categoryInterests[prod.category] * 20;
+      }
+      if (user.country && prod.targetCountries?.includes(user.country)) {
+        baseScore += 50;
+      }
+    }
+
+    // Check if boosted
+    const isBoosted = activeBoosts.some(b => b.productId === prod.id);
+    if (isBoosted) {
+      baseScore += 300; // Sponsored boost priority
+    }
+
+    return {
+      ...prod,
+      computedScore: baseScore,
+      isSponsored: isBoosted
+    };
+  });
+
+  scoredProducts.sort((a, b) => b.computedScore - a.computedScore);
+
+  // Categorize recommendations
+  const sponsored = scoredProducts.filter(p => p.isSponsored);
+  const personalized = user && user.categoryInterests && Object.keys(user.categoryInterests).length > 0
+    ? scoredProducts.filter(p => user.categoryInterests![p.category] && user.categoryInterests![p.category] > 0)
+    : scoredProducts.slice(0, 6);
+
+  const trending = scoredProducts.slice(0, 8);
+  const similarToRecent = user?.viewHistory && user.viewHistory.length > 0
+    ? scoredProducts.filter(p => p.category === user.viewHistory![0].category)
+    : scoredProducts.slice(2, 8);
+
+  res.json({
+    personalized: personalized.length > 0 ? personalized : scoredProducts.slice(0, 6),
+    sponsored,
+    trending,
+    similarToRecent,
+    allScored: scoredProducts
+  });
+});
+
+
 // Moderate or block product
 app.post("/api/admin/products/moderate", (req, res) => {
   const { productId, action, operatorId } = req.body;
@@ -6404,6 +6874,105 @@ app.post("/api/supervision-reports", (req, res) => {
   appState.supervisionReports.unshift(newRep);
   saveState(appState);
   res.json(newRep);
+});
+
+// ============================================
+// IMPERSONATION & ADMIN CREDENTIALS ENDPOINTS
+// ============================================
+app.post("/api/admin/reset-user-password", (req, res) => {
+  const { founderId, targetUserId, newPassword } = req.body;
+  const founder = appState.users.find(u => u.id === founderId);
+  if (!founder || founder.role !== "founder") {
+    return res.status(403).json({ error: "Accès refusé. Seul le Fondateur peut réinitialiser les mots de passe." });
+  }
+  const targetUser = appState.users.find(u => u.id === targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "Utilisateur cible introuvable." });
+  }
+  const pwd = newPassword && newPassword.trim() !== "" ? newPassword.trim() : "123456";
+  targetUser.password = bcrypt.hashSync(pwd, 10);
+  createAuditLog(founder.id, founder.username, "founder", "Réinitialisation mot de passe", `Le fondateur a réinitialisé le mot de passe de @${targetUser.username}.`, req);
+  saveState(appState);
+  res.json({ success: true, message: `Mot de passe réinitialisé avec succès pour @${targetUser.username}` });
+});
+
+app.post("/api/admin/impersonate", (req, res) => {
+  const { founderId, targetUserId, silent = true } = req.body;
+  const founder = appState.users.find(u => u.id === founderId);
+  if (!founder || founder.role !== "founder") {
+    return res.status(403).json({ error: "Accès refusé. Seul le Fondateur (Super Administrateur) peut utiliser la fonction d'impersonation." });
+  }
+  const targetUser = appState.users.find(u => u.id === targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "Utilisateur cible introuvable." });
+  }
+
+  if (!appState.impersonationLogs) {
+    appState.impersonationLogs = [];
+  }
+
+  const clientIpHeader = req.headers['x-forwarded-for'];
+  const clientIp = Array.isArray(clientIpHeader) ? clientIpHeader[0] : (clientIpHeader || req.ip || "127.0.0.1");
+  const uaHeader = req.headers['user-agent'];
+  const userAgent = Array.isArray(uaHeader) ? uaHeader[0] : (uaHeader || "");
+
+  const log: ImpersonationLog = {
+    id: "imp_" + Date.now(),
+    founderId: founder.id,
+    founderUsername: founder.username,
+    targetUserId: targetUser.id,
+    targetUsername: targetUser.username,
+    startedAt: new Date().toISOString(),
+    ip: clientIp,
+    userAgent
+  };
+  appState.impersonationLogs.unshift(log);
+
+  // If not silent, notify user. By default silent = true (no trace or notification in user account)
+  if (!silent) {
+    if (!targetUser.notifications) {
+      targetUser.notifications = [];
+    }
+    targetUser.notifications.unshift({
+      id: "notif_imp_" + Date.now(),
+      title: "Alerte de Sécurité : Session Supervisée 🛡️",
+      desc: `Le Fondateur de la plateforme (@${founder.username}) a ouvert une session d'impersonation sur votre compte pour des raisons de support et d'audit.`,
+      time: "À l'instant",
+      read: false,
+      priority: "critical",
+      category: "security"
+    });
+  }
+
+  createAuditLog(founder.id, founder.username, "founder", "Impersonation de compte", `Le fondateur a pris le contrôle de la session de @${targetUser.username} (${targetUser.id}) [Mode: ${silent ? 'Silencieux/Discret' : 'Notifié'}].`, req);
+  saveState(appState);
+
+  res.json({
+    success: true,
+    targetUser,
+    impersonationLogId: log.id,
+    message: `Session ouverte en tant que ${targetUser.name || targetUser.username}`
+  });
+});
+
+app.post("/api/admin/stop-impersonate", (req, res) => {
+  const { founderId, impersonationLogId } = req.body;
+  if (appState.impersonationLogs) {
+    const log = appState.impersonationLogs.find(l => l.id === impersonationLogId);
+    if (log && !log.endedAt) {
+      log.endedAt = new Date().toISOString();
+    }
+  }
+  const founder = appState.users.find(u => u.id === founderId);
+  if (founder) {
+    createAuditLog(founder.id, founder.username, founder.role, "Fin d'impersonation", "Le fondateur est retourné à son compte d'origine.", req);
+  }
+  saveState(appState);
+  res.json({ success: true });
+});
+
+app.get("/api/admin/impersonation-logs", (req, res) => {
+  res.json(appState.impersonationLogs || []);
 });
 
 // Serve Vite setup for building client files / index.html

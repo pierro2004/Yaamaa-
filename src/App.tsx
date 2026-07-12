@@ -30,6 +30,7 @@ import { AudioVideoCallModal } from "./components/AudioVideoCallModal";
 import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
+import AdminProductBoostsPanel from "./components/AdminProductBoostsPanel";
 import { AdminApiKeysPanel } from "./components/AdminApiKeysPanel";
 import { AdminPublishingBoard } from "./components/AdminPublishingBoard";
 import { ModerationCenterModal } from "./components/ModerationCenterModal";
@@ -205,6 +206,7 @@ export default function App() {
   const [orders, setOrders] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<any[]>([]);
   const [promoCampaigns, setPromoCampaigns] = useState<any[]>([]);
+  const [productBoosts, setProductBoosts] = useState<any[]>([]);
 
   // Load Indicator / UI States
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -668,7 +670,7 @@ export default function App() {
     try {
       const [
         settingsRes, usersRes, campaignsRes, submissionsRes, transactionsRes, auditLogsRes,
-        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes, broadcastRes, subPlansRes
+        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes, broadcastRes, subPlansRes, productBoostsRes
       ] = await Promise.all([
         fetch("/api/settings").then(r => r.ok ? r.json() : {}).catch(() => ({})),
         fetch("/api/users").then(r => r.ok ? r.json() : []).catch(() => []),
@@ -682,7 +684,8 @@ export default function App() {
         fetch("/api/disputes").then(r => r.ok ? r.json() : []).catch(() => []),
         fetch("/api/promotions").then(r => r.ok ? r.json() : []).catch(() => []),
         fetch("/api/broadcast-campaigns").then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch("/api/subscription-plans").then(r => r.ok ? r.json() : []).catch(() => [])
+        fetch("/api/subscription-plans").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/product-boosts").then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
 
       setSystemMetrics(settingsRes || {});
@@ -698,6 +701,7 @@ export default function App() {
       setPromoCampaigns(Array.isArray(promoCampaignsRes) ? promoCampaignsRes : []);
       setBroadcastCampaigns(Array.isArray(broadcastRes) ? broadcastRes : []);
       setSubscriptionPlans(Array.isArray(subPlansRes) ? subPlansRes : []);
+      setProductBoosts(Array.isArray(productBoostsRes) ? productBoostsRes : []);
 
       // Setup pre-loaded admin views variables from DB state
       const sRes = settingsRes as any;
@@ -5270,6 +5274,17 @@ export default function App() {
               >
                 <span className="text-sm">🤝</span> Parrainage & Commissions
               </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("admin_product_boosts")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "admin_product_boosts"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🚀</span> Boosts & Ads ({productBoosts.length})
+              </button>
             </div>
 
             {/* TAB CONTENT: 1. DASHBOARD */}
@@ -6988,6 +7003,16 @@ export default function App() {
               <AdminApiKeysPanel
                 systemMetrics={systemMetrics}
                 currentUser={currentUser}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* 17. GESTION DES BOOSTS PRODUITS ET ADS */}
+            {adminSubTab === "admin_product_boosts" && (
+              <AdminProductBoostsPanel
+                currentUser={currentUser}
+                productBoosts={productBoosts}
+                products={products}
                 onRefreshData={() => syncPlatformData(currentUser?.id)}
               />
             )}

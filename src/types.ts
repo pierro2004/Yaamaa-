@@ -116,6 +116,12 @@ export interface User {
     soundRingtonePayment: string;
     soundRingtoneAlert: string;
   };
+  viewHistory?: Array<{ productId: string; category: string; viewedAt: string; durationSeconds: number }>;
+  searchHistory?: Array<{ query: string; timestamp: string }>;
+  categoryInterests?: Record<string, number>;
+  wishlistProductIds?: string[];
+  likedProductIds?: string[];
+  cartProductIds?: string[];
 }
 
 export type MissionType =
@@ -306,6 +312,9 @@ export interface SystemSettings {
   referralCommissionValue?: number;
   referralMaxEarningsCap?: number;
   referralMaxReferralsPerUser?: number;
+  adPacks?: AdPack[];
+  campaignTypes?: CampaignTypeConfig[];
+  adSettings?: AdPlatformSettings;
 }
 
 // ==========================================
@@ -449,6 +458,68 @@ export interface PromoCampaign {
   ctr: number;
   revenueGenerated: number;
   createdAt: string;
+}
+
+export interface ProductBoostCampaign {
+  id: string;
+  productId: string;
+  productName: string;
+  productImage: string;
+  sellerId: string;
+  sellerUsername: string;
+  title: string;
+  description: string;
+  budget: number;
+  currency: string;
+  durationDays: number;
+  estimatedReach: number;
+  targetCategory: string;
+  targetCountry: string;
+  targetRegion?: string;
+  targetInterests: string[];
+  targetAgeRange: string;
+  impressions: number;
+  clicks: number;
+  salesGenerated: number;
+  revenueGenerated?: number;
+  status: "active" | "paused" | "completed" | "suspended";
+  createdAt: string;
+  endDate: string;
+  adminBoosted?: boolean;
+}
+
+export interface AdPack {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  durationDays: number;
+  guaranteedImpressions: number;
+  estimatedViews: number;
+  estimatedClicks: number;
+  estimatedReach: number;
+  category: string;
+  diffusionType: "standard" | "priority" | "premium";
+  priorityLevel: number;
+  isActive: boolean;
+}
+
+export interface CampaignTypeConfig {
+  id: string;
+  name: string;
+  objective: "views" | "shop_visits" | "sales" | "launch";
+  description: string;
+  defaultBudget: number;
+  defaultDuration: number;
+  isAvailable: boolean;
+}
+
+export interface AdPlatformSettings {
+  maxSponsoredPerSession: number;
+  sponsoredOrganicRatio: number; // e.g., 20%
+  autoApproval: boolean;
+  antiSpamEnabled: boolean;
 }
 
 export interface PlatformFinancialReport {

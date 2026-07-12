@@ -150,6 +150,60 @@ export default function BoutiqueView({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Product Boost Modal State
+  const [boostModalProduct, setBoostModalProduct] = useState<Product | null>(null);
+  const [boostObjective, setBoostObjective] = useState<"views" | "shop_visits" | "sales" | "cart_adds">("views");
+  const [boostBudget, setBoostBudget] = useState("50");
+  const [boostDuration, setBoostDuration] = useState("7");
+  const [boostCountry, setBoostCountry] = useState("Tous");
+  const [boostRegion, setBoostRegion] = useState("Tous");
+  const [boostInterests, setBoostInterests] = useState("Shopping, Mode, High-Tech");
+  const [boostSubmitting, setBoostSubmitting] = useState(false);
+  const [boostMsg, setBoostMsg] = useState("");
+  const [boostError, setBoostError] = useState("");
+
+  const handleBoostProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!boostModalProduct || !currentUser) return;
+    setBoostSubmitting(true);
+    setBoostMsg("");
+    setBoostError("");
+    try {
+      const res = await fetch("/api/products/boost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: boostModalProduct.id,
+          sellerId: currentUser.id,
+          title: `Campagne : ${boostModalProduct.name}`,
+          description: boostModalProduct.description,
+          budget: parseFloat(boostBudget) || 50,
+          durationDays: parseInt(boostDuration) || 7,
+          estimatedReach: (parseFloat(boostBudget) || 50) * 1000,
+          targetCategory: boostModalProduct.category,
+          targetCountry: boostCountry,
+          targetRegion: boostRegion,
+          targetInterests: boostInterests.split(",").map(s => s.trim())
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBoostMsg("Campagne publicitaire lancée avec succès ! Votre produit est désormais sponsorisé.");
+        await syncPlatformData();
+        setTimeout(() => {
+          setBoostModalProduct(null);
+          setBoostMsg("");
+        }, 1500);
+      } else {
+        setBoostError(data.error || "Erreur lors du lancement de la campagne.");
+      }
+    } catch (err) {
+      setBoostError("Erreur réseau.");
+    } finally {
+      setBoostSubmitting(false);
+    }
+  };
+
   // Product Creation Form State
   const [prodName, setProdName] = useState("");
   const [prodCategory, setProdCategory] = useState<string>("physical");
@@ -2045,7 +2099,22 @@ export default function BoutiqueView({
                                         Partager le lien
                                       </button>
 
-                                      <div className="border-t border-gray-100 my-1" />
+                                                                             <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setActiveProductMenuId(null);
+                                           setBoostModalProduct(prod);
+                                           setBoostMsg("");
+                                           setBoostError("");
+                                         }}
+                                         className="w-full px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 flex items-center gap-2 font-bold cursor-pointer"
+                                       >
+                                         <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                                         🚀 Booster ce produit
+                                       </button>
+
+                                       <div className="border-t border-gray-100 my-1" />
 
                                       <button
                                         type="button"
@@ -2925,6 +2994,145 @@ export default function BoutiqueView({
                 Oui, Continuer 🚀
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SELLER PRODUCT BOOST MODAL */}
+      {boostModalProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4 backdrop-blur-xs animate-fade-in" id="seller_product_boost_modal">
+          <div className="bg-white border border-gray-150 rounded-3xl w-full max-w-lg p-8 relative shadow-2xl text-left space-y-6">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-50 rounded-2xl text-amber-600 shrink-0">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+                <div>
+                  <span className="font-mono text-[9px] font-bold text-amber-600 uppercase tracking-widest block">Yaamaa Ads Engine</span>
+                  <h3 className="text-base font-extrabold text-gray-950">Booster le produit : {boostModalProduct.name}</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBoostModalProduct(null)}
+                className="text-gray-400 hover:text-gray-700 font-bold p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {boostMsg && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                {boostMsg}
+              </div>
+            )}
+
+            {boostError && (
+              <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                {boostError}
+              </div>
+            )}
+
+            <form onSubmit={handleBoostProductSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Objectif de la Campagne</label>
+                <select
+                  value={boostObjective}
+                  onChange={(e) => setBoostObjective(e.target.value as any)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="views">Obtenir plus de vues et d'impressions</option>
+                  <option value="shop_visits">Recevoir plus de visites sur ma boutique</option>
+                  <option value="sales">Augmenter les ventes directes</option>
+                  <option value="cart_adds">Obtenir plus d'ajouts au panier</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Budget ({boostModalProduct.currency || "FCFA"})</label>
+                  <input
+                    type="number"
+                    value={boostBudget}
+                    onChange={(e) => setBoostBudget(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    required
+                  />
+                  <span className="text-[10px] text-gray-400 mt-1 block">Déduit de votre portefeuille Yaamaa</span>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Durée (Jours)</label>
+                  <input
+                    type="number"
+                    value={boostDuration}
+                    onChange={(e) => setBoostDuration(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    required
+                  />
+                  <span className="text-[10px] text-gray-400 mt-1 block">Diffusion continue 24h/24</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Pays Cible</label>
+                  <input
+                    type="text"
+                    value={boostCountry}
+                    onChange={(e) => setBoostCountry(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Région / Ville</label>
+                  <input
+                    type="text"
+                    value={boostRegion}
+                    onChange={(e) => setBoostRegion(e.target.value)}
+                    placeholder="Ex: Dakar, Abidjan..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Centres d'intérêt ciblés (séparés par des virgules)</label>
+                <input
+                  type="text"
+                  value={boostInterests}
+                  onChange={(e) => setBoostInterests(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 space-y-1">
+                <span className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <Sparkles className="h-4 w-4" /> Estimation des performances :
+                </span>
+                <p>Portée potentielle : <strong className="font-mono text-gray-950">{(parseFloat(boostBudget) || 50) * 1000} utilisateurs</strong> ciblés</p>
+                <p>Impressions prévues : <strong className="font-mono text-gray-950">~{((parseFloat(boostBudget) || 50) * 1250).toLocaleString()} affichages</strong></p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setBoostModalProduct(null)}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer text-center"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={boostSubmitting}
+                  className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer text-center flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {boostSubmitting ? "Lancement..." : "Lancer le Boost 🚀"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
