@@ -1011,28 +1011,9 @@ export default function Navbar({
               {/* --- LINE 1: MICRO-SERVICES --- */}
                 <div className="space-y-2.5">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-mono">
-                    Line 1: {currentLanguage === "fr" ? "Gains & Publicités" : "Earnings & Campaigns"}
+                    Line 1: {currentLanguage === "fr" ? "Publicités & Services" : "Campaigns & Services"}
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    {/* Missions */}
-                    <button
-                      id="menu_list_btn_missions"
-                      onClick={() => handleOptionSelect(() => onNavigate("missions"))}
-                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-emerald-50/50 border border-gray-150/80 hover:border-emerald-250 transition-all text-left cursor-pointer"
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-150/20 text-emerald-600 group-hover:scale-105 transition">
-                        <CheckCircle2 className="h-5.5 w-5.5" />
-                      </div>
-                      <div className="truncate">
-                        <span className="block text-xs font-black text-slate-900 group-hover:text-emerald-600 transition font-heading">
-                          {currentLanguage === "fr" ? "Missions Rémunérées" : "Rewarded Missions"}
-                        </span>
-                        <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
-                          {currentLanguage === "fr" ? "Gagnez des XOF facilement" : "Complete tasks to earn money"}
-                        </span>
-                      </div>
-                    </button>
-
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Promotions */}
                     <button
                       id="menu_list_btn_promotions"
@@ -1048,25 +1029,6 @@ export default function Navbar({
                         </span>
                         <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
                           {currentLanguage === "fr" ? "Sponsoriser des liens ou pages" : "Advertise your products"}
-                        </span>
-                      </div>
-                    </button>
-
-                    {/* Tâches / Validation */}
-                    <button
-                      id="menu_list_btn_tasks"
-                      onClick={() => handleOptionSelect(() => onNavigate("missions"))}
-                      className="group flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-gray-150/80 hover:border-indigo-250 transition-all text-left cursor-pointer"
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-150/20 text-indigo-600 group-hover:scale-105 transition">
-                        <ListTodo className="h-5.5 w-5.5" />
-                      </div>
-                      <div className="truncate">
-                        <span className="block text-xs font-black text-slate-900 group-hover:text-indigo-600 transition font-heading">
-                          {currentLanguage === "fr" ? "Suivi de Tâches" : "My Task Submissions"}
-                        </span>
-                        <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
-                          {currentLanguage === "fr" ? "Preuves & Validation d'argent" : "Audit tracking & checks"}
                         </span>
                       </div>
                     </button>
@@ -1088,7 +1050,7 @@ export default function Navbar({
                           {currentLanguage === "fr" ? "Fournisseurs & Livreurs" : "Suppliers & Drivers"}
                         </span>
                         <span className="block text-[10.5px] text-gray-400 font-mono mt-0.5 truncate">
-                          {currentLanguage === "fr" ? "Annuaire, missions & inscriptions" : "Directory & missions"}
+                          {currentLanguage === "fr" ? "Annuaire & inscriptions" : "Directory & network"}
                         </span>
                       </div>
                     </button>

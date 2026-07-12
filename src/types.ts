@@ -98,6 +98,10 @@ export interface User {
   yaamaaChatApproved?: boolean;
   yaamaaChatRejected?: boolean;
   yaamaaChatApprovedAt?: string;
+  chatCode?: string;
+  chatCodeCreatedAt?: number;
+  resetCode?: string;
+  resetCodeCreatedAt?: number;
   notificationPreferences?: {
     calls: boolean;
     messages: boolean;
@@ -122,6 +126,21 @@ export interface User {
   wishlistProductIds?: string[];
   likedProductIds?: string[];
   cartProductIds?: string[];
+  transactionPinHash?: string;
+  pinLockedUntil?: string | null;
+  pinFailedAttempts?: number;
+  biometricEnabled?: boolean;
+  pinRecoveryCode?: string;
+  pinRecoveryExpiresAt?: string;
+  pinAuditLogs?: Array<{
+    id: string;
+    timestamp: string;
+    operation: string;
+    result: "success" | "failure";
+    details?: string;
+    ip?: string;
+    device?: string;
+  }>;
 }
 
 export type MissionType =
@@ -277,6 +296,39 @@ export interface ApiKey {
   operatorId: string;
 }
 
+export interface AutomationRule {
+  id: string;
+  name: string;
+  triggerEvent: "referral_success" | "deposit_success" | "withdrawal_success" | "mission_completed" | "gift_received" | "subscription_purchased" | "custom";
+  conditions: string;
+  templateId: string;
+  channels: ("in_app" | "message" | "home_feed" | "email")[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  title: string;
+  category: "referral" | "gift" | "withdrawal" | "mission" | "subscription" | "general";
+  content: string;
+  variables: string[];
+  isActive: boolean;
+}
+
+export interface SyncLogEntry {
+  id: string;
+  adminId: string;
+  adminUsername: string;
+  timestamp: string;
+  parameterKey: string;
+  oldValue: any;
+  newValue: any;
+  modulesUpdated: string[];
+  status: "success" | "warning" | "error";
+  details: string;
+}
+
 export interface SystemSettings {
   isWithdrawalFrozen: boolean;
   suspendedCountries: string[];
@@ -315,6 +367,28 @@ export interface SystemSettings {
   adPacks?: AdPack[];
   campaignTypes?: CampaignTypeConfig[];
   adSettings?: AdPlatformSettings;
+  automationRules?: AutomationRule[];
+  messageTemplates?: MessageTemplate[];
+  syncLogs?: SyncLogEntry[];
+  pinMinLength?: number;
+  pinMaxLength?: number;
+  maxPinAttempts?: number;
+  pinBlockDurationMinutes?: number;
+  pinRequiredOperations?: {
+    balance: boolean;
+    productPayment: boolean;
+    merchantPurchase: boolean;
+    subscription: boolean;
+    virtualGift: boolean;
+    sendMoney: boolean;
+    withdrawal: boolean;
+    pointConversion: boolean;
+    assetConversion: boolean;
+    pointTransfer: boolean;
+    orderValidation: boolean;
+  };
+  pinRecoveryCodeValidityMinutes?: number;
+  pinAllowedRecoveryMethods?: ("merchant_number" | "email")[];
 }
 
 // ==========================================
@@ -875,6 +949,74 @@ export interface ActionHistoryItem {
   oldStatus: string;
   newStatus: string;
   comment?: string;
+  createdAt: string;
+}
+
+export interface CartItem {
+  id: string;
+  productId: string;
+  productName: string;
+  productImage: string;
+  shopId: string;
+  shopName: string;
+  sellerId: string;
+  unitPrice: number;
+  quantity: number;
+  variants?: { size?: string; color?: string; model?: string; [key: string]: any };
+  deliveryFee: number;
+  discountAmount: number;
+  lineTotal: number;
+  currency: string;
+}
+
+export interface DeliveryAddress {
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  departmentOrRegion: string;
+  country: string;
+  deliveryInstructions?: string;
+}
+
+export interface VendorSubOrder {
+  subOrderId: string;
+  sellerId: string;
+  shopId: string;
+  shopName: string;
+  items: CartItem[];
+  subtotal: number;
+  deliveryFee: number;
+  commissionAmount: number;
+  sellerPayout: number;
+  status: "received" | "confirmed" | "preparing" | "shipped" | "out_for_delivery" | "delivered" | "cancelled" | "refunded";
+  trackingNumber?: string;
+  updatedAt?: string;
+}
+
+export interface MultiVendorOrder {
+  id: string;
+  buyerId: string;
+  buyerUsername: string;
+  deliveryAddress: DeliveryAddress;
+  paymentMethod: string;
+  subtotal: number;
+  totalDeliveryFees: number;
+  totalDiscounts: number;
+  totalTax: number;
+  finalAmount: number;
+  currency: string;
+  vendorSubOrders: VendorSubOrder[];
+  splitTransactionLogs: {
+    id: string;
+    sellerId: string;
+    grossAmount: number;
+    commissionDeducted: number;
+    netCredited: number;
+    timestamp: string;
+    status: "success" | "pending";
+  }[];
+  status: "paid_escrow" | "processing" | "shipped" | "completed" | "disputed" | "refunded";
   createdAt: string;
 }
 

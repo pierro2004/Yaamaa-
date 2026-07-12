@@ -1,6 +1,6 @@
 {
   "name": "Yaamaa",
-  "description": "Plateforme de micro-travaux et de campagnes remunerees par IA.",
+  "description": "Plateforme de commerce de proximité et système de panier multi-vendeurs avec répartition automatique des paiements.",
   "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

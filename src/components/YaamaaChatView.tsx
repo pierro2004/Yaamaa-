@@ -88,46 +88,47 @@ export default function YaamaaChatView({
       }
 
       setTargetUser(data.user);
-      setVerificationCode(data.code || "849201");
-      setStep("waiting");
-      setSuccessMessage("Une notification de tentative de connexion a été envoyée dans l'application principale Yaamaa Pro associée à ce numéro marchand.");
+      setVerificationCode(data.code || "");
+      setStep("code");
+      setSuccessMessage("Un code de connexion a été envoyé dans la boîte de notification de Yaamaa Pro. Veuillez le récupérer et le saisir ci-dessous.");
     } catch (err) {
       setErrorMessage("Erreur de connexion au serveur Yaamaa.");
     }
   };
 
-  const handleCheckApprovalStatus = async () => {
-    if (!targetUser) return;
-    try {
-      const res = await fetch(`/api/yaamaa-chat/check-status?userId=${targetUser.id}&merchantNumber=${merchantNumberInput.trim()}`);
-      const data = await res.json();
-      if (data.approved) {
-        setStep("code");
-        setSuccessMessage("Connexion autorisée depuis Yaamaa Pro ! Veuillez saisir le code de sécurité reçu.");
-      } else if (data.rejected) {
-        setStep("login");
-        setErrorMessage("La tentative de connexion a été refusée depuis Yaamaa Pro.");
-      } else {
-        setSuccessMessage("En attente de votre validation (Ouvrez Yaamaa Pro et cliquez sur 'OUI' dans vos notifications)...");
-      }
-    } catch (e) {
-      setStep("code");
-    }
-  };
-
-  const handleVerifyCodeSubmit = (e: React.FormEvent) => {
+  const handleVerifyCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setSuccessMessage("");
+
     if (!enteredCode.trim()) {
-      setErrorMessage("Veuillez saisir le code reçu par message dans Yaamaa Pro.");
+      setErrorMessage("Veuillez saisir le code reçu dans vos notifications Yaamaa.");
       return;
     }
 
-    if (targetUser) {
+    if (!targetUser) {
+      setErrorMessage("Utilisateur introuvable. Veuillez recommencer.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/yaamaa-chat/login-with-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: targetUser.id, code: enteredCode.trim() })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "Code incorrect.");
+        return;
+      }
+
       onLoginSuccess(targetUser);
       setStep("chat");
-    } else {
-      setErrorMessage("Code invalide ou utilisateur introuvable.");
+      setSuccessMessage("Connexion réussie à Yaamaa Chat !");
+    } catch (err) {
+      setErrorMessage("Erreur de communication avec le serveur.");
     }
   };
 

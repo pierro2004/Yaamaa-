@@ -35,7 +35,7 @@ import {
   Share2,
   Trash2
 } from "lucide-react";
-import { User, Shop, Product, Order, Dispute } from "../types";
+import { User, Shop, Product, Order, Dispute, CartItem, DeliveryAddress, VendorSubOrder, MultiVendorOrder } from "../types";
 import { ALL_COUNTRIES } from "../countries";
 import { getRegionsForCountry, getCommunesForRegion } from "../locationData";
 
@@ -70,6 +70,163 @@ export default function BoutiqueView({
 }: BoutiqueViewProps) {
   // Navigation inside Boutique
   const [boutiqueTab, setBoutiqueTab] = useState<"marketplace" | "seller_dashboard" | "my_purchases">("marketplace");
+
+  // Multi-vendor Cart & Automated Payment Split States
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("yaamaa_cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("yaamaa_cart", JSON.stringify(cartItems));
+    } catch {}
+  }, [cartItems]);
+
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [multiVendorOrdersList, setMultiVendorOrdersList] = useState<MultiVendorOrder[]>([]);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({
+    recipientName: currentUser?.name || "",
+    phoneNumber: currentUser?.phone || "",
+    streetAddress: "",
+    city: "",
+    departmentOrRegion: "",
+    country: currentUser?.country || "Sénégal",
+    deliveryInstructions: ""
+  });
+  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState("Wallet Yaamaa");
+  const [checkoutMsg, setCheckoutMsg] = useState("");
+  const [checkoutErr, setCheckoutErr] = useState("");
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const fetchMultiVendorOrders = async () => {
+    try {
+      const res = await fetch("/api/multivendor-orders");
+      if (res.ok) {
+        const data = await res.json();
+        setMultiVendorOrdersList(Array.isArray(data) ? data : []);
+      }
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    fetchMultiVendorOrders();
+  }, []);
+
+  const handleAddToCart = (product: Product) => {
+    const existingIndex = cartItems.findIndex(ci => ci.productId === product.id);
+    if (existingIndex > -1) {
+      const updated = [...cartItems];
+      updated[existingIndex].quantity += 1;
+      updated[existingIndex].lineTotal = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      setCartItems(updated);
+    } else {
+      const newItem: CartItem = {
+        id: "cart_item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+        productId: product.id,
+        productName: product.name,
+        productImage: product.images[0] || "https://images.unsplash.com/photo-1586105251261-72a756497a11?q=80&w=400&auto=format&fit=crop",
+        shopId: product.shopId,
+        shopName: product.shopName,
+        sellerId: product.ownerId,
+        unitPrice: product.price,
+        quantity: 1,
+        deliveryFee: product.category === "physical" ? 1500 : 0,
+        discountAmount: 0,
+        lineTotal: product.price,
+        currency: product.currency
+      };
+      setCartItems([...cartItems, newItem]);
+    }
+    setIsCartOpen(true);
+  };
+
+  const handleUpdateCartQty = (id: string, delta: number) => {
+    setCartItems(cartItems.map(item => {
+      if (item.id === id) {
+        const newQty = Math.max(1, item.quantity + delta);
+        return { ...item, quantity: newQty, lineTotal: newQty * item.unitPrice };
+      }
+      return item;
+    }));
+  };
+
+  const handleRemoveCartItem = (id: string) => {
+    setCartItems(cartItems.filter(item => item.id !== id));
+  };
+
+  const handleExecuteCheckout = async () => {
+    if (!currentUser) {
+      setCheckoutErr("Veuillez vous connecter pour passer commande.");
+      return;
+    }
+    if (!deliveryAddress.recipientName || !deliveryAddress.phoneNumber || !deliveryAddress.streetAddress || !deliveryAddress.city) {
+      setCheckoutErr("Veuillez renseigner tous les champs obligatoires de l'adresse de livraison.");
+      return;
+    }
+    setCheckoutErr("");
+    setCheckoutMsg("");
+    setIsCheckingOut(true);
+
+    try {
+      const res = await fetch("/api/multivendor-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyerId: currentUser.id,
+          buyerUsername: currentUser.username,
+          deliveryAddress,
+          items: cartItems,
+          paymentMethod: checkoutPaymentMethod
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCheckoutMsg(`Commande multi-vendeurs #${data.id} validée avec succès ! Répartition automatique des paiements effectuée.`);
+        setCartItems([]);
+        localStorage.removeItem("yaamaa_cart");
+        await syncPlatformData();
+        await fetchMultiVendorOrders();
+        setTimeout(() => {
+          setIsCheckoutOpen(false);
+          setIsCartOpen(false);
+          setBoutiqueTab("my_purchases");
+          setCheckoutMsg("");
+        }, 1500);
+      } else {
+        setCheckoutErr(data.error || "Erreur lors du traitement du panier multi-vendeurs.");
+      }
+    } catch (err) {
+      setCheckoutErr("Erreur réseau lors du paiement.");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
+  const handleUpdateSubOrderStatus = async (orderId: string, subOrderId: string, status: string, trackingNumber?: string) => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/multivendor-orders/${orderId}/sub-orders/${subOrderId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, trackingNumber, userId: currentUser.id })
+      });
+      if (res.ok) {
+        await fetchMultiVendorOrders();
+        await syncPlatformData();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Erreur lors de la mise à jour.");
+      }
+    } catch {
+      alert("Erreur réseau.");
+    }
+  };
 
   // Active Subscription Countdown & Warning Modal State
   const [showChangeSubWarning, setShowChangeSubWarning] = useState(false);
@@ -796,6 +953,20 @@ export default function BoutiqueView({
             <RefreshCw className={`h-4.5 w-4.5 ${isReevaluating ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
 
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="relative px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm font-bold text-xs"
+            title="Mon Panier Multi-Vendeurs"
+          >
+            <ShoppingBag className="h-4 w-4" />
+            <span>Panier</span>
+            {cartItems.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-black h-4.5 w-4.5 rounded-full flex items-center justify-center shadow">
+                {cartItems.reduce((acc, item) => acc + item.quantity, 0)}
+              </span>
+            )}
+          </button>
+
           <div className="bg-gray-100 p-1 rounded-xl flex items-center">
             <button
               onClick={() => setBoutiqueTab("marketplace")}
@@ -1067,23 +1238,18 @@ export default function BoutiqueView({
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setBuyingProduct(prod)}
-                        className="flex-1 bg-gray-950 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5"
+                        onClick={() => handleAddToCart(prod)}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 shadow-sm"
                       >
                         <ShoppingBag className="h-3.5 w-3.5" />
-                        Acheter
+                        Ajouter au Panier
                       </button>
                       <button
-                        onClick={() => {
-                          if (onStartChat) {
-                            onStartChat(prod.ownerId);
-                          }
-                        }}
-                        className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-2.5 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 border border-indigo-100"
-                        title="Discuter avec le vendeur"
+                        onClick={() => setBuyingProduct(prod)}
+                        className="bg-gray-950 hover:bg-gray-800 text-white font-bold px-3 py-2.5 rounded-xl transition-all text-xs flex items-center justify-center"
+                        title="Achat immédiat"
                       >
-                        <MessageCircle className="h-3.5 w-3.5 text-indigo-600" />
-                        Discuter
+                        Acheter
                       </button>
                     </div>
                   </div>
@@ -2156,161 +2322,228 @@ export default function BoutiqueView({
       {/* 3. MES ACHATS (BUYER ORDERS TAB)                          */}
       {/* ======================================================== */}
       {boutiqueTab === "my_purchases" && (
-        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6 animate-fade-in" id="purchases_tab_container">
+        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-8 animate-fade-in" id="purchases_tab_container">
           <h4 className="text-lg font-heading font-black text-gray-950 flex items-center gap-2 pb-3 border-b border-gray-100">
             <ShoppingBag className="h-5.5 w-5.5 text-emerald-600 animate-pulse" />
-            Suivi de mes achats sécurisés (Escrow Actif)
+            Suivi de mes achats multi-vendeurs & Escrow
           </h4>
 
-          {buyerOrders.length === 0 ? (
-            <div className="py-16 text-center text-gray-400 space-y-3">
-              <ShoppingBag className="mx-auto h-12 w-12 text-gray-200" />
-              <p className="text-sm font-bold text-gray-900">Vous n'avez pas encore effectué d'achats.</p>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto">Visitez la Marketplace, sélectionnez des produits et achetez pour voir votre transaction s'afficher ici.</p>
-              <button 
-                onClick={() => setBoutiqueTab("marketplace")}
-                className="text-xs font-bold bg-zinc-950 text-white px-4 py-2 rounded-xl"
-              >
-                Parcourir la Marketplace
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100 shrink-0">
-              {buyerOrders.map(order => (
-                <div key={order.id} className="py-5 space-y-4 font-sans">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                      <img 
-                        src={order.productImage} 
-                        alt="" 
-                        className="h-16 w-16 rounded-xl object-cover bg-gray-50 border border-gray-100 shrink-0" 
-                      />
-                      <div className="space-y-1">
-                        <span className="bg-gray-100 text-gray-700 text-[9px] font-black px-2 py-0.5 rounded font-mono block w-fit">
-                          COMMANDE #{order.id}
+          {/* MULTI-VENDOR ORDERS TRACKING */}
+          <div className="space-y-6">
+            <h5 className="text-sm font-bold text-gray-900">Paniers Multi-Vendeurs Validés ({multiVendorOrdersList.filter(o => o.buyerId === currentUser?.id).length})</h5>
+            {multiVendorOrdersList.filter(o => o.buyerId === currentUser?.id).length === 0 ? (
+              <p className="text-xs text-gray-400 italic">Aucun panier multi-vendeurs actif pour l'instant.</p>
+            ) : (
+              <div className="space-y-6">
+                {multiVendorOrdersList.filter(o => o.buyerId === currentUser?.id).map(mvOrder => (
+                  <div key={mvOrder.id} className="bg-gray-50 border border-gray-200 rounded-3xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-200 pb-3">
+                      <div>
+                        <span className="font-mono text-[10px] bg-zinc-900 text-white px-2.5 py-1 rounded-lg font-bold">
+                          COMMANDE MULTI-VENDEURS #{mvOrder.id}
                         </span>
-                        <h5 className="text-sm font-black text-gray-950">{order.productName}</h5>
-                        <p className="text-xs text-zinc-400">
-                          Boutique : <span className="text-emerald-700 font-bold">{order.shopName}</span> • Quantité : <span className="font-bold">{order.quantity}</span>
-                        </p>
+                        <p className="text-xs text-gray-500 mt-1">Passée le {new Date(mvOrder.createdAt).toLocaleString("fr-FR")} • Payé via {mvOrder.paymentMethod}</p>
+                      </div>
+                      <div className="sm:text-right">
+                        <span className="text-base font-black text-gray-950">{mvOrder.finalAmount.toLocaleString()} {mvOrder.currency}</span>
+                        <p className="text-[10px] text-emerald-700 font-bold">Livraison : {mvOrder.deliveryAddress.streetAddress}, {mvOrder.deliveryAddress.city}</p>
                       </div>
                     </div>
 
-                    <div className="sm:text-right space-y-1">
-                      <span className="block text-base font-black text-gray-900">{order.totalPrice.toLocaleString()} {order.currency}</span>
-                      <p className="text-xs text-gray-500 font-mono">Payé via {order.paymentMethod}</p>
-                      
-                      {/* Active Status Badge */}
-                      <span className={`inline-block text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                        order.status === "completed" ? "bg-emerald-50 text-emerald-700" :
-                        order.status === "shipped" ? "bg-indigo-50 text-indigo-700 animate-pulse" :
-                        order.status === "disputed" ? "bg-rose-50 text-rose-700 animate-bounce" :
-                        "bg-amber-50 text-amber-700"
-                      }`}>
-                        {order.status === "completed" ? "CONFIRMÉ & REVERSÉ" :
-                         order.status === "shipped" ? "COLIS EXPÉDIÉ (À CONFIRMER)" :
-                         order.status === "disputed" ? "LITIGE DÉCLARÉ" :
-                         order.status === "refunded" ? "REMBOURSÉ" :
-                         "BLOCAGE SÉCURISÉ (ESCROW)"}
-                      </span>
+                    {/* VENDOR SUB-ORDERS LIST */}
+                    <div className="space-y-3">
+                      <span className="text-[11px] font-black text-gray-700 uppercase tracking-wider block">Sous-commandes par Vendeur :</span>
+                      {mvOrder.vendorSubOrders.map(sub => (
+                        <div key={sub.subOrderId} className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div>
+                              <h6 className="text-xs font-black text-emerald-800">Boutique : @{sub.shopName}</h6>
+                              <p className="text-[10px] font-mono text-gray-500">Sous-ID: {sub.subOrderId}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                sub.status === "delivered" || sub.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                                sub.status === "shipped" || sub.status === "out_for_delivery" ? "bg-indigo-100 text-indigo-800 animate-pulse" :
+                                "bg-amber-100 text-amber-800"
+                              }`}>
+                                Statut : {sub.status}
+                              </span>
+                              {sub.status === "shipped" && (
+                                <button
+                                  onClick={() => handleUpdateSubOrderStatus(mvOrder.id, sub.subOrderId, "delivered")}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[10px] shadow transition cursor-pointer"
+                                >
+                                  Confirmer Réception (Libérer Escrow 🔓)
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="divide-y divide-gray-100 text-xs">
+                            {sub.items.map(item => (
+                              <div key={item.id} className="py-2 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <img src={item.productImage} alt="" className="h-9 w-9 rounded-lg object-cover bg-gray-50" />
+                                  <span>{item.quantity}x {item.productName}</span>
+                                </div>
+                                <span className="font-mono font-bold">{item.lineTotal.toLocaleString()} {item.currency}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  {/* DIGITAL PRODUCT AUTO-DOWNLOADS & COURSE ACCESS LINKS */}
-                  {(() => {
-                    const matchingProduct = products.find(p => p.id === order.productId);
-                    const canAccessDigital = ["paid_escrow", "shipped", "completed"].includes(order.status);
-                    
-                    if (!matchingProduct || !canAccessDigital) return null;
-                    
-                    const hasPdf = matchingProduct.downloadableFile;
-                    const hasLink = matchingProduct.courseLink;
-                    
-                    if (!hasPdf && !hasLink) return null;
-
-                    return (
-                      <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-3 font-sans animate-fade-in">
-                        <div className="flex items-center gap-2 text-emerald-900">
-                          <Sparkles className="h-4.5 w-4.5 text-emerald-600 animate-pulse" />
-                          <h6 className="text-xs font-black">Accès instantané à vos ressources numériques sécurisées</h6>
+          <div className="pt-6 border-t border-gray-100 space-y-6">
+            <h5 className="text-sm font-bold text-gray-900">Achats Simples / Directs ({buyerOrders.length})</h5>
+            {buyerOrders.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 space-y-3">
+                <ShoppingBag className="mx-auto h-10 w-10 text-gray-200" />
+                <p className="text-xs font-bold text-gray-900">Aucun achat direct effectué.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 shrink-0">
+                {buyerOrders.map(order => (
+                  <div key={order.id} className="py-5 space-y-4 font-sans">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <img 
+                          src={order.productImage} 
+                          alt="" 
+                          className="h-16 w-16 rounded-xl object-cover bg-gray-50 border border-gray-100 shrink-0" 
+                        />
+                        <div className="space-y-1">
+                          <span className="bg-gray-100 text-gray-700 text-[9px] font-black px-2 py-0.5 rounded font-mono block w-fit">
+                            COMMANDE #{order.id}
+                          </span>
+                          <h5 className="text-sm font-black text-gray-950">{order.productName}</h5>
+                          <p className="text-xs text-zinc-400">
+                            Boutique : <span className="text-emerald-700 font-bold">{order.shopName}</span> • Quantité : <span className="font-bold">{order.quantity}</span>
+                          </p>
                         </div>
+                      </div>
+
+                      <div className="sm:text-right space-y-1">
+                        <span className="block text-base font-black text-gray-900">{order.totalPrice.toLocaleString()} {order.currency}</span>
+                        <p className="text-xs text-gray-500 font-mono">Payé via {order.paymentMethod}</p>
                         
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          {hasPdf && (
-                            <a
-                              href={matchingProduct.downloadableFile}
-                              download={matchingProduct.downloadableFileName || "produit_telechargeable.pdf"}
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-sm transition shrink-0 cursor-pointer text-center"
-                            >
-                              <FileText className="h-4 w-4" />
-                              Télécharger mon fichier PDF ({matchingProduct.downloadableFileName || "produit.pdf"})
-                            </a>
-                          )}
+                        {/* Active Status Badge */}
+                        <span className={`inline-block text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
+                          order.status === "completed" ? "bg-emerald-50 text-emerald-700" :
+                          order.status === "shipped" ? "bg-indigo-50 text-indigo-700 animate-pulse" :
+                          order.status === "disputed" ? "bg-rose-50 text-rose-700 animate-bounce" :
+                          "bg-amber-50 text-amber-700"
+                        }`}>
+                          {order.status === "completed" ? "CONFIRMÉ & REVERSÉ" :
+                           order.status === "shipped" ? "COLIS EXPÉDIÉ (À CONFIRMER)" :
+                           order.status === "disputed" ? "LITIGE DÉCLARÉ" :
+                           order.status === "refunded" ? "REMBOURSÉ" :
+                           "BLOCAGE SÉCURISÉ (ESCROW)"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* DIGITAL PRODUCT AUTO-DOWNLOADS & COURSE ACCESS LINKS */}
+                    {(() => {
+                      const matchingProduct = products.find(p => p.id === order.productId);
+                      const canAccessDigital = ["paid_escrow", "shipped", "completed"].includes(order.status);
+                      
+                      if (!matchingProduct || !canAccessDigital) return null;
+                      
+                      const hasPdf = matchingProduct.downloadableFile;
+                      const hasLink = matchingProduct.courseLink;
+                      
+                      if (!hasPdf && !hasLink) return null;
+
+                      return (
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-3 font-sans animate-fade-in">
+                          <div className="flex items-center gap-2 text-emerald-900">
+                            <Sparkles className="h-4.5 w-4.5 text-emerald-600 animate-pulse" />
+                            <h6 className="text-xs font-black">Accès instantané à vos ressources numériques sécurisées</h6>
+                          </div>
                           
-                          {hasLink && (
-                            <a
-                              href={matchingProduct.courseLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs shadow-sm transition shrink-0 cursor-pointer text-center"
-                            >
-                              <Globe className="h-4 w-4 text-emerald-400" />
-                              Accéder à la formation / site d'accès
-                            </a>
-                          )}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {hasPdf && (
+                              <a
+                                href={matchingProduct.downloadableFile}
+                                download={matchingProduct.downloadableFileName || "produit_telechargeable.pdf"}
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-sm transition shrink-0 cursor-pointer text-center"
+                              >
+                                <FileText className="h-4 w-4" />
+                                Télécharger mon fichier PDF ({matchingProduct.downloadableFileName || "produit.pdf"})
+                              </a>
+                            )}
+                            
+                            {hasLink && (
+                              <a
+                                href={matchingProduct.courseLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs shadow-sm transition shrink-0 cursor-pointer text-center"
+                              >
+                                <Globe className="h-4 w-4 text-emerald-400" />
+                                Accéder à la formation / site d'accès
+                              </a>
+                            )}
+                          </div>
+                          
+                          <p className="text-[10px] text-emerald-800 font-medium">Yaamaa Escrow sécurise vos fonds. Une fois satisfait du contenu numérique, veuillez valider le paiement pour reverser le solde au vendeur.</p>
                         </div>
-                        
-                        <p className="text-[10px] text-emerald-800 font-medium">Yaamaa Escrow sécurise vos fonds. Une fois satisfait du contenu numérique, veuillez valider le paiement pour reverser le solde au vendeur.</p>
+                      );
+                    })()}
+
+                    {/* SHIPPING / DELIVERY LOGS CARDS */}
+                    {order.status === "shipped" && (
+                      <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="text-xs text-indigo-900 font-sans space-y-1">
+                          <p className="font-extrabold flex items-center gap-1">📣 Avis d'expédition : Les vendeurs ont livré votre produit.</p>
+                          <p className="text-indigo-700 font-semibold flex items-center gap-1 font-mono">📌 Numéro de suivi : {order.trackingNumber}</p>
+                          <p className="text-gray-500 text-[10px] font-normal">Veuillez vérifier votre colis physique ou boîte mail avant d'approuver l'escrow.</p>
+                        </div>
+
+                        <button
+                          onClick={() => handleConfirmReceipt(order.id)}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition shrink-0 uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Confirmer la réception
+                        </button>
                       </div>
-                    );
-                  })()}
+                    )}
 
-                  {/* SHIPPING / DELIVERY LOGS CARDS */}
-                  {order.status === "shipped" && (
-                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div className="text-xs text-indigo-900 font-sans space-y-1">
-                        <p className="font-extrabold flex items-center gap-1">📣 Avis d'expédition : Les vendeurs ont livré votre produit.</p>
-                        <p className="text-indigo-700 font-semibold flex items-center gap-1 font-mono">📌 Numéro de suivi : {order.trackingNumber}</p>
-                        <p className="text-gray-500 text-[10px] font-normal">Veuillez vérifier votre colis physique ou boîte mail avant d'approuver l'escrow.</p>
+                    {/* DISPUTE SYSTEM */}
+                    {order.status !== "completed" && order.status !== "refunded" && order.status !== "disputed" && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setDisputedOrder(order)}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100 transition flex items-center gap-1"
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Signaler un problème / Litige
+                        </button>
                       </div>
+                    )}
 
-                      <button
-                        onClick={() => handleConfirmReceipt(order.id)}
-                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition shrink-0 uppercase tracking-wider flex items-center gap-1 cursor-pointer"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Confirmer la réception
-                      </button>
-                    </div>
-                  )}
-
-                  {/* DISPUTE SYSTEM */}
-                  {order.status !== "completed" && order.status !== "refunded" && order.status !== "disputed" && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setDisputedOrder(order)}
-                        className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100 transition flex items-center gap-1"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        Signaler un problème / Litige
-                      </button>
-                    </div>
-                  )}
-
-                  {/* If disputed, display feedback */}
-                  {order.status === "disputed" && (
-                    <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-[11px] text-rose-800 flex gap-2">
-                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
-                      <div>
-                        <p className="font-bold">Dossier en attente d'arbitrage administratif.</p>
-                        <p className="font-normal text-rose-600 mt-1">Les fonds de {order.totalPrice} {order.currency} restent bloqués de manière stricte sur la plateforme. Notre service modération examine les pièces justificatives.</p>
+                    {/* If disputed, display feedback */}
+                    {order.status === "disputed" && (
+                      <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-[11px] text-rose-800 flex gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                        <div>
+                          <p className="font-bold">Dossier en attente d'arbitrage administratif.</p>
+                          <p className="font-normal text-rose-600 mt-1">Les fonds de {order.totalPrice} {order.currency} restent bloqués de manière stricte sur la plateforme. Notre service modération examine les pièces justificatives.</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -3133,6 +3366,269 @@ export default function BoutiqueView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MULTI-VENDOR CART SLIDE-OVER DRAWER */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm animate-fade-in flex justify-end">
+          <div className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-zinc-950 text-white">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5 text-emerald-400" />
+                <h3 className="font-heading font-black text-base">Panier Multi-Vendeurs Yaamaa</h3>
+              </div>
+              <button 
+                onClick={() => setIsCartOpen(false)}
+                className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-gray-300 hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {cartItems.length === 0 ? (
+                <div className="py-20 text-center text-gray-400 space-y-3">
+                  <ShoppingBag className="mx-auto h-12 w-12 text-gray-200" />
+                  <p className="text-sm font-bold text-gray-900">Votre panier est vide.</p>
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto">Ajoutez des produits de plusieurs boutiques différentes pour tester le panier intelligent et la répartition automatique des paiements.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.entries<{ shopName: string; sellerId: string; items: CartItem[]; deliveryFee: number }>(
+                    cartItems.reduce<Record<string, { shopName: string; sellerId: string; items: CartItem[]; deliveryFee: number }>>((acc, item) => {
+                      if (!acc[item.shopId]) {
+                        acc[item.shopId] = { shopName: item.shopName, sellerId: item.sellerId, items: [], deliveryFee: 0 };
+                      }
+                      acc[item.shopId].items.push(item);
+                      acc[item.shopId].deliveryFee += item.deliveryFee || 0;
+                      return acc;
+                    }, {})
+                  ).map(([shopId, group]) => (
+                    <div key={shopId} className="bg-gray-50/80 border border-gray-200 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                        <span className="text-xs font-black text-emerald-800 flex items-center gap-1">
+                          🏪 Boutique : @{group.shopName}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
+                          Livraison : {group.deliveryFee.toLocaleString()} {group.items[0]?.currency || "XOF"}
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-gray-100 space-y-3">
+                        {group.items.map(item => (
+                          <div key={item.id} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <img src={item.productImage} alt="" className="h-12 w-12 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
+                              <div>
+                                <h6 className="text-xs font-bold text-gray-900 line-clamp-1">{item.productName}</h6>
+                                <p className="text-[11px] font-mono text-gray-600 font-semibold">{item.unitPrice.toLocaleString()} {item.currency}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden">
+                                <button onClick={() => handleUpdateCartQty(item.id, -1)} className="px-2 py-1 text-xs hover:bg-gray-100 font-bold">-</button>
+                                <span className="px-2.5 py-1 text-xs font-mono font-bold">{item.quantity}</span>
+                                <button onClick={() => handleUpdateCartQty(item.id, 1)} className="px-2 py-1 text-xs hover:bg-gray-100 font-bold">+</button>
+                              </div>
+                              <button onClick={() => handleRemoveCartItem(item.id)} className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {cartItems.length > 0 && (
+              <div className="p-5 border-t border-gray-100 bg-gray-50 space-y-4">
+                <div className="space-y-1.5 text-xs text-gray-600">
+                  <div className="flex justify-between">
+                    <span>Sous-total produits :</span>
+                    <span className="font-mono font-bold text-gray-900">{cartItems.reduce((s, i) => s + i.lineTotal, 0).toLocaleString()} {cartItems[0]?.currency || "XOF"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Frais de livraison totaux :</span>
+                    <span className="font-mono font-bold text-gray-900">
+                      {Object.values(
+                        cartItems.reduce<Record<string, number>>((acc, item) => {
+                          if (!acc[item.shopId]) acc[item.shopId] = item.deliveryFee || 0;
+                          return acc;
+                        }, {})
+                      ).reduce((a: number, b: number) => a + b, 0).toLocaleString()} {cartItems[0]?.currency || "XOF"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-200 text-sm font-black text-gray-950">
+                    <span>Total Final (Paiement Unique) :</span>
+                    <span className="font-mono text-emerald-700">
+                      {(cartItems.reduce((s, i) => s + i.lineTotal, 0) + Object.values(
+                        cartItems.reduce<Record<string, number>>((acc, item) => {
+                          if (!acc[item.shopId]) acc[item.shopId] = item.deliveryFee || 0;
+                          return acc;
+                        }, {})
+                      ).reduce((a: number, b: number) => a + b, 0)).toLocaleString()} {cartItems[0]?.currency || "XOF"}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      alert("Veuillez vous connecter pour procéder au paiement.");
+                      return;
+                    }
+                    setIsCheckoutOpen(true);
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CreditCard className="h-4.5 w-4.5" />
+                  Passer la commande unique 🚀
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* CHECKOUT MODAL WITH DELIVERY ADDRESS & PAYMENT */}
+      {isCheckoutOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-base font-heading font-black text-gray-950">Adresse de livraison & Paiement Unique</h3>
+              </div>
+              <button onClick={() => setIsCheckoutOpen(false)} className="text-gray-400 hover:text-gray-700 font-bold">✕</button>
+            </div>
+
+            {checkoutErr && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
+                {checkoutErr}
+              </div>
+            )}
+            {checkoutMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold">
+                {checkoutMsg}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Nom du destinataire *</label>
+                  <input
+                    type="text"
+                    required
+                    value={deliveryAddress.recipientName}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, recipientName: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Téléphone de contact *</label>
+                  <input
+                    type="text"
+                    required
+                    value={deliveryAddress.phoneNumber}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, phoneNumber: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Adresse complète (Rue / Quartier) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Sicap Liberté 3, Villa N° 42"
+                  value={deliveryAddress.streetAddress}
+                  onChange={(e) => setDeliveryAddress({ ...deliveryAddress, streetAddress: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Ville *</label>
+                  <input
+                    type="text"
+                    required
+                    value={deliveryAddress.city}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, city: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Région / Département</label>
+                  <input
+                    type="text"
+                    value={deliveryAddress.departmentOrRegion}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, departmentOrRegion: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Pays *</label>
+                  <input
+                    type="text"
+                    required
+                    value={deliveryAddress.country}
+                    onChange={(e) => setDeliveryAddress({ ...deliveryAddress, country: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Instructions de livraison (optionnel)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Sonner à l'interphone 3B, déposer chez le gardien..."
+                  value={deliveryAddress.deliveryInstructions}
+                  onChange={(e) => setDeliveryAddress({ ...deliveryAddress, deliveryInstructions: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Méthode de paiement unique</label>
+                <select
+                  value={checkoutPaymentMethod}
+                  onChange={(e) => setCheckoutPaymentMethod(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-900 focus:outline-none focus:border-emerald-600"
+                >
+                  <option value="Wallet Yaamaa">Wallet Yaamaa (Solde disponible: {currentUser?.wallet?.available.toLocaleString()} {currentUser?.currency || "XOF"})</option>
+                  <option value="Kkiapay / Mobile Money">Kkiapay / Mobile Money (Orange Money, MTN, Moov)</option>
+                  <option value="Carte Bancaire">Carte Bancaire (Visa / Mastercard)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsCheckoutOpen(false)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer text-center"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isCheckingOut}
+                onClick={handleExecuteCheckout}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer text-center flex items-center justify-center gap-2"
+              >
+                {isCheckingOut ? "Traitement..." : "Confirmer le Paiement 🔒"}
+              </button>
+            </div>
           </div>
         </div>
       )}

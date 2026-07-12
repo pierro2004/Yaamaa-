@@ -5253,6 +5253,22 @@ export default function SocialView({
                     </button>
                   )}
 
+                  {/* GIFT CATALOG BUTTON IN THE MIDDLE OF THE CONVERSATION INPUT BAR */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGiftRecipientId(activeFriend ? activeFriend.id : (activeCommunity?.creatorId || null));
+                      setGiftCatalogTab("send");
+                      setShowGiftCatalogModal(true);
+                    }}
+                    className="p-2 sm:p-2.5 rounded-xl border bg-pink-50 border-pink-200 hover:bg-pink-100 text-pink-700 hover:text-pink-800 shrink-0 cursor-pointer font-extrabold text-[10px] sm:text-xs flex items-center gap-1 sm:gap-1.5 transition active:scale-95"
+                    title="Ouvrir le catalogue de cadeaux virtuels"
+                    id="btn_open_gift_catalog_chat"
+                  >
+                    <Gift className="h-4 w-4 text-pink-600 animate-pulse" />
+                    <span className="hidden sm:inline">Cadeaux 🎁</span>
+                  </button>
+
                   <textarea
                     rows={1}
                     value={isRecording ? `Message vocal en cours (durée: ${recordingDuration}s)... Cliquez sur le micro pour arrêter.` : newMsgText}

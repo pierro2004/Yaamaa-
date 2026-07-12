@@ -31,7 +31,6 @@ interface UserProfileModalProps {
   usersList: User[];
   productsList: Product[];
   promoCampaignsList: PromoCampaign[];
-  campaignsList: Campaign[];
   currentLanguage: Language;
 }
 
@@ -43,7 +42,6 @@ export default function UserProfileModal({
   usersList,
   productsList,
   promoCampaignsList,
-  campaignsList,
   currentLanguage
 }: UserProfileModalProps) {
   const [activeTab, setActiveTab] = useState<"about" | "publications" | "shop" | "campaigns" | "privacy">("about");
@@ -132,10 +130,9 @@ export default function UserProfileModal({
     );
   }
 
-  // Filter products, promo campaigns, and micro-tasks
+  // Filter products and promo campaigns
   const userProducts = productsList.filter((p) => p.ownerId === user.id && p.isApproved && !p.isBanned);
   const userPromos = promoCampaignsList.filter((c) => c.ownerId === user.id);
-  const userTasks = campaignsList.filter((c) => c.advertiserId === user.id);
 
   // Default bio/story if not provided
   const userBio = user.bio || (currentLanguage === "fr" 
@@ -143,8 +140,8 @@ export default function UserProfileModal({
     : "Active member of the Yaamaa community. Together, let's build the economy of tomorrow.");
 
   const userStory = user.story || (currentLanguage === "fr"
-    ? `J'ai rejoint la plateforme pour participer à des micro-tâches rémunérées et découvrir les talents locaux. Yaamaa m'aide au quotidien à rentabiliser mes réseaux sociaux tout en échangeant avec des pionniers de toute l'Afrique.`
-    : `I joined the platform to participate in rewarded micro-tasks and discover local talents. Yaamaa helps me monetize my social media daily while interacting with pioneers from all over Africa.`);
+    ? `J'ai rejoint la plateforme pour découvrir les talents locaux et développer mon activité. Yaamaa m'aide au quotidien à rentabiliser mes projets tout en échangeant avec des pionniers de toute l'Afrique.`
+    : `I joined the platform to discover local talents and develop my business. Yaamaa helps me monetize my projects daily while interacting with pioneers from all over Africa.`);
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -280,7 +277,7 @@ export default function UserProfileModal({
             }`}
           >
             <Megaphone className="h-4 w-4" />
-            {currentLanguage === "fr" ? `Campagnes (${userPromos.length + userTasks.length})` : `Campaigns (${userPromos.length + userTasks.length})`}
+            {currentLanguage === "fr" ? `Campagnes (${userPromos.length})` : `Campaigns (${userPromos.length})`}
           </button>
 
           {currentUserId === user.id && (
@@ -651,10 +648,10 @@ export default function UserProfileModal({
           {/* CAMPAIGNS TAB */}
           {activeTab === "campaigns" && (
             <div className="space-y-4 animate-fade-in">
-              {userPromos.length === 0 && userTasks.length === 0 ? (
+              {userPromos.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-2xl border border-gray-100 p-6">
                   <Megaphone className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-400 font-medium">Aucune campagne publicitaire ou micro-tâche lancée pour le moment.</p>
+                  <p className="text-xs text-gray-400 font-medium">Aucune campagne publicitaire lancée pour le moment.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -682,35 +679,6 @@ export default function UserProfileModal({
                         <div className="text-right">
                           <span className="text-[9px] text-gray-400 block font-mono uppercase">Service visé</span>
                           <span className="text-xs font-bold text-gray-800 truncate block">{camp.productServiceName}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* MICRO-TASK MISSIONS */}
-                  {userTasks.map((camp) => (
-                    <div key={camp.id} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="bg-emerald-50 text-emerald-700 text-[9px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider font-mono border border-emerald-100">
-                          🛠️ Micro-Mission Rémunérée
-                        </span>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                          camp.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"
-                        }`}>
-                          {camp.status}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-extrabold text-gray-900 font-sans">{camp.title}</h4>
-                      <p className="text-[10.5px] text-gray-500 leading-relaxed">{camp.description}</p>
-                      
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50">
-                        <div>
-                          <span className="text-[9px] text-gray-400 block font-mono uppercase">Récompense / Exécutant</span>
-                          <span className="text-xs font-black text-emerald-600 font-mono">+{camp.rewardPerUser.toLocaleString()} {user.currency}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[9px] text-gray-400 block font-mono uppercase">Participants</span>
-                          <span className="text-xs font-bold text-gray-800 font-mono">{camp.participantsCount} validés</span>
                         </div>
                       </div>
                     </div>

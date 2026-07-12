@@ -35,7 +35,12 @@ import {
   SupervisionIncident,
   SupervisionReport,
   ModerationFile,
-  ProductBoostCampaign
+  ProductBoostCampaign,
+  AdPack,
+  CampaignTypeConfig,
+  MultiVendorOrder,
+  CartItem,
+  VendorSubOrder
 } from "./src/types";
 import { ALL_COUNTRIES } from "./src/countries";
 import bcrypt from "bcryptjs";
@@ -108,6 +113,7 @@ interface AppState {
   supervisionIncidents?: SupervisionIncident[];
   supervisionReports?: SupervisionReport[];
   moderationFiles?: ModerationFile[];
+  multiVendorOrders?: MultiVendorOrder[];
   impersonationLogs?: ImpersonationLog[];
   productBoostCampaigns?: ProductBoostCampaign[];
   nextMerchantSequence?: number;
@@ -137,6 +143,25 @@ const DEFAULT_SETTINGS: SystemSettings = {
   autoSenderName: "Yama Assistance",
   autoSenderPhone: "+221701234567",
   autoSenderAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
+  pinMinLength: 4,
+  pinMaxLength: 8,
+  maxPinAttempts: 3,
+  pinBlockDurationMinutes: 30,
+  pinRequiredOperations: {
+    balance: false,
+    productPayment: true,
+    merchantPurchase: true,
+    subscription: true,
+    virtualGift: true,
+    sendMoney: true,
+    withdrawal: true,
+    pointConversion: true,
+    assetConversion: true,
+    pointTransfer: true,
+    orderValidation: true
+  },
+  pinRecoveryCodeValidityMinutes: 15,
+  pinAllowedRecoveryMethods: ["merchant_number", "email"],
   virtualGifts: [
     { id: "gift_rose", name: "Rose Éternelle", emoji: "🌹", pointsPrice: 10, description: "Un classique pour exprimer de l'affection", rarity: "Commun", category: "Amour", animation: "petals", soundEffect: "love_chime", duration: 5, isActive: true, pointsValue: 10 },
     { id: "gift_heart", name: "Cœur Pulsant", emoji: "💖", pointsPrice: 20, description: "Un cœur vibrant d'énergie positive", rarity: "Commun", category: "Amour", animation: "light", soundEffect: "heartbeat", duration: 4, isActive: true, pointsValue: 20 },
@@ -296,7 +321,87 @@ const DEFAULT_SETTINGS: SystemSettings = {
     sponsoredOrganicRatio: 25,
     autoApproval: true,
     antiSpamEnabled: true
-  }
+  },
+  messageTemplates: [
+    {
+      id: "tpl_referral",
+      title: "Bonus Parrainage",
+      category: "referral",
+      content: "Félicitations {NomUtilisateur} ! Vous venez de recevoir {MontantCommission} grâce à l'achat effectué par votre filleul {NomFilleul}. Votre nouveau solde est de {SoldePortefeuille}.",
+      variables: ["NomUtilisateur", "MontantCommission", "NomFilleul", "SoldePortefeuille"],
+      isActive: true
+    },
+    {
+      id: "tpl_gift",
+      title: "Cadeau Virtuel Reçu",
+      category: "gift",
+      content: "Bonjour {NomUtilisateur}, vous avez reçu un superbe cadeau {CadeauRecu} ! Date : {Date} à {Heure}.",
+      variables: ["NomUtilisateur", "CadeauRecu", "Date", "Heure"],
+      isActive: true
+    },
+    {
+      id: "tpl_withdrawal",
+      title: "Retrait Validé",
+      category: "withdrawal",
+      content: "Cher {NomUtilisateur}, votre demande de retrait de {MontantGagne} a été validée avec succès sur votre numéro marchand {NumeroMarchand}.",
+      variables: ["NomUtilisateur", "MontantGagne", "NumeroMarchand"],
+      isActive: true
+    },
+    {
+      id: "tpl_mission",
+      title: "Mission Rémunérée",
+      category: "mission",
+      content: "Bravo {NomUtilisateur} ! Votre mission '{NomCampagne}' est validée. Vous avez gagné {MontantGagne}.",
+      variables: ["NomUtilisateur", "NomCampagne", "MontantGagne"],
+      isActive: true
+    }
+  ],
+  automationRules: [
+    {
+      id: "rule_1",
+      name: "Alerte Automatique Parrainage",
+      triggerEvent: "referral_success",
+      conditions: "always",
+      templateId: "tpl_referral",
+      channels: ["in_app", "message"],
+      isActive: true,
+      createdAt: "2026-01-01T00:00:00Z"
+    },
+    {
+      id: "rule_2",
+      name: "Notification Cadeau Reçu",
+      triggerEvent: "gift_received",
+      conditions: "always",
+      templateId: "tpl_gift",
+      channels: ["in_app"],
+      isActive: true,
+      createdAt: "2026-01-01T00:00:00Z"
+    },
+    {
+      id: "rule_3",
+      name: "Confirmation de Retrait",
+      triggerEvent: "withdrawal_success",
+      conditions: "always",
+      templateId: "tpl_withdrawal",
+      channels: ["in_app"],
+      isActive: true,
+      createdAt: "2026-01-01T00:00:00Z"
+    }
+  ],
+  syncLogs: [
+    {
+      id: "log_init",
+      adminId: "user_founder",
+      adminUsername: "founder",
+      timestamp: "2026-01-01T00:00:00Z",
+      parameterKey: "initialization_sync",
+      oldValue: "none",
+      newValue: "active",
+      modulesUpdated: ["tarifs", "parrainage", "cadeaux", "retraits"],
+      status: "success",
+      details: "Initialisation du moteur de synchronisation et d'automatisation Yaamaa."
+    }
+  ]
 };
 
 // Seed initial data
@@ -1344,6 +1449,10 @@ function loadState(): AppState {
         state.moderationFiles = useDemoSeed ? SEED_MODERATION_FILES : [];
         updated = true;
       }
+      if (!state.multiVendorOrders) {
+        state.multiVendorOrders = [];
+        updated = true;
+      }
 
       if (updated) {
         fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
@@ -1379,7 +1488,8 @@ function loadState(): AppState {
     subscriptionNotifications: [],
     supervisionIncidents: SEED_SUPERVISION_INCIDENTS,
     supervisionReports: SEED_SUPERVISION_REPORTS,
-    moderationFiles: useDemoSeed ? SEED_MODERATION_FILES : []
+    moderationFiles: useDemoSeed ? SEED_MODERATION_FILES : [],
+    multiVendorOrders: []
   };
   saveState(freshState);
   return freshState;
@@ -1462,24 +1572,30 @@ app.post("/api/users/current", (req, res) => {
   res.json(user);
 });
 
-// Real User Login Authentication Email and Password
+// Real User Login Authentication Email or Merchant Number and Password
 app.post("/api/users/login", (req, res) => {
-  const { email, password } = req.body;
+  const { email, identifier, password } = req.body;
+  const loginId = identifier || email;
   
-  if (!email || !password) {
-    return res.status(400).json({ error: "Veuillez renseigner votre email et votre mot de passe." });
+  if (!loginId || !password) {
+    return res.status(400).json({ error: "Veuillez renseigner votre numéro marchand ou email et votre mot de passe." });
   }
 
-  // Find user by email
-  const user = appState.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  // Find user by email or merchant number
+  const cleanId = loginId.trim().toLowerCase();
+  const user = appState.users.find(u => 
+    u.email.toLowerCase() === cleanId || 
+    (u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId)
+  );
+
   if (!user) {
-    return res.status(401).json({ error: "L'adresse email n'a pas été trouvée. Veuillez vérifier ou créer un compte." });
+    return res.status(401).json({ error: "Le numéro marchand ou l'adresse est invalide." });
   }
 
-  // Validate password match (bcrypt or legacy plaintext fallback)
-  const isMatch = bcrypt.compareSync(password, user.password) || user.password === password;
+  // Validate password match
+  const isMatch = bcrypt.compareSync(password, user.password || "") || user.password === password;
   if (!isMatch) {
-    return res.status(401).json({ error: "Le mot de passe saisi est incorrect." });
+    return res.status(401).json({ error: "Mot de passe invalide." });
   }
 
   ensureAdminMerchantNumber(user);
@@ -1607,6 +1723,8 @@ app.post("/api/yaamaa-chat/verify-merchant", (req, res) => {
   }
 
   const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+  user.chatCode = generatedCode;
+  user.chatCodeCreatedAt = Date.now();
   
   if (!user.notifications) {
     user.notifications = [];
@@ -1615,7 +1733,7 @@ app.post("/api/yaamaa-chat/verify-merchant", (req, res) => {
   user.notifications.unshift({
     id: "notif_chat_" + Date.now(),
     title: "Tentative de connexion Yaamaa Chat 🔐",
-    desc: `Une demande de connexion a été initiée depuis Yaamaa Chat pour votre numéro marchand (${user.merchantNumber}). Code de sécurité: ${generatedCode}.`,
+    desc: `Une demande de connexion a été initiée depuis Yaamaa Chat pour votre numéro marchand (${user.merchantNumber}). Code de sécurité: ${generatedCode}. Valide 5 minutes.`,
     time: "À l'instant",
     read: false,
     priority: "critical",
@@ -1625,6 +1743,108 @@ app.post("/api/yaamaa-chat/verify-merchant", (req, res) => {
 
   saveState(appState);
   res.json({ success: true, user, code: generatedCode });
+});
+
+app.post("/api/yaamaa-chat/login-with-code", (req, res) => {
+  const { userId, code } = req.body;
+  if (!userId || !code) {
+    return res.status(400).json({ error: "Identifiant et code requis." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur non trouvé." });
+  }
+
+  if (!user.chatCode || user.chatCode !== code.trim()) {
+    return res.status(401).json({ error: "Code incorrect" });
+  }
+
+  const elapsedMs = Date.now() - (user.chatCodeCreatedAt || 0);
+  if (elapsedMs > 5 * 60 * 1000) {
+    return res.status(401).json({ error: "Code expiré (délai de 5 minutes dépassé)" });
+  }
+
+  user.chatCode = undefined;
+  user.chatCodeCreatedAt = undefined;
+  saveState(appState);
+
+  createAuditLog(user.id, user.username, user.role, "Connexion Yaamaa Chat réussie", `Connexion réussie via Yaamaa Chat pour ${user.username}`, req);
+  res.json({ success: true, user });
+});
+
+// Forgot Password API endpoints
+app.post("/api/users/forgot-password/request", (req, res) => {
+  const { identifier, method } = req.body;
+  if (!identifier) {
+    return res.status(400).json({ error: "Numéro marchand ou adresse email requis." });
+  }
+
+  const cleanId = identifier.trim().toLowerCase();
+  const user = appState.users.find(u => 
+    u.email.toLowerCase() === cleanId || 
+    (u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId)
+  );
+
+  if (!user) {
+    return res.status(404).json({ error: "Aucun compte ne correspond à cet identifiant." });
+  }
+
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+  user.resetCode = resetCode;
+  user.resetCodeCreatedAt = Date.now();
+
+  if (!user.notifications) user.notifications = [];
+  user.notifications.unshift({
+    id: "notif_reset_" + Date.now(),
+    title: "Récupération de mot de passe Yaamaa 🔑",
+    desc: `Votre code de réinitialisation est : ${resetCode}. Valide pendant 5 minutes.`,
+    time: "À l'instant",
+    read: false,
+    priority: "critical",
+    category: "security"
+  });
+
+  saveState(appState);
+  res.json({ success: true, message: "Code de réinitialisation envoyé avec succès.", method: method || "merchant_number" });
+});
+
+app.post("/api/users/forgot-password/verify-and-reset", (req, res) => {
+  const { identifier, code, newPassword, confirmNewPassword } = req.body;
+  if (!identifier || !code || !newPassword || !confirmNewPassword) {
+    return res.status(400).json({ error: "Tous les champs sont requis." });
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    return res.status(400).json({ error: "Les mots de passe ne correspondent pas." });
+  }
+
+  const cleanId = identifier.trim().toLowerCase();
+  const user = appState.users.find(u => 
+    u.email.toLowerCase() === cleanId || 
+    (u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId)
+  );
+
+  if (!user) {
+    return res.status(404).json({ error: "Utilisateur non trouvé." });
+  }
+
+  if (!user.resetCode || user.resetCode !== code.trim()) {
+    return res.status(400).json({ error: "Code de réinitialisation incorrect." });
+  }
+
+  const elapsed = Date.now() - (user.resetCodeCreatedAt || 0);
+  if (elapsed > 5 * 60 * 1000) {
+    return res.status(400).json({ error: "Code de réinitialisation expiré (délai de 5 minutes dépassé)." });
+  }
+
+  user.password = bcrypt.hashSync(newPassword, 10);
+  user.resetCode = undefined;
+  user.resetCodeCreatedAt = undefined;
+  saveState(appState);
+
+  createAuditLog(user.id, user.username, user.role, "Mot de passe réinitialisé", `Réinitialisation réussie du mot de passe pour ${user.username}`, req);
+  res.json({ success: true, message: "Mot de passe réinitialisé avec succès." });
 });
 
 app.get("/api/yaamaa-chat/check-status", (req, res) => {
@@ -2395,6 +2615,309 @@ app.post("/api/admin/submissions/review", (req, res) => {
   saveState(appState);
   createAuditLog(operatorId || "system", opName, "admin", "Révision Preuve", `Preuve ID ${submissionId} modifiée: ${previousStatus} -> ${status}`, req);
   res.json({ submission: sub, participant });
+});
+
+// ==========================================
+// 🛡️ TRANSACTION PIN SECURITY SYSTEM
+// ==========================================
+
+function logPinAudit(user: any, operation: string, result: "success" | "failure", details?: string, req?: any) {
+  if (!user.pinAuditLogs) user.pinAuditLogs = [];
+  const entry = {
+    id: "pin_audit_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+    timestamp: new Date().toISOString(),
+    operation,
+    result,
+    details,
+    ip: req?.ip || req?.headers?.["x-forwarded-for"] || "127.0.0.1",
+    device: req?.headers?.["user-agent"] || "Yaamaa App"
+  };
+  user.pinAuditLogs.unshift(entry);
+  if (user.pinAuditLogs.length > 50) user.pinAuditLogs.pop();
+
+  if (!user.notifications) user.notifications = [];
+  user.notifications.unshift({
+    id: "notif_pin_" + Date.now(),
+    title: result === "success" ? "🔐 Sécurité PIN : " + operation : "⚠️ Alerte Sécurité PIN",
+    desc: `Opération: ${operation} - Résultat: ${result === "success" ? "Réussi" : "Échoué"}. ${details || ""}`,
+    time: "À l'instant",
+    timestamp: new Date().toISOString(),
+    priority: result === "success" ? "standard" : "critical",
+    category: "security"
+  });
+}
+
+// 1. Create PIN
+app.post("/api/wallet/pin/create", async (req, res) => {
+  const { userId, pin, confirmPin } = req.body;
+  if (!userId || !pin || !confirmPin) {
+    return res.status(400).json({ error: "Paramètres PIN manquants." });
+  }
+  if (pin !== confirmPin) {
+    return res.status(400).json({ error: "Les deux codes PIN ne correspondent pas." });
+  }
+  const minLen = appState.settings.pinMinLength || 4;
+  const maxLen = appState.settings.pinMaxLength || 8;
+  if (pin.length < minLen || pin.length > maxLen || !/^\d+$/.test(pin)) {
+    return res.status(400).json({ error: `Le Code PIN doit contenir entre ${minLen} et ${maxLen} chiffres uniquement.` });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  try {
+    user.transactionPinHash = await bcrypt.hash(pin, 10);
+    user.pinFailedAttempts = 0;
+    user.pinLockedUntil = null;
+    saveState(appState);
+
+    logPinAudit(user, "Création du Code PIN", "success", "Code PIN configuré avec succès", req);
+    createAuditLog(userId, user.username, user.role, "Sécurité PIN", "Création du Code PIN de transaction", req);
+    res.json({ success: true, message: "Code PIN créé avec succès." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Erreur serveur lors de la création du PIN." });
+  }
+});
+
+// 2. Verify PIN
+app.post("/api/wallet/pin/verify", async (req, res) => {
+  const { userId, pin } = req.body;
+  if (!userId || !pin) {
+    return res.status(400).json({ error: "ID utilisateur ou code PIN manquant." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  if (!user.transactionPinHash) {
+    return res.status(400).json({ error: "Aucun Code PIN configuré pour ce compte. Veuillez d'abord le créer.", requirePinSetup: true });
+  }
+
+  if (user.pinLockedUntil && new Date(user.pinLockedUntil) > new Date()) {
+    const remainingMins = Math.ceil((new Date(user.pinLockedUntil).getTime() - Date.now()) / 60000);
+    return res.status(403).json({ error: `Portefeuille temporairement bloqué en raison de plusieurs tentatives erronées. Veuillez patienter ${remainingMins} minute(s) ou utiliser la récupération.` });
+  }
+
+  try {
+    const isMatch = await bcrypt.compare(pin, user.transactionPinHash);
+    if (!isMatch) {
+      if (user.pinFailedAttempts === undefined) user.pinFailedAttempts = 0;
+      user.pinFailedAttempts += 1;
+      const maxAttempts = appState.settings.maxPinAttempts || 3;
+      const attemptsLeft = maxAttempts - user.pinFailedAttempts;
+
+      if (user.pinFailedAttempts >= maxAttempts) {
+        const blockDuration = appState.settings.pinBlockDurationMinutes || 30;
+        user.pinLockedUntil = new Date(Date.now() + blockDuration * 60000).toISOString();
+        saveState(appState);
+        logPinAudit(user, "Blocage Temporaire Portefeuille", "failure", `Bloqué suite à ${user.pinFailedAttempts} échecs PIN`, req);
+        return res.status(403).json({ error: `Code PIN incorrect. Nombre maximal d'essais atteint. Portefeuille verrouillé pour ${blockDuration} minutes.` });
+      }
+
+      saveState(appState);
+      logPinAudit(user, "Vérification PIN", "failure", `Code erroné. Restant: ${attemptsLeft}`, req);
+      return res.status(400).json({ error: `Code PIN incorrect. Il vous reste ${attemptsLeft} tentative(s).`, attemptsLeft });
+    }
+
+    user.pinFailedAttempts = 0;
+    user.pinLockedUntil = null;
+    saveState(appState);
+    logPinAudit(user, "Vérification PIN", "success", "Validation réussie", req);
+    res.json({ success: true, message: "PIN validé avec succès." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Erreur de vérification du PIN." });
+  }
+});
+
+// 3. Change PIN
+app.post("/api/wallet/pin/change", async (req, res) => {
+  const { userId, oldPin, newPin, confirmNewPin } = req.body;
+  if (!userId || !oldPin || !newPin || !confirmNewPin) {
+    return res.status(400).json({ error: "Tous les champs PIN sont obligatoires." });
+  }
+  if (newPin !== confirmNewPin) {
+    return res.status(400).json({ error: "Le nouveau code PIN et sa confirmation ne correspondent pas." });
+  }
+  const minLen = appState.settings.pinMinLength || 4;
+  const maxLen = appState.settings.pinMaxLength || 8;
+  if (newPin.length < minLen || newPin.length > maxLen || !/^\d+$/.test(newPin)) {
+    return res.status(400).json({ error: `Le nouveau Code PIN doit contenir entre ${minLen} et ${maxLen} chiffres.` });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user || !user.transactionPinHash) {
+    return res.status(404).json({ error: "Utilisateur ou PIN existant introuvable." });
+  }
+
+  try {
+    const isOldMatch = await bcrypt.compare(oldPin, user.transactionPinHash);
+    if (!isOldMatch) {
+      logPinAudit(user, "Modification PIN", "failure", "Ancien PIN incorrect", req);
+      return res.status(400).json({ error: "L'ancien code PIN est incorrect." });
+    }
+
+    user.transactionPinHash = await bcrypt.hash(newPin, 10);
+    user.pinFailedAttempts = 0;
+    user.pinLockedUntil = null;
+    saveState(appState);
+
+    logPinAudit(user, "Modification PIN", "success", "Code PIN modifié avec succès", req);
+    res.json({ success: true, message: "Code PIN modifié avec succès." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Erreur lors du changement de PIN." });
+  }
+});
+
+// 4. Recover PIN Request
+app.post("/api/wallet/pin/recover/request", (req, res) => {
+  const { identifier, method } = req.body;
+  if (!identifier || !method) {
+    return res.status(400).json({ error: "Identifiant et méthode de récupération requis." });
+  }
+
+  let user: any = null;
+  if (method === "merchant_number") {
+    user = appState.users.find(u => u.merchantNumber && u.merchantNumber.toLowerCase() === identifier.trim().toLowerCase());
+  } else if (method === "email") {
+    user = appState.users.find(u => u.email && u.email.toLowerCase() === identifier.trim().toLowerCase());
+  }
+
+  if (user) {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const validityMins = appState.settings.pinRecoveryCodeValidityMinutes || 15;
+    user.pinRecoveryCode = code;
+    user.pinRecoveryExpiresAt = new Date(Date.now() + validityMins * 60000).toISOString();
+    saveState(appState);
+
+    if (!user.notifications) user.notifications = [];
+    user.notifications.unshift({
+      id: "notif_rec_" + Date.now(),
+      title: "🔑 Code de Récupération PIN Yaamaa",
+      desc: `Votre code unique de réinitialisation est: ${code} (Valide ${validityMins} minutes).`,
+      time: "À l'instant",
+      timestamp: new Date().toISOString(),
+      priority: "urgent",
+      category: "security"
+    });
+
+    logPinAudit(user, "Demande Récupération PIN", "success", `Code envoyé via ${method}`, req);
+  }
+
+  res.json({ success: true, message: "Si les informations fournies correspondent à un compte Yaamaa valide, un code de réinitialisation sécurisé a été généré et transmis." });
+});
+
+// 5. Recover PIN Verify & Reset
+app.post("/api/wallet/pin/recover/verify", async (req, res) => {
+  const { identifier, method, code, newPin, confirmNewPin } = req.body;
+  if (!identifier || !method || !code || !newPin || !confirmNewPin) {
+    return res.status(400).json({ error: "Tous les champs de réinitialisation sont obligatoires." });
+  }
+  if (newPin !== confirmNewPin) {
+    return res.status(400).json({ error: "Le nouveau code PIN et sa confirmation ne correspondent pas." });
+  }
+
+  let user: any = null;
+  if (method === "merchant_number") {
+    user = appState.users.find(u => u.merchantNumber && u.merchantNumber.toLowerCase() === identifier.trim().toLowerCase());
+  } else if (method === "email") {
+    user = appState.users.find(u => u.email && u.email.toLowerCase() === identifier.trim().toLowerCase());
+  }
+
+  if (!user || !user.pinRecoveryCode || user.pinRecoveryCode !== code) {
+    return res.status(400).json({ error: "Code de récupération invalide." });
+  }
+
+  if (user.pinRecoveryExpiresAt && new Date(user.pinRecoveryExpiresAt) < new Date()) {
+    return res.status(400).json({ error: "Le code de récupération a expiré. Veuillez refaire une demande." });
+  }
+
+  const minLen = appState.settings.pinMinLength || 4;
+  const maxLen = appState.settings.pinMaxLength || 8;
+  if (newPin.length < minLen || newPin.length > maxLen || !/^\d+$/.test(newPin)) {
+    return res.status(400).json({ error: `Le nouveau Code PIN doit contenir entre ${minLen} et ${maxLen} chiffres.` });
+  }
+
+  try {
+    user.transactionPinHash = await bcrypt.hash(newPin, 10);
+    user.pinRecoveryCode = undefined;
+    user.pinRecoveryExpiresAt = undefined;
+    user.pinFailedAttempts = 0;
+    user.pinLockedUntil = null;
+    saveState(appState);
+
+    logPinAudit(user, "Réinitialisation PIN", "success", "PIN réinitialisé avec succès via code", req);
+    res.json({ success: true, message: "Votre Code PIN a été réinitialisé avec succès." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Erreur lors de la réinitialisation du PIN." });
+  }
+});
+
+// 6. Biometric Toggle
+app.post("/api/wallet/pin/biometric/toggle", (req, res) => {
+  const { userId, enabled } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  user.biometricEnabled = !!enabled;
+  saveState(appState);
+  logPinAudit(user, "Biométrie", "success", `Authentification biométrique ${enabled ? 'activée' : 'désactivée'}`, req);
+  res.json({ success: true, biometricEnabled: user.biometricEnabled });
+});
+
+// Admin PIN Settings & Audit
+app.get("/api/admin/pin-settings", (req, res) => {
+  res.json({
+    pinMinLength: appState.settings.pinMinLength || 4,
+    pinMaxLength: appState.settings.pinMaxLength || 8,
+    maxPinAttempts: appState.settings.maxPinAttempts || 3,
+    pinBlockDurationMinutes: appState.settings.pinBlockDurationMinutes || 30,
+    pinRequiredOperations: appState.settings.pinRequiredOperations || {},
+    pinRecoveryCodeValidityMinutes: appState.settings.pinRecoveryCodeValidityMinutes || 15,
+    pinAllowedRecoveryMethods: appState.settings.pinAllowedRecoveryMethods || ["merchant_number", "email"]
+  });
+});
+
+app.post("/api/admin/pin-settings", (req, res) => {
+  const { pinMinLength, pinMaxLength, maxPinAttempts, pinBlockDurationMinutes, pinRequiredOperations, pinRecoveryCodeValidityMinutes, pinAllowedRecoveryMethods, operatorId } = req.body;
+  
+  if (pinMinLength !== undefined) appState.settings.pinMinLength = Number(pinMinLength);
+  if (pinMaxLength !== undefined) appState.settings.pinMaxLength = Number(pinMaxLength);
+  if (maxPinAttempts !== undefined) appState.settings.maxPinAttempts = Number(maxPinAttempts);
+  if (pinBlockDurationMinutes !== undefined) appState.settings.pinBlockDurationMinutes = Number(pinBlockDurationMinutes);
+  if (pinRequiredOperations !== undefined) appState.settings.pinRequiredOperations = pinRequiredOperations;
+  if (pinRecoveryCodeValidityMinutes !== undefined) appState.settings.pinRecoveryCodeValidityMinutes = Number(pinRecoveryCodeValidityMinutes);
+  if (pinAllowedRecoveryMethods !== undefined) appState.settings.pinAllowedRecoveryMethods = pinAllowedRecoveryMethods;
+
+  saveState(appState);
+  createAuditLog(operatorId || "admin", "Administrateur", "admin", "Config Sécurité PIN", "Mise à jour des paramètres de sécurité PIN", req);
+  res.json({ success: true, settings: appState.settings });
+});
+
+app.get("/api/admin/pin-audit-logs", (req, res) => {
+  const allLogs: any[] = [];
+  appState.users.forEach(u => {
+    if (u.pinAuditLogs && Array.isArray(u.pinAuditLogs)) {
+      u.pinAuditLogs.forEach(l => {
+        allLogs.push({ ...l, userId: u.id, username: u.username, name: u.name });
+      });
+    }
+  });
+  allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  res.json(allLogs);
+});
+
+app.post("/api/admin/wallets/unblock-pin", (req, res) => {
+  const { userId, operatorId } = req.body;
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur introuvable." });
+
+  user.pinFailedAttempts = 0;
+  user.pinLockedUntil = null;
+  saveState(appState);
+
+  logPinAudit(user, "Déblocage Portefeuille PIN", "success", "Débloqué par l'administration", req);
+  createAuditLog(operatorId || "admin", "Administrateur", "admin", "Déblocage Portefeuille PIN", `Utilisateur ${user.username} débloqué`, req);
+  res.json({ success: true, user });
 });
 
 // 5. TRANSACTIONS & WITHDRAWAL SECURITY
@@ -4434,6 +4957,253 @@ app.get("/api/admin/gifts/stats", (req, res) => {
   });
 });
 
+// ==========================================
+// 5.4 AUTOMATION & SYNCHRONIZATION ENGINE ENDPOINTS
+// ==========================================
+
+function triggerAutomationEvent(eventKey: string, context: { user?: any, recipient?: any, inviter?: any, amount?: number, commission?: number, giftName?: string, campaignName?: string, subscriptionName?: string, extraData?: any }) {
+  if (!appState.settings.automationRules) appState.settings.automationRules = DEFAULT_SETTINGS.automationRules || [];
+  if (!appState.settings.messageTemplates) appState.settings.messageTemplates = DEFAULT_SETTINGS.messageTemplates || [];
+
+  const rules = appState.settings.automationRules;
+  const templates = appState.settings.messageTemplates;
+  const matchingRules = rules.filter(r => r.isActive && r.triggerEvent === eventKey);
+
+  matchingRules.forEach(rule => {
+    const template = templates.find(t => t.id === rule.templateId && t.isActive);
+    if (!template) return;
+
+    const targetUser = context.recipient || context.user || context.inviter;
+    if (!targetUser) return;
+
+    let content = template.content;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const variablesMap: { [key: string]: string } = {
+      NomUtilisateur: targetUser.name || targetUser.username || "Utilisateur",
+      NumeroMarchand: targetUser.merchantNumber || "N/A",
+      MontantGagne: context.amount ? `${context.amount} ${targetUser.currency || 'FCFA'}` : "0 FCFA",
+      NombreFilleuls: String(targetUser.referralsCount || 0),
+      MontantCommission: context.commission ? `${context.commission} ${targetUser.currency || 'FCFA'}` : "0 FCFA",
+      CadeauRecu: context.giftName || "Cadeau",
+      Date: dateStr,
+      Heure: timeStr,
+      NomAbonnement: context.subscriptionName || "Abonnement Standard",
+      NomCampagne: context.campaignName || "Campagne Yaamaa",
+      SoldePortefeuille: `${targetUser.wallet?.available || 0} ${targetUser.currency || 'FCFA'}`,
+      NomFilleul: context.user?.name || context.user?.username || "Filleul"
+    };
+
+    Object.keys(variablesMap).forEach(key => {
+      const regex = new RegExp(`\\{${key}\\}`, "g");
+      content = content.replace(regex, variablesMap[key]);
+    });
+
+    rule.channels.forEach(channel => {
+      if (channel === "in_app") {
+        if (!targetUser.notifications) targetUser.notifications = [];
+        targetUser.notifications.unshift({
+          id: "notif_auto_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+          title: template.title,
+          message: content,
+          timestamp: new Date().toISOString(),
+          read: false
+        });
+      } else if (channel === "message") {
+        if (!appState.socialMessages) appState.socialMessages = [];
+        appState.socialMessages.push({
+          id: "msg_auto_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+          senderId: "user_admin",
+          senderUsername: "Yama Assistance",
+          senderAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
+          text: content,
+          createdAt: new Date().toISOString(),
+          recipientId: targetUser.id
+        });
+      } else if (channel === "home_feed") {
+        if (!appState.broadcastCampaigns) appState.broadcastCampaigns = [];
+        appState.broadcastCampaigns.unshift({
+          id: "bc_auto_" + Date.now(),
+          title: template.title,
+          text: content,
+          mediaType: "none",
+          scheduleType: "immediate",
+          status: "sent",
+          targeting: { targetGroup: "all" },
+          senderId: "user_admin",
+          senderUsername: "Yama Assistance",
+          senderAvatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
+          createdAt: new Date().toISOString(),
+          sentCount: 1500,
+          readCount: 1200,
+          recipientCount: 1500,
+          distributedCount: 1500
+        });
+      }
+    });
+
+    if (!appState.settings.syncLogs) appState.settings.syncLogs = [];
+    appState.settings.syncLogs.unshift({
+      id: "log_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+      adminId: "system",
+      adminUsername: "Yaamaa Automation Engine",
+      timestamp: new Date().toISOString(),
+      parameterKey: `automation_rule_${rule.id}`,
+      oldValue: "Trigger: " + eventKey,
+      newValue: `Dispatched to: ${rule.channels.join(", ")}`,
+      modulesUpdated: rule.channels,
+      status: "success",
+      details: `Règle "${rule.name}" exécutée avec succès pour @${targetUser.username}`
+    });
+  });
+}
+
+app.get("/api/admin/automation-rules", (req, res) => {
+  res.json(appState.settings.automationRules || DEFAULT_SETTINGS.automationRules || []);
+});
+
+app.post("/api/admin/automation-rules", (req, res) => {
+  const { name, triggerEvent, conditions, templateId, channels, isActive, operatorId } = req.body;
+  if (!appState.settings.automationRules) appState.settings.automationRules = [];
+  const newRule = {
+    id: "rule_" + Date.now(),
+    name: name || "Nouvelle Règle",
+    triggerEvent: triggerEvent || "referral_success",
+    conditions: conditions || "always",
+    templateId: templateId || "",
+    channels: channels || ["in_app"],
+    isActive: isActive !== false,
+    createdAt: new Date().toISOString()
+  };
+  appState.settings.automationRules.push(newRule);
+  
+  if (!appState.settings.syncLogs) appState.settings.syncLogs = [];
+  appState.settings.syncLogs.unshift({
+    id: "log_" + Date.now(),
+    adminId: operatorId || "system",
+    adminUsername: appState.users.find(u => u.id === operatorId)?.username || "admin",
+    timestamp: new Date().toISOString(),
+    parameterKey: "automation_rule_create",
+    oldValue: "None",
+    newValue: newRule.name,
+    modulesUpdated: ["automation_engine"],
+    status: "success",
+    details: `Création de la règle d'automatisation ${newRule.name}`
+  });
+
+  saveState(appState);
+  res.json({ success: true, rule: newRule });
+});
+
+app.put("/api/admin/automation-rules/:id", (req, res) => {
+  const { id } = req.params;
+  const { operatorId } = req.body;
+  const rules = appState.settings.automationRules || [];
+  const rule = rules.find(r => r.id === id);
+  if (!rule) return res.status(404).json({ error: "Règle introuvable." });
+  Object.assign(rule, req.body);
+
+  if (!appState.settings.syncLogs) appState.settings.syncLogs = [];
+  appState.settings.syncLogs.unshift({
+    id: "log_" + Date.now(),
+    adminId: operatorId || "system",
+    adminUsername: appState.users.find(u => u.id === operatorId)?.username || "admin",
+    timestamp: new Date().toISOString(),
+    parameterKey: `automation_rule_update_${id}`,
+    oldValue: "Modified",
+    newValue: rule.name,
+    modulesUpdated: ["automation_engine"],
+    status: "success",
+    details: `Mise à jour de la règle d'automatisation ${rule.name}`
+  });
+
+  saveState(appState);
+  res.json({ success: true, rule });
+});
+
+app.delete("/api/admin/automation-rules/:id", (req, res) => {
+  const { id } = req.params;
+  if (!appState.settings.automationRules) appState.settings.automationRules = [];
+  appState.settings.automationRules = appState.settings.automationRules.filter(r => r.id !== id);
+  saveState(appState);
+  res.json({ success: true });
+});
+
+app.get("/api/admin/message-templates", (req, res) => {
+  res.json(appState.settings.messageTemplates || DEFAULT_SETTINGS.messageTemplates || []);
+});
+
+app.post("/api/admin/message-templates", (req, res) => {
+  const { title, category, content, variables, isActive, operatorId } = req.body;
+  if (!appState.settings.messageTemplates) appState.settings.messageTemplates = [];
+  const newTpl = {
+    id: "tpl_" + Date.now(),
+    title: title || "Nouveau Modèle",
+    category: category || "general",
+    content: content || "Félicitations {NomUtilisateur} !",
+    variables: variables || ["NomUtilisateur"],
+    isActive: isActive !== false
+  };
+  appState.settings.messageTemplates.push(newTpl);
+
+  if (!appState.settings.syncLogs) appState.settings.syncLogs = [];
+  appState.settings.syncLogs.unshift({
+    id: "log_" + Date.now(),
+    adminId: operatorId || "system",
+    adminUsername: appState.users.find(u => u.id === operatorId)?.username || "admin",
+    timestamp: new Date().toISOString(),
+    parameterKey: "message_template_create",
+    oldValue: "None",
+    newValue: newTpl.title,
+    modulesUpdated: ["messaging_library"],
+    status: "success",
+    details: `Création du modèle de message ${newTpl.title}`
+  });
+
+  saveState(appState);
+  res.json({ success: true, template: newTpl });
+});
+
+app.put("/api/admin/message-templates/:id", (req, res) => {
+  const { id } = req.params;
+  const { operatorId } = req.body;
+  const tpls = appState.settings.messageTemplates || [];
+  const tpl = tpls.find(t => t.id === id);
+  if (!tpl) return res.status(404).json({ error: "Modèle introuvable." });
+  Object.assign(tpl, req.body);
+
+  if (!appState.settings.syncLogs) appState.settings.syncLogs = [];
+  appState.settings.syncLogs.unshift({
+    id: "log_" + Date.now(),
+    adminId: operatorId || "system",
+    adminUsername: appState.users.find(u => u.id === operatorId)?.username || "admin",
+    timestamp: new Date().toISOString(),
+    parameterKey: `message_template_update_${id}`,
+    oldValue: "Modified",
+    newValue: tpl.title,
+    modulesUpdated: ["messaging_library"],
+    status: "success",
+    details: `Mise à jour du modèle ${tpl.title}`
+  });
+
+  saveState(appState);
+  res.json({ success: true, template: tpl });
+});
+
+app.delete("/api/admin/message-templates/:id", (req, res) => {
+  const { id } = req.params;
+  if (!appState.settings.messageTemplates) appState.settings.messageTemplates = [];
+  appState.settings.messageTemplates = appState.settings.messageTemplates.filter(t => t.id !== id);
+  saveState(appState);
+  res.json({ success: true });
+});
+
+app.get("/api/admin/sync-logs", (req, res) => {
+  res.json(appState.settings.syncLogs || []);
+});
+
 // 5.3.1 ADMIN CUSTOMIZES HOME PAGE CONTENT
 app.post("/api/admin/home-customization", (req, res) => {
   const { 
@@ -5870,6 +6640,233 @@ app.post("/api/orders", (req, res) => {
   saveState(appState);
   createAuditLog(buyerId, buyerUsername, buyer.role, "Achat Escrow", `Achat #${orderId}: ${quantity}x ${product.name} (${totalPrice} ${product.currency})`, req);
   res.json(newOrder);
+});
+
+// --- MULTI-VENDOR CART & AUTOMATED PAYMENT SPLITTING SYSTEM ---
+
+app.get("/api/multivendor-orders", (req, res) => {
+  res.json(appState.multiVendorOrders || []);
+});
+
+app.post("/api/multivendor-orders", (req, res) => {
+  const { buyerId, buyerUsername, deliveryAddress, items, paymentMethod } = req.body;
+  if (!buyerId || !buyerUsername || !deliveryAddress || !items || !Array.isArray(items) || items.length === 0 || !paymentMethod) {
+    return res.status(400).json({ error: "Données de commande multi-vendeurs incomplètes." });
+  }
+
+  const buyer = appState.users.find(u => u.id === buyerId);
+  if (!buyer) return res.status(404).json({ error: "Acheteur introuvable." });
+
+  const vendorGroups: Record<string, { sellerId: string; shopId: string; shopName: string; items: CartItem[]; subtotal: number; deliveryFee: number }> = {};
+  
+  let subtotalAll = 0;
+  let totalDeliveryFees = 0;
+  let totalDiscounts = 0;
+  const currency = items[0]?.currency || "XOF";
+
+  for (const item of items) {
+    const product = (appState.products || []).find(p => p.id === item.productId);
+    if (!product) {
+      return res.status(404).json({ error: `Produit introuvable: ${item.productName}` });
+    }
+    if (product.quantityAvailable < item.quantity && product.category === "physical") {
+      return res.status(400).json({ error: `Stock insuffisant pour le produit: ${product.name}` });
+    }
+
+    const lineSubtotal = item.unitPrice * item.quantity;
+    subtotalAll += lineSubtotal;
+    const fee = item.deliveryFee || 0;
+    totalDeliveryFees += fee;
+    const disc = item.discountAmount || 0;
+    totalDiscounts += disc;
+
+    const sellerId = product.ownerId;
+    if (!vendorGroups[sellerId]) {
+      vendorGroups[sellerId] = {
+        sellerId,
+        shopId: product.shopId,
+        shopName: product.shopName,
+        items: [],
+        subtotal: 0,
+        deliveryFee: 0
+      };
+    }
+    vendorGroups[sellerId].items.push({
+      ...item,
+      unitPrice: product.price,
+      currency: product.currency,
+      lineTotal: lineSubtotal
+    });
+    vendorGroups[sellerId].subtotal += lineSubtotal;
+    vendorGroups[sellerId].deliveryFee += fee;
+  }
+
+  const finalAmount = parseFloat((subtotalAll + totalDeliveryFees - totalDiscounts).toFixed(2));
+
+  if (paymentMethod === "Wallet Yaamaa" || paymentMethod === "Wallet") {
+    if (buyer.wallet.available < finalAmount) {
+      return res.status(400).json({ error: `Solde Yaamaa insuffisant (${buyer.wallet.available} ${currency}) pour régler le panier de ${finalAmount} ${currency}.` });
+    }
+    buyer.wallet.available = parseFloat((buyer.wallet.available - finalAmount).toFixed(2));
+  }
+
+  for (const item of items) {
+    const product = (appState.products || []).find(p => p.id === item.productId);
+    if (product && product.category === "physical") {
+      product.quantityAvailable -= item.quantity;
+      product.salesCount = (product.salesCount || 0) + item.quantity;
+    }
+  }
+
+  const orderId = "mv_order_" + Date.now();
+  const feePct = appState.settings.platformFeePercentage || 10;
+
+  const vendorSubOrders: VendorSubOrder[] = [];
+  const splitTransactionLogs: any[] = [];
+
+  for (const sellerId of Object.keys(vendorGroups)) {
+    const vg = vendorGroups[sellerId];
+    const subOrderId = "sub_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
+    const commissionAmount = parseFloat((vg.subtotal * (feePct / 100)).toFixed(2));
+    const sellerPayout = parseFloat((vg.subtotal - commissionAmount).toFixed(2));
+
+    vendorSubOrders.push({
+      subOrderId,
+      sellerId,
+      shopId: vg.shopId,
+      shopName: vg.shopName,
+      items: vg.items,
+      subtotal: vg.subtotal,
+      deliveryFee: vg.deliveryFee,
+      commissionAmount,
+      sellerPayout,
+      status: "received",
+      updatedAt: new Date().toISOString()
+    });
+
+    splitTransactionLogs.push({
+      id: "split_tx_" + Math.random().toString(36).substring(2, 9),
+      sellerId,
+      grossAmount: vg.subtotal,
+      commissionDeducted: commissionAmount,
+      netCredited: sellerPayout,
+      timestamp: new Date().toISOString(),
+      status: "pending"
+    });
+  }
+
+  const newMultiOrder: MultiVendorOrder = {
+    id: orderId,
+    buyerId,
+    buyerUsername,
+    deliveryAddress,
+    paymentMethod,
+    subtotal: subtotalAll,
+    totalDeliveryFees,
+    totalDiscounts,
+    totalTax: 0,
+    finalAmount,
+    currency,
+    vendorSubOrders,
+    splitTransactionLogs,
+    status: "paid_escrow",
+    createdAt: new Date().toISOString()
+  };
+
+  const buyerTx: WalletTransaction = {
+    id: "tx_mv_" + Date.now(),
+    userId: buyerId,
+    type: "withdraw",
+    amount: finalAmount,
+    currency,
+    status: "completed",
+    method: paymentMethod,
+    details: `Panier Multi-Vendeurs Commande #${orderId} (${items.length} articles, ${Object.keys(vendorGroups).length} vendeurs)`,
+    createdAt: new Date().toISOString()
+  };
+  appState.transactions.unshift(buyerTx);
+
+  if (!appState.multiVendorOrders) appState.multiVendorOrders = [];
+  appState.multiVendorOrders.unshift(newMultiOrder);
+
+  saveState(appState);
+  createAuditLog(buyerId, buyerUsername, buyer.role, "Achat Panier Multi-Vendeurs", `Commande #${orderId}: ${finalAmount} ${currency} répartie entre ${Object.keys(vendorGroups).length} vendeurs`, req);
+  res.json(newMultiOrder);
+});
+
+app.put("/api/multivendor-orders/:id/sub-orders/:subOrderId/status", (req, res) => {
+  const { id, subOrderId } = req.params;
+  const { status, trackingNumber, userId } = req.body;
+
+  const orders = appState.multiVendorOrders || [];
+  const order = orders.find(o => o.id === id);
+  if (!order) return res.status(404).json({ error: "Commande multi-vendeurs introuvable." });
+
+  const subOrder = order.vendorSubOrders.find(s => s.subOrderId === subOrderId);
+  if (!subOrder) return res.status(404).json({ error: "Sous-commande vendeur introuvable." });
+
+  const user = appState.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Utilisateur non autorisé." });
+
+  if (user.role !== "admin" && subOrder.sellerId !== userId && order.buyerId !== userId) {
+    return res.status(403).json({ error: "Vous n'êtes pas autorisé à modifier cette sous-commande." });
+  }
+
+  const oldStatus = subOrder.status;
+  subOrder.status = status;
+  if (trackingNumber) subOrder.trackingNumber = trackingNumber;
+  subOrder.updatedAt = new Date().toISOString();
+
+  if ((status === "delivered" || (status as string) === "completed") && (oldStatus as string) !== "delivered" && (oldStatus as string) !== "completed") {
+    const seller = appState.users.find(u => u.id === subOrder.sellerId);
+    if (seller) {
+      const netPayout = subOrder.sellerPayout;
+      seller.wallet.available = parseFloat((seller.wallet.available + netPayout).toFixed(2));
+      seller.wallet.totalEarned = parseFloat((seller.wallet.totalEarned + netPayout).toFixed(2));
+
+      const sellerTx: WalletTransaction = {
+        id: "tx_sale_mv_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5),
+        userId: seller.id,
+        type: "earn",
+        amount: netPayout,
+        currency: order.currency,
+        status: "completed",
+        method: "Wallet Yaamaa",
+        details: `Vente Panier Multi-Vendeurs (Escrow Libéré) - Commande #${order.id} (Sous-commande #${subOrderId})`,
+        createdAt: new Date().toISOString()
+      };
+      appState.transactions.unshift(sellerTx);
+
+      const splitLog = order.splitTransactionLogs.find(s => s.sellerId === subOrder.sellerId);
+      if (splitLog) {
+        splitLog.status = "success";
+      }
+
+      if (seller.referredBy) {
+        const inviter = appState.users.find(u => u.id === seller.referredBy || u.referralCode === seller.referredBy);
+        if (inviter && inviter.merchantNumber) {
+          const refComm = parseFloat((subOrder.subtotal * 0.05).toFixed(2));
+          inviter.wallet.available = parseFloat((inviter.wallet.available + refComm).toFixed(2));
+          inviter.wallet.totalEarned = parseFloat((inviter.wallet.totalEarned + refComm).toFixed(2));
+          appState.transactions.unshift({
+            id: "tx_ref_sell_" + Date.now(),
+            userId: inviter.id,
+            type: "earn",
+            amount: refComm,
+            currency: order.currency,
+            status: "completed",
+            method: "Affiliation",
+            details: `Commission Vente Boutique (5%) - Filleul @${seller.username}`,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+    }
+  }
+
+  saveState(appState);
+  createAuditLog(userId, user.username, user.role, "Mise à jour Commande Multi-Vendeurs", `Sous-commande #${subOrderId} (Vendeur: ${subOrder.sellerId}) passée à ${status}`, req);
+  res.json(order);
 });
 
 // Mark as shipped by seller

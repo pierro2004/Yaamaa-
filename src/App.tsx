@@ -31,6 +31,7 @@ import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
 import AdminProductBoostsPanel from "./components/AdminProductBoostsPanel";
+import AdminSyncAutomationPanel from "./components/AdminSyncAutomationPanel";
 import { AdminApiKeysPanel } from "./components/AdminApiKeysPanel";
 import { AdminPublishingBoard } from "./components/AdminPublishingBoard";
 import { ModerationCenterModal } from "./components/ModerationCenterModal";
@@ -38,6 +39,9 @@ import { NotificationCenterModal } from "./components/NotificationCenterModal";
 import { NotificationSettingsModal } from "./components/NotificationSettingsModal";
 import { SupabaseIntegrationModal } from "./components/SupabaseIntegrationModal";
 import { ProjectExportModal } from "./components/ProjectExportModal";
+import WalletSecuritySettingsModal from "./components/WalletSecuritySettingsModal";
+import TransactionPinModal from "./components/TransactionPinModal";
+import AdminPinSecurityPanel from "./components/AdminPinSecurityPanel";
 import { Language, getTranslation } from "./i18n";
 import { Store, Megaphone } from "lucide-react";
 import { 
@@ -254,6 +258,11 @@ export default function App() {
   // Forgot Password state
   const [forgotPasswordActive, setForgotPasswordActive] = useState<boolean>(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>("");
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<"request" | "verify" | "reset" | "success">("request");
+  const [forgotPasswordCode, setForgotPasswordCode] = useState<string>("");
+  const [forgotPasswordNewPass, setForgotPasswordNewPass] = useState<string>("");
+  const [forgotPasswordConfirm, setForgotPasswordConfirm] = useState<string>("");
+  const [rememberLogin, setRememberLogin] = useState<boolean>(true);
 
   // Simulated Contacts for Referral sharing
   const [simulatedContacts, setSimulatedContacts] = useState([
@@ -294,6 +303,12 @@ export default function App() {
   const [withdrawIBAN, setWithdrawIBAN] = useState<string>("");
   const [isWithdrawalProcessing, setIsWithdrawalProcessing] = useState<boolean>(false);
   const [withdrawalSuccessState, setWithdrawalSuccessState] = useState<boolean>(false);
+
+  const [showWalletSecurityModal, setShowWalletSecurityModal] = useState<boolean>(false);
+  const [showTransactionPinModal, setShowTransactionPinModal] = useState<boolean>(false);
+  const [pendingFinancialAction, setPendingFinancialAction] = useState<(() => void) | null>(null);
+  const [pendingActionTitle, setPendingActionTitle] = useState<string>("Validation Sécurité PIN");
+  const [pendingActionDesc, setPendingActionDesc] = useState<string>("Veuillez saisir votre Code PIN de transaction Yaamaa.");
 
   // Filters for user transaction history and performed tasks
   const [personalTxFilter, setPersonalTxFilter] = useState<string>("all");
@@ -1125,12 +1140,12 @@ export default function App() {
       const res = await fetch("/api/users/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+        body: JSON.stringify({ identifier: loginEmail, password: loginPassword })
       });
       const data = await res.json();
       
       if (!res.ok) {
-        setAuthErrorMsg("Connexion refusée. " + (data.error || "Informations incorrectes."));
+        setAuthErrorMsg(data.error || "Informations incorrectes.");
         return;
       }
 
@@ -1150,7 +1165,7 @@ export default function App() {
         syncPlatformData(data.id);
       }, 700);
     } catch (err) {
-      setAuthErrorMsg("Connexion refusée. Échec de communication avec le serveur.");
+      setAuthErrorMsg("Échec de communication avec le serveur.");
     } finally {
       setIsLoading(false);
     }
@@ -1221,22 +1236,83 @@ export default function App() {
     }
   };
 
-  // Simulated Password Reset Workflow
-  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+  // Password Reset Workflow (5 minutes expiry)
+  const handleForgotPasswordRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthErrorMsg(null);
     setAuthSuccessMsg(null);
 
-    if (!forgotPasswordEmail) {
-      setAuthErrorMsg("Veuillez renseigner votre adresse e-mail.");
+    if (!forgotPasswordEmail.trim()) {
+      setAuthErrorMsg("Veuillez renseigner votre numéro marchand ou adresse e-mail.");
       return;
     }
 
-    const matchedUser = users.find(u => u.email.toLowerCase() === forgotPasswordEmail.toLowerCase());
-    if (matchedUser) {
-      setAuthSuccessMsg(`Un e-mail de récupération simulé a été envoyé pour ${forgotPasswordEmail}. Version Sandbox : votre mot de passe d'évaluation actuel est : "${matchedUser.password || "password123"}".`);
-    } else {
-      setAuthErrorMsg("Aucun compte n'est enregistré avec cette adresse e-mail.");
+    try {
+      const res = await fetch("/api/users/forgot-password/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: forgotPasswordEmail.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthErrorMsg(data.error || "Identifiant introuvable.");
+        return;
+      }
+      setForgotPasswordStep("verify");
+      setAuthSuccessMsg("Code de réinitialisation envoyé dans vos notifications Yaamaa (ou par e-mail). Valide pendant 5 minutes.");
+    } catch (err) {
+      setAuthErrorMsg("Erreur de connexion au serveur.");
+    }
+  };
+
+  const handleForgotPasswordVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthErrorMsg(null);
+    setAuthSuccessMsg(null);
+
+    if (!forgotPasswordCode.trim()) {
+      setAuthErrorMsg("Veuillez saisir le code reçu.");
+      return;
+    }
+    setForgotPasswordStep("reset");
+    setAuthSuccessMsg("Code validé ! Veuillez définir votre nouveau mot de passe ci-dessous.");
+  };
+
+  const handleForgotPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthErrorMsg(null);
+    setAuthSuccessMsg(null);
+
+    if (!forgotPasswordNewPass || !forgotPasswordConfirm) {
+      setAuthErrorMsg("Veuillez remplir les deux tableaux avec le nouveau mot de passe.");
+      return;
+    }
+
+    if (forgotPasswordNewPass !== forgotPasswordConfirm) {
+      setAuthErrorMsg("Les mots de passe ne correspondent pas.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/users/forgot-password/verify-and-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: forgotPasswordEmail.trim(),
+          code: forgotPasswordCode.trim(),
+          newPassword: forgotPasswordNewPass,
+          confirmNewPassword: forgotPasswordConfirm
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuthErrorMsg(data.error || "Erreur lors de la réinitialisation.");
+        return;
+      }
+      setForgotPasswordStep("success");
+      setAuthSuccessMsg("Mot de passe réinitialisé avec succès !");
+    } catch (err) {
+      setAuthErrorMsg("Erreur réseau.");
     }
   };
 
@@ -2293,46 +2369,170 @@ export default function App() {
           {/* FORGOT PASSWORD SCREEN */}
           {forgotPasswordActive ? (
             <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4" id="forgot_password_pane">
-              <h3 className="text-sm font-black uppercase text-white tracking-wider border-b border-gray-800 pb-3">
-                Récupération de mot de passe
+              <h3 className="text-sm font-black uppercase text-white tracking-wider border-b border-gray-800 pb-3 flex items-center justify-between">
+                <span>Récupération de mot de passe</span>
+                <span className="text-[10px] text-emerald-400 font-mono font-normal">Délai 5 min max</span>
               </h3>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Renseignez votre adresse e-mail d'inscription. Notre système simulera la récupération ou rappellera votre mot de passe sandbox d'évaluation.
-              </p>
 
-              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Adresse E-mail</label>
-                  <input
-                    type="email"
-                    required
-                    value={forgotPasswordEmail}
-                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent font-sans"
-                    placeholder="Ex: amelie@yaamaa.com"
-                  />
-                </div>
+              {forgotPasswordStep === "request" && (
+                <form onSubmit={handleForgotPasswordRequest} className="space-y-4">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Renseignez votre <strong>Numéro Marchand</strong> valide ou votre <strong>Adresse E-mail</strong>. Un code de réinitialisation vous sera envoyé.
+                  </p>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Numéro Marchand ou E-mail</label>
+                    <input
+                      type="text"
+                      required
+                      value={forgotPasswordEmail}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans"
+                      placeholder="Ex: YM-1001 ou amelie@yaamaa.com"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordActive(false);
+                        setForgotPasswordStep("request");
+                        setAuthErrorMsg(null);
+                        setAuthSuccessMsg(null);
+                      }}
+                      className="flex-1 py-3 bg-gray-800 text-gray-300 font-bold text-xs uppercase rounded-xl hover:bg-gray-750 transition"
+                    >
+                      Retour
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-555 text-white font-bold text-xs uppercase rounded-xl transition shadow"
+                    >
+                      Envoyer le code
+                    </button>
+                  </div>
+                </form>
+              )}
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForgotPasswordActive(false);
-                      setAuthErrorMsg(null);
-                      setAuthSuccessMsg(null);
-                    }}
-                    className="flex-1 py-3 bg-gray-800 text-gray-300 font-bold text-xs uppercase rounded-xl hover:bg-gray-750 transition"
-                  >
-                    Retour
-                  </button>
+              {forgotPasswordStep === "verify" && (
+                <form onSubmit={handleForgotPasswordVerify} className="space-y-4">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Consultez vos notifications dans l'application Yaamaa Pro / Chat (ou votre boîte e-mail) et saisissez le code à 6 chiffres reçu (valide 5 minutes).
+                  </p>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Code de réinitialisation</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={forgotPasswordCode}
+                      onChange={(e) => setForgotPasswordCode(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-sm text-white tracking-widest text-center font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder="123456"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForgotPasswordStep("request")}
+                      className="flex-1 py-3 bg-gray-800 text-gray-300 font-bold text-xs uppercase rounded-xl hover:bg-gray-750 transition"
+                    >
+                      Modifier l'identifiant
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-555 text-white font-bold text-xs uppercase rounded-xl transition shadow"
+                    >
+                      Vérifier le code
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotPasswordStep === "reset" && (
+                <form onSubmit={handleForgotPasswordReset} className="space-y-4">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Définissez votre nouveau mot de passe dans les deux tableaux ci-dessous.
+                  </p>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      required
+                      value={forgotPasswordNewPass}
+                      onChange={(e) => setForgotPasswordNewPass(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Confirmer le nouveau mot de passe</label>
+                    <input
+                      type="password"
+                      required
+                      value={forgotPasswordConfirm}
+                      onChange={(e) => setForgotPasswordConfirm(e.target.value)}
+                      className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                      placeholder="••••••••"
+                    />
+                  </div>
                   <button
                     type="submit"
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-555 text-white font-bold text-xs uppercase rounded-xl transition shadow"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-555 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow"
                   >
-                    Récupérer
+                    Valider la réinitialisation
                   </button>
+                </form>
+              )}
+
+              {forgotPasswordStep === "success" && (
+                <div className="space-y-4 text-center">
+                  <div className="h-12 w-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto text-xl font-bold">
+                    ✓
+                  </div>
+                  <p className="text-xs text-gray-300">
+                    Votre mot de passe a été mis à jour avec succès.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <input
+                      type="checkbox"
+                      id="remember_login"
+                      checked={rememberLogin}
+                      onChange={(e) => setRememberLogin(e.target.checked)}
+                      className="rounded border-gray-800 bg-gray-950 text-emerald-500 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                    />
+                    <label htmlFor="remember_login" className="text-xs text-gray-300 cursor-pointer">
+                      Se souvenir de la connexion sur cet appareil
+                    </label>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordActive(false);
+                        setForgotPasswordStep("request");
+                        setAuthErrorMsg(null);
+                        setAuthSuccessMsg(null);
+                      }}
+                      className="flex-1 py-3 bg-gray-800 text-gray-300 font-bold text-xs uppercase rounded-xl hover:bg-gray-750 transition"
+                    >
+                      Ignorée
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPasswordActive(false);
+                        setForgotPasswordStep("request");
+                        setAuthScreenMode("login");
+                        setAuthErrorMsg(null);
+                        setAuthSuccessMsg(null);
+                      }}
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-555 text-white font-bold text-xs uppercase rounded-xl transition shadow"
+                    >
+                      Se connecter
+                    </button>
+                  </div>
                 </div>
-              </form>
+              )}
             </div>
           ) : (
             /* PRIMARY LOGIN / REGISTER FORM CARD */
@@ -2379,15 +2579,15 @@ export default function App() {
                 <form onSubmit={handleEmailLogin} className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">
-                      Adresse Email
+                      Numéro Marchand ou Adresse Email
                     </label>
                     <input
-                      type="email"
+                      type="text"
                       required
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans"
-                      placeholder="Ex: mamadou@yaamaa.com"
+                      placeholder="Ex: YM-1001 ou mamadou@yaamaa.com"
                     />
                   </div>
 
@@ -2400,11 +2600,12 @@ export default function App() {
                         type="button"
                         onClick={() => {
                           setForgotPasswordEmail(loginEmail);
+                          setForgotPasswordStep("request");
                           setForgotPasswordActive(true);
                           setAuthErrorMsg(null);
                           setAuthSuccessMsg(null);
                         }}
-                        className="text-[10px] text-emerald-400 hover:underline"
+                        className="text-[10px] text-emerald-400 hover:underline cursor-pointer"
                       >
                         Mot de passe oublié ?
                       </button>
@@ -2423,7 +2624,7 @@ export default function App() {
                     id="login_submit_btn"
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3 mt-2 bg-emerald-600 font-bold text-white text-xs tracking-wider uppercase rounded-xl hover:bg-emerald-555 transition shadow"
+                    className="w-full py-3 mt-2 bg-emerald-600 font-bold text-white text-xs tracking-wider uppercase rounded-xl hover:bg-emerald-555 transition shadow cursor-pointer"
                   >
                     {isLoading ? "Vérification..." : "Se connecter"}
                   </button>
@@ -3930,6 +4131,14 @@ export default function App() {
               </div>
               
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWalletSecurityModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-xs font-bold transition cursor-pointer"
+                  id="btn_open_wallet_security_modal"
+                >
+                  <span>🔐</span> Sécurité PIN & Portefeuille
+                </button>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold uppercase px-2.5 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                   Passerelle Officielle Yaamaa Pay S.A.
@@ -5284,6 +5493,29 @@ export default function App() {
                 }`}
               >
                 <span className="text-sm">🚀</span> Boosts & Ads ({productBoosts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("sync_automation")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "sync_automation"
+                    ? "border-emerald-600 text-emerald-700 bg-emerald-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">🔄</span> Synchro & Automatisation
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("admin_pin_security")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "admin_pin_security"
+                    ? "border-indigo-600 text-indigo-700 bg-indigo-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+                id="admin_tab_btn_pin_security"
+              >
+                <span className="text-sm">🛡️</span> Sécurité PIN & Biométrie
               </button>
             </div>
 
@@ -7017,6 +7249,25 @@ export default function App() {
               />
             )}
 
+            {/* 18. MOTEUR DE SYNCHRONISATION ET D'AUTOMATISATION */}
+            {adminSubTab === "sync_automation" && (
+              <AdminSyncAutomationPanel
+                currentUser={currentUser}
+                settings={systemMetrics?.settings || {}}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* 19. SÉCURITÉ PIN & BIOMÉTRIE ADMIN */}
+            {adminSubTab === "admin_pin_security" && currentUser && (
+              <AdminPinSecurityPanel
+                currentUser={currentUser}
+                systemMetrics={systemMetrics}
+                syncPlatformData={() => syncPlatformData(currentUser?.id)}
+                users={users}
+              />
+            )}
+
             {/* 16. SYSTÈMES DE PARRAINAGE ET COMMISSIONS */}
             {adminSubTab === "referral_program" && (
               <div id="admin_tab_referral_program" className="space-y-8 animate-fade-in">
@@ -7615,7 +7866,6 @@ export default function App() {
           usersList={users}
           productsList={products}
           promoCampaignsList={promoCampaigns}
-          campaignsList={campaigns}
           currentLanguage={currentLanguage}
         />
       )}
@@ -8808,6 +9058,37 @@ ${shareLink}
       {isUsbExportModalOpen && (
         <ProjectExportModal
           onClose={() => setIsUsbExportModalOpen(false)}
+        />
+      )}
+
+      {/* WALLET SECURITY SETTINGS MODAL */}
+      {showWalletSecurityModal && currentUser && (
+        <WalletSecuritySettingsModal
+          isOpen={showWalletSecurityModal}
+          onClose={() => setShowWalletSecurityModal(false)}
+          currentUser={currentUser}
+          syncPlatformData={() => syncPlatformData(currentUser?.id)}
+        />
+      )}
+
+      {/* TRANSACTION PIN VERIFICATION MODAL */}
+      {showTransactionPinModal && currentUser && (
+        <TransactionPinModal
+          isOpen={showTransactionPinModal}
+          onClose={() => {
+            setShowTransactionPinModal(false);
+            setPendingFinancialAction(null);
+          }}
+          onSuccess={() => {
+            if (pendingFinancialAction) {
+              pendingFinancialAction();
+              setPendingFinancialAction(null);
+            }
+          }}
+          currentUser={currentUser}
+          operationTitle={pendingActionTitle}
+          operationDescription={pendingActionDesc}
+          syncPlatformData={() => syncPlatformData(currentUser?.id)}
         />
       )}
 
