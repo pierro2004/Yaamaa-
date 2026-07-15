@@ -1143,7 +1143,15 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: loginEmail, password: loginPassword })
       });
-      const data = await res.json();
+      
+      let data: any = {};
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Erreur serveur (Status ${res.status})`);
+      }
       
       if (!res.ok) {
         setAuthErrorMsg(data.error || "Informations incorrectes.");
@@ -1165,8 +1173,9 @@ export default function App() {
         }
         syncPlatformData(data.id);
       }, 700);
-    } catch (err) {
-      setAuthErrorMsg("Échec de communication avec le serveur.");
+    } catch (err: any) {
+      console.error("[Login Error]", err);
+      setAuthErrorMsg(err.message || "Échec de communication avec le serveur.");
     } finally {
       setIsLoading(false);
     }
@@ -1206,7 +1215,15 @@ export default function App() {
           password: registerPassword
         })
       });
-      const data = await res.json();
+      
+      let data: any = {};
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Erreur serveur (Status ${res.status})`);
+      }
 
       if (!res.ok) {
         setAuthErrorMsg(data.error || "Impossible de compléter l'inscription.");
@@ -1230,8 +1247,9 @@ export default function App() {
         }
         syncPlatformData(data.id);
       }, 700);
-    } catch (err) {
-      setAuthErrorMsg("Échec réseau lors de la création du compte.");
+    } catch (err: any) {
+      console.error("[Register Error]", err);
+      setAuthErrorMsg(err.message || "Échec réseau lors de la création du compte.");
     } finally {
       setIsLoading(false);
     }
