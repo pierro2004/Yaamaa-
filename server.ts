@@ -1926,7 +1926,7 @@ app.post("/api/yaamaa-chat/contracts", (req, res) => {
     return res.status(404).json({ error: "Fournisseur non trouvé." });
   }
 
-  const isApproved = supplier.role === "supplier" || supplier.role === "deliverer" || supplier.isApprovedSupplier || supplier.isApprovedDeliverer || supplier.yaamaaChatApproved;
+  const isApproved = (supplier as any).role === "supplier" || (supplier as any).role === "deliverer" || (supplier as any).isApprovedSupplier || (supplier as any).isApprovedDeliverer || (supplier as any).yaamaaChatApproved;
   if (!isApproved) {
     return res.status(403).json({ error: "Seuls les Fournisseurs ou Livreurs approuvés peuvent créer des contrats." });
   }

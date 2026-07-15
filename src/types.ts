@@ -82,6 +82,7 @@ export interface User {
   yaamaaAiStats?: YaamaaAiStats;
   yaamaaAiHandledConversations?: YaamaaAiHandledConversation[];
   yaamaaAiNotifications?: YaamaaAiNotification[];
+  transactions?: any[];
   status?: "online" | "offline" | "unavailable";
   language?: "fr" | "en";
   notifications?: Array<{
@@ -91,8 +92,8 @@ export interface User {
     time: string;
     timestamp?: string;
     read?: boolean;
-    priority?: "info" | "standard" | "important" | "urgent" | "critical";
-    category?: "communication" | "account" | "wallet" | "merchant" | "referral" | "gifts" | "publications" | "moderation" | "admin" | "security";
+    priority?: "info" | "standard" | "important" | "urgent" | "critical" | "medium";
+    category?: "communication" | "account" | "wallet" | "merchant" | "referral" | "gifts" | "publications" | "moderation" | "admin" | "security" | "shopping" | "missions" | "promotions";
     linkView?: string;
   }>;
   yaamaaChatApproved?: boolean;
@@ -961,6 +962,47 @@ export interface ActionHistoryItem {
   newStatus: string;
   comment?: string;
   createdAt: string;
+}
+
+export interface SupportingDocument {
+  title: string;
+  url: string;
+  type: string;
+}
+
+export interface ApplicantInfo {
+  companyName?: string;
+  ninea?: string;
+  address?: string;
+  activity?: string;
+  vehicleType?: string;
+  plateNumber?: string;
+  zone?: string;
+  appName?: string;
+  category?: string;
+  webhookUrl?: string;
+  socialProfile?: string;
+  scope?: string;
+}
+
+export interface ModerationFile {
+  id: string;
+  category: ModerationCategory;
+  title: string;
+  applicantId: string;
+  applicantUsername: string;
+  applicantName: string;
+  applicantAvatar: string;
+  createdAt: string;
+  status: ModerationStatus;
+  urgency: ModerationUrgency;
+  supportingDocuments: SupportingDocument[];
+  applicantInfo?: ApplicantInfo;
+  internalComments: InternalComment[];
+  actionHistory: ActionHistoryItem[];
+  rejectionReason?: string;
+  assignedAdminId?: string;
+  assignedAdminUsername?: string;
 }
 
 export interface CartItem {
