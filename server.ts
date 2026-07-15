@@ -76,13 +76,31 @@ const STATE_FILE = path.join(tmpDir, "data_state.json");
 const BACKUP_FILE = path.join(tmpDir, "data_state_backup.json");
 
 if (isVercel && !fs.existsSync(STATE_FILE)) {
-  const rootState = path.join(process.cwd(), "data_state.json");
-  if (fs.existsSync(rootState)) {
-    try {
-      fs.copyFileSync(rootState, STATE_FILE);
-    } catch (e) {
-      console.error("Failed to copy state to /tmp:", e);
+  const possiblePaths = [
+    path.join(process.cwd(), "data_state.json"),
+    path.join(process.cwd(), "..", "data_state.json"),
+    path.join(__dirname, "data_state.json"),
+    path.join(__dirname, "..", "data_state.json"),
+    path.join(__dirname, "../..", "data_state.json"),
+  ];
+
+  let foundPath: string | null = null;
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      foundPath = p;
+      break;
     }
+  }
+
+  if (foundPath) {
+    try {
+      fs.copyFileSync(foundPath, STATE_FILE);
+      console.log(`Successfully copied state from ${foundPath} to ${STATE_FILE}`);
+    } catch (e) {
+      console.error(`Failed to copy state from ${foundPath} to ${STATE_FILE}:`, e);
+    }
+  } else {
+    console.error("Could not find data_state.json in any of the expected paths:", possiblePaths);
   }
 }
 
