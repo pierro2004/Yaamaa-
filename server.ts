@@ -70,6 +70,21 @@ const ai = GEMINI_API_KEY
     })
   : null;
 
+// Initialize Supabase Client
+import { createClient } from "@supabase/supabase-js";
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+const supabase = isSupabaseConfigured 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : null;
+
 const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true" || process.env.NODE_ENV === "production";
 const tmpDir = isVercel ? '/tmp' : process.cwd();
 const STATE_FILE = path.join(tmpDir, "data_state.json");
@@ -1593,7 +1608,7 @@ app.post("/api/users/current", (req, res) => {
 });
 
 // Real User Login Authentication Email or Merchant Number and Password
-app.post("/api/users/login", (req, res) => {
+app.post("/api/users/login", async (req, res) => {
   const { email, identifier, password } = req.body;
   const loginId = identifier || email;
   
@@ -1601,8 +1616,119 @@ app.post("/api/users/login", (req, res) => {
     return res.status(400).json({ error: "Veuillez renseigner votre numéro marchand ou email et votre mot de passe." });
   }
 
-  // Find user by email or merchant number
   const cleanId = loginId.trim().toLowerCase();
+
+  // 1. If Supabase is configured, use Supabase Authentication first!
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let authEmail = cleanId;
+      if (!cleanId.includes("@")) {
+        // If a merchant number was used, try to resolve its email locally first
+        const foundUser = appState.users.find(u => u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId);
+        if (foundUser) {
+          authEmail = foundUser.email;
+        }
+      }
+
+      console.log(`[Supabase Auth] Attempting signIn for: ${authEmail}`);
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: password
+      });
+
+      if (signInError) {
+        console.error("[Supabase Auth] signIn error:", signInError);
+        return res.status(401).json({ 
+          error: `Échec de connexion Supabase : ${signInError.message}`,
+          details: signInError
+        });
+      }
+
+      const sbUser = signInData.user;
+      if (sbUser) {
+        // Find or recreate the profile in our local memory state
+        let user = appState.users.find(u => u.id === sbUser.id || u.email.toLowerCase() === sbUser.email?.toLowerCase());
+        
+        if (!user) {
+          console.log(`[Supabase Database] Fetching profile for ${sbUser.id}`);
+          let fetchedProfile: any = null;
+          
+          // Try fetching from the profiles table
+          const { data: profData } = await supabase.from("profiles").select("*").eq("id", sbUser.id).maybeSingle();
+          if (profData) {
+            fetchedProfile = profData;
+          } else {
+            // Fallback: try fetching from the users table
+            const { data: usrData } = await supabase.from("users").select("*").eq("id", sbUser.id).maybeSingle();
+            if (usrData) {
+              fetchedProfile = usrData;
+            }
+          }
+
+          if (fetchedProfile) {
+            user = {
+              id: sbUser.id,
+              email: sbUser.email || fetchedProfile.email,
+              password: "", // do not expose
+              phone: fetchedProfile.phone || "",
+              name: fetchedProfile.name || fetchedProfile.full_name || "Utilisateur Supabase",
+              username: fetchedProfile.username || sbUser.email?.split("@")[0] || "user",
+              avatar: fetchedProfile.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+              role: fetchedProfile.role || "participant",
+              level: fetchedProfile.level || 1,
+              xp: fetchedProfile.xp || 0,
+              wallet: {
+                available: fetchedProfile.wallet_available || fetchedProfile.wallet?.available || 0,
+                pending: fetchedProfile.wallet_pending || fetchedProfile.wallet?.pending || 0,
+                totalEarned: fetchedProfile.wallet_total_earned || fetchedProfile.wallet?.totalEarned || 0,
+                referralEarned: fetchedProfile.wallet_referral_earned || fetchedProfile.wallet?.referralEarned || 0,
+              },
+              country: fetchedProfile.country || "France",
+              currency: fetchedProfile.currency || "EUR",
+              referralCode: fetchedProfile.referral_code || "REF_" + sbUser.id.substring(0, 8),
+              referredBy: fetchedProfile.referred_by || undefined,
+              is2faEnabled: fetchedProfile.is_2fa_enabled || fetchedProfile.is2faEnabled || false,
+              isSuspended: fetchedProfile.is_suspended || fetchedProfile.isSuspended || false,
+              createdAt: fetchedProfile.created_at || fetchedProfile.createdAt || new Date().toISOString()
+            };
+          } else {
+            // Create a default profile if they authenticated but no DB profile row was found
+            user = {
+              id: sbUser.id,
+              email: sbUser.email || "",
+              password: "",
+              phone: "",
+              name: sbUser.user_metadata?.name || "Utilisateur Supabase",
+              username: sbUser.user_metadata?.username || sbUser.email?.split("@")[0] || "user",
+              avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+              role: "participant",
+              level: 1,
+              xp: 0,
+              wallet: { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 },
+              country: "France",
+              currency: "EUR",
+              referralCode: "REF_" + sbUser.id.substring(0, 8).toUpperCase(),
+              is2faEnabled: false,
+              isSuspended: false,
+              createdAt: new Date().toISOString()
+            };
+          }
+
+          appState.users.push(user);
+          saveState(appState);
+        }
+
+        ensureAdminMerchantNumber(user);
+        createAuditLog(user.id, user.username, user.role, "Connexion réussie", `L'utilisateur @${user.username} s'est connecté via Supabase.`, req);
+        return res.json(user);
+      }
+    } catch (authErr: any) {
+      console.error("[Supabase Auth] Unexpected login error:", authErr);
+      // Fallback to local memory authentication
+    }
+  }
+
+  // Find user by email or merchant number
   const user = appState.users.find(u => 
     u.email.toLowerCase() === cleanId || 
     (u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId)
@@ -1624,55 +1750,97 @@ app.post("/api/users/login", (req, res) => {
 });
 
 // Create/Update profile simulation
-app.post("/api/users/register", (req, res) => {
+app.post("/api/users/register", async (req, res) => {
   let { name, username, email, phone, role, country, currency, referredBy, password } = req.body;
   
   if (!name || !email) {
     return res.status(400).json({ error: "Veuillez renseigner votre Nom et votre E-mail." });
   }
 
-  const userPassword = bcrypt.hashSync(password || "123456", 10);
-
-  // Default to founder promo code BOSS2026 if not specified (Google search / direct download default)
   const defaultReferredBy = referredBy || "BOSS2026";
+  const isFirstUser = appState.users.length === 0;
+  const userRole = isFirstUser ? "founder" : (role || "participant");
+  const userLevel = isFirstUser ? 50 : 1;
+  const userXp = isFirstUser ? 95000 : 0;
+  const userWallet = isFirstUser
+    ? { available: 5000, pending: 0, totalEarned: 5000, referralEarned: 0 }
+    : { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 };
 
-  // Ensure unique email
+  const finalCountry = country || "France";
+  const finalCurrency = currency || "EUR";
+
+  let finalUserId = "user_" + Date.now();
+  let finalUsername = username;
+  let finalPassword = bcrypt.hashSync(password || "123456", 10);
+
+  // Check unique email locally first
   const emailExists = appState.users.find(u => u.email.toLowerCase() === email.toLowerCase());
   if (emailExists) {
     return res.status(400).json({ error: "Cette adresse e-mail est déjà inscrite. Veuillez vous connecter." });
   }
 
   // Auto-generate username if not provided
-  if (!username) {
-    username = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, "") + Math.floor(10 + Math.random()*90);
+  if (!finalUsername) {
+    finalUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, "") + Math.floor(10 + Math.random()*90);
   }
 
-  // Check unique username
-  const exists = appState.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (exists) {
-    username = username + Math.floor(10 + Math.random()*90);
+  // Check unique username locally
+  const usernameExists = appState.users.find(u => u.username.toLowerCase() === finalUsername.toLowerCase());
+  if (usernameExists) {
+    finalUsername = finalUsername + Math.floor(10 + Math.random()*90);
   }
 
-  const referralCode = "REF_" + username.substring(0, 4).toUpperCase() + Math.floor(100+Math.random()*900);
-  const isFirstUser = appState.users.length === 0;
+  const referralCode = "REF_" + finalUsername.substring(0, 4).toUpperCase() + Math.floor(100+Math.random()*900);
+
+  // 1. If Supabase is configured, use Supabase Auth signUp
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`[Supabase Auth] Registering ${email} with password`);
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: password || "123456",
+        options: {
+          data: {
+            name,
+            username: finalUsername,
+          }
+        }
+      });
+
+      if (signUpError) {
+        console.error("[Supabase Auth] signUp error:", signUpError);
+        return res.status(400).json({
+          error: `Échec d'inscription Supabase : ${signUpError.message}`,
+          details: signUpError
+        });
+      }
+
+      if (signUpData.user) {
+        // Use the persistent Supabase Auth UUID
+        finalUserId = signUpData.user.id;
+      }
+    } catch (authErr: any) {
+      console.error("[Supabase Auth] Unexpected registration error:", authErr);
+      return res.status(500).json({ error: "Erreur inattendue lors de la communication avec l'authentification Supabase.", details: authErr.message });
+    }
+  }
+
   const newUser: User = {
-    id: "user_" + Date.now(),
+    id: finalUserId,
     email,
-    password: userPassword,
+    password: finalPassword,
     phone: phone || "",
     name,
-    username,
+    username: finalUsername,
     avatar: isFirstUser 
       ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop"
       : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
-    role: isFirstUser ? "founder" : (role || "participant"),
-    level: isFirstUser ? 50 : 1,
-    xp: isFirstUser ? 95000 : 0,
-    wallet: isFirstUser
-      ? { available: 5000, pending: 0, totalEarned: 5000, referralEarned: 0 }
-      : { available: 0, pending: 0, totalEarned: 0, referralEarned: 0 },
-    country: country || "France",
-    currency: currency || "EUR",
+    role: userRole,
+    level: userLevel,
+    xp: userXp,
+    wallet: userWallet,
+    country: finalCountry,
+    currency: finalCurrency,
     referralCode,
     referredBy: defaultReferredBy,
     is2faEnabled: false,
@@ -1689,11 +1857,9 @@ app.post("/api/users/register", (req, res) => {
   if (defaultReferredBy) {
     const inviter = appState.users.find(u => u.referralCode === defaultReferredBy || u.id === defaultReferredBy);
     if (inviter) {
-      // 1. Verify that the inviter has a merchant number active. "Without a merchant number, they cannot earn money"
       if (!inviter.merchantNumber) {
         newUser.referredBy = undefined;
       } else {
-        // 2. Verify that the inviter has not reached their sponsorship limit
         const currentReferrals = appState.users.filter(u => u.referredBy === inviter.id).length;
         const limit = getUserMaxReferrals(inviter);
 
@@ -1701,7 +1867,6 @@ app.post("/api/users/register", (req, res) => {
           newUser.referredBy = undefined;
         } else {
           newUser.referredBy = inviter.id;
-          // Small invitation bonus
           inviter.wallet.available += 1.0; 
           inviter.wallet.totalEarned += 1.0;
           inviter.wallet.referralEarned += 1.0;
@@ -1714,17 +1879,83 @@ app.post("/api/users/register", (req, res) => {
             currency: inviter.currency,
             status: "completed",
             method: "Yaamaa Referral",
-            details: `Bonus d'inscription pour avoir parrainé ${username}`,
+            details: `Bonus d'inscription pour avoir parrainé @${newUser.username}`,
             createdAt: new Date().toISOString()
           };
           appState.transactions.unshift(newTx);
+          createAuditLog(inviter.id, inviter.username, inviter.role, "Bonus parrainage", `Bonus de parrainage de +1.0 ${inviter.currency} accordé pour l'inscription de @${newUser.username}.`, req);
         }
       }
     }
   }
 
+  // 2. Try to store the profile in Supabase Database tables
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`[Supabase Database] Saving user profile for ${newUser.username} in profiles table`);
+      
+      const profilePayload = {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        username: newUser.username,
+        phone: newUser.phone,
+        role: newUser.role,
+        country: newUser.country,
+        currency: newUser.currency,
+        created_at: newUser.createdAt,
+        avatar: newUser.avatar,
+        level: newUser.level,
+        xp: newUser.xp,
+        wallet_available: newUser.wallet.available,
+        wallet_pending: newUser.wallet.pending,
+        wallet_total_earned: newUser.wallet.totalEarned,
+        wallet_referral_earned: newUser.wallet.referralEarned,
+        referral_code: newUser.referralCode,
+        referred_by: newUser.referredBy,
+        is_2fa_enabled: newUser.is2faEnabled,
+        is_suspended: newUser.isSuspended
+      };
+
+      const { error: profileError } = await supabase.from("profiles").upsert(profilePayload);
+      
+      if (profileError) {
+        console.warn("[Supabase Database] Error inserting into 'profiles' table. Attempting fallback 'users' table.", profileError);
+        
+        // Attempt with 'users' fallback table
+        const usersPayload = {
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          username: newUser.username,
+          phone: newUser.phone,
+          role: newUser.role,
+          country: newUser.country,
+          currency: newUser.currency,
+          created_at: newUser.createdAt
+        };
+        const { error: usersError } = await supabase.from("users").upsert(usersPayload);
+        
+        if (usersError) {
+          console.error("[Supabase Database] Error inserting into fallback 'users' table:", usersError);
+          // Return a descriptive error as requested
+          return res.status(400).json({
+            error: "L'authentification Supabase a réussi, mais la création du profil utilisateur a échoué dans la base de données. Veuillez créer les tables 'profiles' ou 'users' et désactiver ou configurer correctement vos politiques de sécurité RLS.",
+            details: {
+              profiles_error: profileError,
+              users_error: usersError,
+              recommendation: "Ouvrez la console Supabase, allez dans l'éditeur SQL et exécutez: 'CREATE TABLE profiles (id uuid REFERENCES auth.users PRIMARY KEY, email text, name text, username text, phone text, role text, country text, currency text, created_at timestamp);' puis ajoutez une politique RLS ou désactivez RLS pour permettre les insertions."
+            }
+          });
+        }
+      }
+    } catch (dbErr: any) {
+      console.error("[Supabase Database] Exception during profile storage:", dbErr);
+    }
+  }
+
   saveState(appState);
-  createAuditLog(newUser.id, newUser.username, newUser.role, "Inscription", `Compte créé pour ${newUser.name} (${newUser.role})`, req);
+  createAuditLog(newUser.id, newUser.username, newUser.role, "Inscription", `Compte créé pour ${newUser.name} (rôle: ${newUser.role}).`, req);
   res.json(newUser);
 });
 

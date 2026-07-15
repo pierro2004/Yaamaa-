@@ -7,12 +7,34 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     build: {
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1500,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
           chat: path.resolve(__dirname, 'chat.html'),
         },
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('scheduler') || id.includes('react-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-lucide';
+              }
+              if (id.includes('motion') || id.includes('@motionone')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('@supabase')) {
+                return 'vendor-supabase';
+              }
+              if (id.includes('@google/genai')) {
+                return 'vendor-gemini';
+              }
+              return 'vendor-others';
+            }
+          }
+        }
       },
     },
     resolve: {
