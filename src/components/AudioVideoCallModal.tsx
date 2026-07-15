@@ -82,46 +82,56 @@ export const AudioVideoCallModal: React.FC<AudioVideoCallModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 backdrop-blur-md p-2 sm:p-4 animate-fade-in font-sans">
-      <div className="bg-gray-900 border border-gray-800 w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[90vh] max-h-[850px] text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/85 backdrop-blur-md p-0 sm:p-4 animate-fade-in font-sans">
+      <div className="bg-gray-900 border border-gray-800 w-full h-full sm:h-[90vh] sm:max-h-[850px] sm:max-w-5xl rounded-none sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col text-white">
         
         {/* HEADER */}
-        <div className="bg-gray-900/90 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Radio className="w-5 h-5 text-white animate-pulse" />
+        <div className="bg-gray-900/90 border-b border-gray-800 px-4 sm:px-6 py-3 sm:py-4 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+                <Radio className="w-5 h-5 text-white animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-2">
+                  Yaamaa Secure Comms
+                  <span className="hidden sm:inline-flex text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono items-center gap-1">
+                    <Shield className="w-3 h-3" /> E2EE
+                  </span>
+                </h2>
+                <p className="text-[11px] text-gray-400">Appels sécurisés HD</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-                Yaamaa Secure Comms
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> E2EE Propriétaire
-                </span>
-              </h2>
-              <p className="text-xs text-gray-400">Appels vocaux et vidéo HD ultra-sécurisés sans tiers</p>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition"
+              title="Fermer"
+            >
+              ✕
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex bg-gray-800/80 p-1 rounded-xl border border-gray-700/50">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-between">
+            <div className="flex bg-gray-800/80 p-1 rounded-xl border border-gray-700/50 overflow-x-auto w-full md:w-auto">
               <button
                 type="button"
                 onClick={() => setTab("active")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tab === "active" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${tab === "active" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
               >
-                Appel en cours {activeCall ? "🔴" : ""}
+                Appel {activeCall ? "🔴" : ""}
               </button>
               <button
                 type="button"
                 onClick={() => setTab("dialer")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tab === "dialer" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${tab === "dialer" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
               >
-                Nouveau / Réunion
+                Nouveau
               </button>
               <button
                 type="button"
                 onClick={() => setTab("history")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tab === "history" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                className={`flex-1 md:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${tab === "history" ? "bg-emerald-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
               >
                 Historique ({callHistory.length})
               </button>
@@ -130,7 +140,7 @@ export const AudioVideoCallModal: React.FC<AudioVideoCallModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition"
+              className="hidden md:flex p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition"
               title="Fermer"
             >
               ✕

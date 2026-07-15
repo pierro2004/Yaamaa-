@@ -7,14 +7,69 @@ interface NotificationCenterModalProps {
   onClose: () => void;
   onUpdateUser: (updatedUser: User) => void;
   onNavigateView?: (viewName: string) => void;
+  onOpenReferrals?: () => void;
+  onOpenWalletSecurity?: () => void;
 }
 
-export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, onNavigateView }: NotificationCenterModalProps) {
+export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, onNavigateView, onOpenReferrals, onOpenWalletSecurity }: NotificationCenterModalProps) {
   const [filterTab, setFilterTab] = useState<"all" | "unread" | "urgent" | "important">("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedNotifDetail, setSelectedNotifDetail] = useState<any>(null);
 
   const notifications = currentUser.notifications || [];
+
+  const handleViewNotification = (notif: any) => {
+    if (!notif.read) {
+      const updated = notifications.map(n => n.id === notif.id ? { ...n, read: true } : n);
+      onUpdateUser({ ...currentUser, notifications: updated });
+    }
+    onClose();
+
+    const text = (notif.title + " " + notif.desc).toLowerCase();
+
+    // Check specific actionable keywords
+    if (text.includes("double authentification") || text.includes("2fa") || text.includes("sécuriser votre solde") || text.includes("sécurité")) {
+      if (onOpenWalletSecurity) {
+        onOpenWalletSecurity();
+      } else if (onNavigateView) {
+        onNavigateView("wallet");
+      }
+      return;
+    }
+
+    if (text.includes("filleul") || text.includes("parrainage") || text.includes("abonnement") && (text.includes("gagné") || text.includes("effectué"))) {
+      if (onOpenReferrals) {
+        onOpenReferrals();
+      } else if (onNavigateView) {
+        onNavigateView("wallet");
+      }
+      return;
+    }
+
+    let targetView = notif.linkView;
+    if (!targetView && notif.metadata && notif.metadata.linkView) {
+      targetView = notif.metadata.linkView;
+    }
+
+    if (!targetView) {
+      if (text.includes("retrait") || text.includes("xof") || text.includes("solde") || text.includes("wallet") || text.includes("bancaire") || text.includes("paiement")) {
+        targetView = "wallet";
+      } else if (text.includes("mission") || text.includes("abonnement") || text.includes("tâche") || text.includes("youtube") || text.includes("récompense")) {
+        targetView = "missions";
+      } else if (text.includes("produit") || text.includes("boutique") || text.includes("achat") || text.includes("commande")) {
+        targetView = "boutique";
+      } else if (text.includes("message") || text.includes("appel") || text.includes("ami") || text.includes("publication") || text.includes("social") || text.includes("commentaires")) {
+        targetView = "social";
+      } else {
+        targetView = "dashboard";
+      }
+    }
+
+    if (onNavigateView) {
+      onNavigateView(targetView);
+    }
+  };
 
   const handleMarkAsRead = (id: string) => {
     const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
@@ -77,8 +132,8 @@ export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, on
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-gray-100 flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-0 sm:p-4 animate-fade-in font-sans">
+      <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-4xl overflow-hidden border border-gray-100 flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-emerald-900 to-slate-900 text-white">
           <div className="flex items-center gap-3">
@@ -234,18 +289,14 @@ export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, on
                       </div>
                     ) : (
                       <>
-                        {notif.linkView && onNavigateView && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onClose();
-                              onNavigateView(notif.linkView);
-                            }}
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-extrabold flex items-center gap-1 transition cursor-pointer"
-                          >
-                            Voir <ExternalLink className="h-3 w-3" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleViewNotification(notif)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-1 transition shadow cursor-pointer"
+                          title="Accéder directement à l'action ou au contenu concerné"
+                        >
+                          Voir <ExternalLink className="h-3 w-3" />
+                        </button>
                         {!notif.read && (
                           <button
                             type="button"
@@ -290,6 +341,103 @@ export function NotificationCenterModal({ currentUser, onClose, onUpdateUser, on
           </button>
         </div>
       </div>
+
+      {/* NOTIFICATION DETAILS MODAL (FULL INFO WHEN CLICKING VOIR) */}
+      {selectedNotifDetail && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in font-sans">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-100 flex flex-col p-6 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl">
+                  <Info className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">{selectedNotifDetail.title}</h3>
+                  <p className="text-xs text-gray-400 font-mono">{selectedNotifDetail.time}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedNotifDetail(null)}
+                className="p-2 hover:bg-gray-100 rounded-full transition text-gray-500 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                  selectedNotifDetail.priority === "critical" ? "bg-rose-600 text-white" :
+                  selectedNotifDetail.priority === "urgent" ? "bg-rose-100 text-rose-700" :
+                  selectedNotifDetail.priority === "important" ? "bg-amber-100 text-amber-700" :
+                  "bg-slate-100 text-slate-700"
+                }`}>
+                  Priorité : {selectedNotifDetail.priority || "Standard"}
+                </span>
+                {selectedNotifDetail.category && (
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                    Catégorie : {selectedNotifDetail.category}
+                  </span>
+                )}
+              </div>
+
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Détails de l'événement & gains</h4>
+                <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">{selectedNotifDetail.desc}</p>
+              </div>
+
+              {selectedNotifDetail.metadata && (
+                <div className="bg-slate-900 text-white rounded-2xl p-4 font-mono text-xs space-y-1">
+                  <p className="text-emerald-400 font-bold">Données techniques / Source :</p>
+                  <pre className="overflow-x-auto text-[11px] text-gray-300">{JSON.stringify(selectedNotifDetail.metadata, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  let targetView = selectedNotifDetail.linkView;
+                  if (!targetView && selectedNotifDetail.metadata && selectedNotifDetail.metadata.linkView) {
+                    targetView = selectedNotifDetail.metadata.linkView;
+                  }
+                  if (!targetView) {
+                    const lower = (selectedNotifDetail.title + " " + selectedNotifDetail.desc).toLowerCase();
+                    if (lower.includes("retrait") || lower.includes("xof") || lower.includes("solde") || lower.includes("wallet") || lower.includes("bancaire") || lower.includes("paiement")) {
+                      targetView = "wallet";
+                    } else if (lower.includes("mission") || lower.includes("abonnement") || lower.includes("tâche") || lower.includes("youtube") || lower.includes("récompense")) {
+                      targetView = "missions";
+                    } else if (lower.includes("produit") || lower.includes("boutique") || lower.includes("achat") || lower.includes("commande")) {
+                      targetView = "boutique";
+                    } else if (lower.includes("message") || lower.includes("appel") || lower.includes("ami") || lower.includes("publication") || lower.includes("social") || lower.includes("commentaires")) {
+                      targetView = "social";
+                    } else {
+                      targetView = "dashboard";
+                    }
+                  }
+                  setSelectedNotifDetail(null);
+                  onClose();
+                  if (onNavigateView) {
+                    onNavigateView(targetView);
+                  }
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+              >
+                Aller à la source / Voir la section <ExternalLink className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedNotifDetail(null)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

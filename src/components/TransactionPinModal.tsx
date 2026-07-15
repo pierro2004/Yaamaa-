@@ -166,7 +166,7 @@ export default function TransactionPinModal({
           method: recoverMethod,
           code: recoverCode,
           newPin,
-          confirmNewPin
+          confirmPin
         })
       });
       const data = await res.json();

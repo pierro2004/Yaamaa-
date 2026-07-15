@@ -98,6 +98,17 @@ export interface User {
   yaamaaChatApproved?: boolean;
   yaamaaChatRejected?: boolean;
   yaamaaChatApprovedAt?: string;
+  vipStatus?: {
+    isActive: boolean;
+    startDate: string;
+    expiresAt: string;
+    reason: string;
+    assignedByAdminId: string;
+    assignedByAdminName: string;
+    initialDurationDays: number;
+    auditLog: Array<{ action: string; timestamp: string; actor: string }>;
+    expiredPromptShown?: boolean;
+  };
   chatCode?: string;
   chatCodeCreatedAt?: number;
   resetCode?: string;
@@ -1020,25 +1031,74 @@ export interface MultiVendorOrder {
   createdAt: string;
 }
 
-export interface ModerationFile {
-  id: string;
-  category: ModerationCategory;
-  title: string;
-  applicantId: string;
-  applicantUsername: string;
-  applicantName: string;
-  applicantAvatar: string;
-  createdAt: string;
-  status: ModerationStatus;
-  urgency: ModerationUrgency;
-  assignedAdminId?: string;
-  assignedAdminUsername?: string;
-  supportingDocuments: Array<{ title: string; url: string; type?: string }>;
-  applicantInfo: Record<string, any>;
-  internalComments: InternalComment[];
-  actionHistory: ActionHistoryItem[];
-  rejectionReason?: string;
+export interface ContractItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
 }
+
+export interface ContractHistoryItem {
+  action: string;
+  timestamp: string;
+  actor: string;
+}
+
+export interface Contract {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  supplierMerchantNumber: string;
+  clientId: string;
+  clientName: string;
+  title: string;
+  description: string;
+  items: ContractItem[];
+  extraFees: number;
+  discount: number;
+  totalAmount: number;
+  estimatedDuration: string;
+  deliveryDate: string;
+  terms: string;
+  deliveryModalities: string;
+  advancePaymentPercent: number;
+  installmentPlan: boolean;
+  insuranceOption: boolean;
+  insuranceFee: number;
+  status: 
+    | 'brouillon' 
+    | 'envoye' 
+    | 'en_attente_reponse' 
+    | 'accepte' 
+    | 'refuse' 
+    | 'modification_demandee' 
+    | 'en_attente_paiement' 
+    | 'paye' 
+    | 'en_preparation' 
+    | 'expedie' 
+    | 'en_cours_de_livraison' 
+    | 'livre' 
+    | 'termine' 
+    | 'annule';
+  delivererId?: string;
+  delivererName?: string;
+  clientSignature?: string;
+  supplierSignature?: string;
+  createdAt: string;
+  updatedAt: string;
+  history: ContractHistoryItem[];
+}
+
+export interface VipAuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  timestamp: string;
+  adminId: string;
+  adminName: string;
+}
+
 
 
 

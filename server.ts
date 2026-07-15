@@ -116,6 +116,8 @@ interface AppState {
   multiVendorOrders?: MultiVendorOrder[];
   impersonationLogs?: ImpersonationLog[];
   productBoostCampaigns?: ProductBoostCampaign[];
+  contracts?: any[];
+  vipAuditLogs?: any[];
   nextMerchantSequence?: number;
 }
 
@@ -1882,6 +1884,427 @@ app.post("/api/yaamaa-chat/respond-approval", (req, res) => {
 
   saveState(appState);
   res.json({ success: true, approved });
+});
+
+// Yaamaa Chat - Contracts & Quotations System APIs
+app.get("/api/yaamaa-chat/contracts", (req, res) => {
+  const { userId } = req.query;
+  if (!appState.contracts) appState.contracts = [];
+  if (!userId) return res.json(appState.contracts);
+
+  const userContracts = appState.contracts.filter(c => 
+    c.supplierId === userId || c.clientId === userId || c.delivererId === userId
+  );
+  res.json(userContracts);
+});
+
+app.post("/api/yaamaa-chat/contracts", (req, res) => {
+  const {
+    supplierId,
+    clientId,
+    title,
+    description,
+    items,
+    extraFees,
+    discount,
+    estimatedDuration,
+    deliveryDate,
+    terms,
+    deliveryModalities,
+    advancePaymentPercent,
+    installmentPlan,
+    insuranceOption,
+    insuranceFee
+  } = req.body;
+
+  if (!supplierId || !clientId || !title) {
+    return res.status(400).json({ error: "Fournisseur, client et titre du contrat requis." });
+  }
+
+  const supplier = appState.users.find(u => u.id === supplierId);
+  if (!supplier) {
+    return res.status(404).json({ error: "Fournisseur non trouvé." });
+  }
+
+  const isApproved = supplier.role === "supplier" || supplier.role === "deliverer" || supplier.isApprovedSupplier || supplier.isApprovedDeliverer || supplier.yaamaaChatApproved;
+  if (!isApproved) {
+    return res.status(403).json({ error: "Seuls les Fournisseurs ou Livreurs approuvés peuvent créer des contrats." });
+  }
+
+  const client = appState.users.find(u => u.id === clientId);
+  if (!client) {
+    return res.status(404).json({ error: "Client non trouvé." });
+  }
+
+  if (!appState.contracts) appState.contracts = [];
+
+  const calculatedItemsTotal = (items || []).reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unitPrice || 0)), 0);
+  const extra = Number(extraFees || 0);
+  const disc = Number(discount || 0);
+  const ins = insuranceOption ? Number(insuranceFee || 1000) : 0;
+  const totalAmount = Math.max(0, calculatedItemsTotal + extra + ins - disc);
+
+  const newContract = {
+    id: "contract_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+    supplierId: supplier.id,
+    supplierName: supplier.name || supplier.username,
+    supplierMerchantNumber: supplier.merchantNumber || "YAAMAA-MCH-001",
+    clientId: client.id,
+    clientName: client.name || client.username,
+    title,
+    description: description || "",
+    items: items || [],
+    extraFees: extra,
+    discount: disc,
+    totalAmount,
+    estimatedDuration: estimatedDuration || "3-5 jours",
+    deliveryDate: deliveryDate || new Date(Date.now() + 5*86400000).toISOString().split('T')[0],
+    terms: terms || "Conditions standard de vente Yaamaa Pro.",
+    deliveryModalities: deliveryModalities || "Livraison standard à domicile ou en point relais.",
+    advancePaymentPercent: Number(advancePaymentPercent || 0),
+    installmentPlan: Boolean(installmentPlan),
+    insuranceOption: Boolean(insuranceOption),
+    insuranceFee: ins,
+    status: "envoye",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    history: [
+      { action: "Contrat créé et envoyé par le fournisseur", timestamp: new Date().toISOString(), actor: supplier.name }
+    ]
+  };
+
+  appState.contracts.unshift(newContract);
+
+  if (!client.notifications) client.notifications = [];
+  client.notifications.unshift({
+    id: "notif_contract_" + Date.now(),
+    title: "Nouveau Contrat / Devis reçu 📄",
+    desc: `Le fournisseur ${supplier.name} vous a envoyé un contrat "${title}" d'un montant de ${totalAmount.toLocaleString()} XOF.`,
+    time: "À l'instant",
+    read: false,
+    priority: "important",
+    category: "shopping",
+    linkView: "chat"
+  });
+
+  saveState(appState);
+  res.json({ success: true, contract: newContract });
+});
+
+app.post("/api/yaamaa-chat/contracts/:id/action", (req, res) => {
+  const contractId = req.params.id;
+  const { action, userId, signature, reason, delivererId, modifiedData } = req.body;
+
+  if (!appState.contracts) appState.contracts = [];
+  const contract = appState.contracts.find(c => c.id === contractId);
+  if (!contract) {
+    return res.status(404).json({ error: "Contrat non trouvé." });
+  }
+
+  const user = appState.users.find(u => u.id === userId);
+  const userName = user ? (user.name || user.username) : "Utilisateur";
+
+  if (action === "accept") {
+    contract.status = "accepte";
+    contract.clientSignature = signature || "Signé numériquement par " + userName;
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Contrat accepté par le client (${userName})`, timestamp: new Date().toISOString(), actor: userName });
+    
+    const supplier = appState.users.find(u => u.id === contract.supplierId);
+    if (supplier) {
+      if (!supplier.notifications) supplier.notifications = [];
+      supplier.notifications.unshift({
+        id: "notif_contract_acc_" + Date.now(),
+        title: "Contrat Accepté ! 🎉",
+        desc: `Le client ${userName} a accepté votre contrat "${contract.title}". En attente de paiement sécurisé.`,
+        time: "À l'instant",
+        read: false,
+        priority: "important",
+        category: "shopping",
+        linkView: "chat"
+      });
+    }
+  } else if (action === "refuse") {
+    contract.status = "refuse";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Contrat refusé par ${userName}. Motif: ${reason || 'Aucun'}`, timestamp: new Date().toISOString(), actor: userName });
+
+    const supplier = appState.users.find(u => u.id === contract.supplierId);
+    if (supplier) {
+      if (!supplier.notifications) supplier.notifications = [];
+      supplier.notifications.unshift({
+        id: "notif_contract_ref_" + Date.now(),
+        title: "Contrat Refusé ❌",
+        desc: `Le client a refusé le contrat "${contract.title}". Motif: ${reason || 'Non spécifié'}.`,
+        time: "À l'instant",
+        read: false,
+        priority: "medium",
+        category: "shopping",
+        linkView: "chat"
+      });
+    }
+  } else if (action === "request_revision") {
+    contract.status = "modification_demandee";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Demande de modification par ${userName}: ${reason || ''}`, timestamp: new Date().toISOString(), actor: userName });
+
+    const supplier = appState.users.find(u => u.id === contract.supplierId);
+    if (supplier) {
+      if (!supplier.notifications) supplier.notifications = [];
+      supplier.notifications.unshift({
+        id: "notif_contract_rev_" + Date.now(),
+        title: "Révision demandée sur un contrat 📝",
+        desc: `Le client demande des modifications sur le contrat "${contract.title}": ${reason}`,
+        time: "À l'instant",
+        read: false,
+        priority: "important",
+        category: "shopping",
+        linkView: "chat"
+      });
+    }
+  } else if (action === "pay") {
+    contract.status = "paye";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Paiement sécurisé effectué par ${userName} (${contract.totalAmount.toLocaleString()} XOF)`, timestamp: new Date().toISOString(), actor: userName });
+
+    if (user) {
+      user.wallet.available = Math.max(0, user.wallet.available - contract.totalAmount);
+      if (!user.transactions) user.transactions = [];
+      user.transactions.unshift({
+        id: "tx_contract_" + Date.now(),
+        type: "debit",
+        amount: contract.totalAmount,
+        currency: "XOF",
+        description: `Paiement contrat: ${contract.title}`,
+        date: new Date().toISOString(),
+        status: "completed"
+      });
+    }
+
+    const supplier = appState.users.find(u => u.id === contract.supplierId);
+    if (supplier) {
+      const netAmount = contract.totalAmount * 0.95;
+      supplier.wallet.available += netAmount;
+      supplier.wallet.totalEarned += netAmount;
+      if (!supplier.transactions) supplier.transactions = [];
+      supplier.transactions.unshift({
+        id: "tx_contract_credit_" + Date.now(),
+        type: "credit",
+        amount: netAmount,
+        currency: "XOF",
+        description: `Encaissement contrat payé: ${contract.title} (commission 5%)`,
+        date: new Date().toISOString(),
+        status: "completed"
+      });
+      if (!supplier.notifications) supplier.notifications = [];
+      supplier.notifications.unshift({
+        id: "notif_contract_pay_" + Date.now(),
+        title: "Paiement Confirmé ! 💰",
+        desc: `Le paiement de ${contract.totalAmount.toLocaleString()} XOF pour le contrat "${contract.title}" a été crédité sur votre solde.`,
+        time: "À l'instant",
+        read: false,
+        priority: "critical",
+        category: "wallet",
+        linkView: "wallet"
+      });
+    }
+  } else if (action === "prepare") {
+    contract.status = "en_preparation";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Commande en préparation par ${userName}`, timestamp: new Date().toISOString(), actor: userName });
+  } else if (action === "ship") {
+    contract.status = "expedie";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Commande expédiée par ${userName}`, timestamp: new Date().toISOString(), actor: userName });
+  } else if (action === "deliver") {
+    contract.status = "livre";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Commande livrée par ${userName}`, timestamp: new Date().toISOString(), actor: userName });
+  } else if (action === "complete") {
+    contract.status = "termine";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Contrat clôturé et terminé par ${userName}`, timestamp: new Date().toISOString(), actor: userName });
+  } else if (action === "assign_deliverer") {
+    contract.delivererId = delivererId;
+    const deliverer = appState.users.find(u => u.id === delivererId);
+    if (deliverer) {
+      contract.delivererName = deliverer.name || deliverer.username;
+      if (!deliverer.notifications) deliverer.notifications = [];
+      deliverer.notifications.unshift({
+        id: "notif_delivery_" + Date.now(),
+        title: "Nouvelle mission de livraison 🚚",
+        desc: `Vous avez été affecté à la livraison du contrat "${contract.title}".`,
+        time: "À l'instant",
+        read: false,
+        priority: "important",
+        category: "missions",
+        linkView: "chat"
+      });
+    }
+    contract.history.push({ action: `Livreur affecté: ${contract.delivererName}`, timestamp: new Date().toISOString(), actor: userName });
+  } else if (action === "update" && modifiedData) {
+    Object.assign(contract, modifiedData);
+    contract.status = "envoye";
+    contract.updatedAt = new Date().toISOString();
+    contract.history.push({ action: `Contrat mis à jour (nouvelle version) par ${userName}`, timestamp: new Date().toISOString(), actor: userName });
+  }
+
+  saveState(appState);
+  res.json({ success: true, contract });
+});
+
+// VIP Promotions & Automatic Transition System APIs
+app.get("/api/admin/vip-promotions", (req, res) => {
+  if (!appState.vipAuditLogs) appState.vipAuditLogs = [];
+  const vipUsers = appState.users.filter(u => u.vipStatus && u.vipStatus.isActive);
+  const expiredVipUsers = appState.users.filter(u => u.vipStatus && !u.vipStatus.isActive && u.vipStatus.expiresAt);
+  const now = new Date();
+  const nearExpirationUsers = vipUsers.filter(u => {
+    if (!u.vipStatus?.expiresAt) return false;
+    const diff = new Date(u.vipStatus.expiresAt).getTime() - now.getTime();
+    return diff > 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+  });
+
+  res.json({
+    activeCount: vipUsers.length,
+    expiredCount: expiredVipUsers.length,
+    nearExpirationCount: nearExpirationUsers.length,
+    vipUsers: vipUsers.map(u => ({ id: u.id, name: u.name, username: u.username, vipStatus: u.vipStatus })),
+    auditLogs: appState.vipAuditLogs
+  });
+});
+
+app.post("/api/admin/vip-promotions/assign", (req, res) => {
+  const { userId, durationValue, durationUnit, startAt, reason, operatorId } = req.body;
+  if (!userId) return res.status(400).json({ error: "Utilisateur cible requis." });
+
+  const targetUser = appState.users.find(u => u.id === userId);
+  if (!targetUser) return res.status(404).json({ error: "Utilisateur non trouvé." });
+
+  const operator = appState.users.find(u => u.id === operatorId) || { name: "Administrateur Système", id: "admin" };
+
+  let multiplier = 24 * 60 * 60 * 1000;
+  let durationDays = Number(durationValue || 7);
+  if (durationUnit === "minutes") { multiplier = 60 * 1000; }
+  else if (durationUnit === "hours") { multiplier = 60 * 60 * 1000; }
+  else if (durationUnit === "weeks") { multiplier = 7 * 24 * 60 * 60 * 1000; }
+  else if (durationUnit === "months") { multiplier = 30 * 24 * 60 * 60 * 1000; }
+
+  const startDate = startAt ? new Date(startAt) : new Date();
+  const expiresAt = new Date(startDate.getTime() + durationDays * multiplier);
+
+  targetUser.vipStatus = {
+    isActive: true,
+    startDate: startDate.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    reason: reason || "Promotion VIP temporaire Yaamaa",
+    assignedByAdminId: operator.id,
+    assignedByAdminName: operator.name || "Admin",
+    initialDurationDays: durationDays,
+    auditLog: [{
+      action: "ASSIGNED",
+      timestamp: new Date().toISOString(),
+      actor: operator.name || "Admin"
+    }]
+  };
+
+  if (!targetUser.notifications) targetUser.notifications = [];
+  targetUser.notifications.unshift({
+    id: "vip_notif_" + Date.now(),
+    title: "Statut VIP Temporaire Activé ! 👑",
+    desc: `Vous avez reçu un statut VIP valide jusqu'au ${new Date(expiresAt).toLocaleString()}. Avantages de parrainage activés !`,
+    time: "À l'instant",
+    read: false,
+    priority: "important",
+    category: "promotions"
+  });
+
+  if (!appState.vipAuditLogs) appState.vipAuditLogs = [];
+  appState.vipAuditLogs.unshift({
+    id: "log_" + Date.now(),
+    userId: targetUser.id,
+    userName: targetUser.name,
+    action: "ASSIGN",
+    details: `Attribution VIP pour ${durationDays} ${durationUnit || 'jours'}. Motif: ${reason}`,
+    timestamp: new Date().toISOString(),
+    adminId: operator.id,
+    adminName: operator.name || "Admin"
+  });
+
+  saveState(appState);
+  res.json({ success: true, user: targetUser });
+});
+
+app.post("/api/admin/vip-promotions/extend", (req, res) => {
+  const { userId, additionalDays, operatorId } = req.body;
+  const targetUser = appState.users.find(u => u.id === userId);
+  if (!targetUser || !targetUser.vipStatus) return res.status(404).json({ error: "VIP utilisateur non trouvé." });
+
+  const currentExpires = new Date(targetUser.vipStatus.expiresAt).getTime();
+  const addMs = Number(additionalDays || 7) * 24 * 60 * 60 * 1000;
+  const newExpires = new Date(Math.max(Date.now(), currentExpires) + addMs);
+
+  targetUser.vipStatus.isActive = true;
+  targetUser.vipStatus.expiresAt = newExpires.toISOString();
+  targetUser.vipStatus.auditLog.push({
+    action: `EXTENDED by ${additionalDays} days`,
+    timestamp: new Date().toISOString(),
+    actor: operatorId || "Admin"
+  });
+
+  if (!appState.vipAuditLogs) appState.vipAuditLogs = [];
+  appState.vipAuditLogs.unshift({
+    id: "log_" + Date.now(),
+    userId: targetUser.id,
+    userName: targetUser.name,
+    action: "EXTEND",
+    details: `Prolongation VIP de ${additionalDays} jours.`,
+    timestamp: new Date().toISOString(),
+    adminId: operatorId || "admin",
+    adminName: "Admin"
+  });
+
+  saveState(appState);
+  res.json({ success: true, user: targetUser });
+});
+
+app.post("/api/admin/vip-promotions/revoke", (req, res) => {
+  const { userId, operatorId, reason } = req.body;
+  const targetUser = appState.users.find(u => u.id === userId);
+  if (!targetUser || !targetUser.vipStatus) return res.status(404).json({ error: "VIP utilisateur non trouvé." });
+
+  targetUser.vipStatus.isActive = false;
+  targetUser.vipStatus.auditLog.push({
+    action: `REVOKED: ${reason || 'Sans motif'}`,
+    timestamp: new Date().toISOString(),
+    actor: operatorId || "Admin"
+  });
+
+  if (!targetUser.notifications) targetUser.notifications = [];
+  targetUser.notifications.unshift({
+    id: "vip_revoked_" + Date.now(),
+    title: "Statut VIP Expiré ou Retiré ⚠️",
+    desc: "Votre période VIP a pris fin. Pour continuer à percevoir vos commissions de parrainage, souscrivez au Premium.",
+    time: "À l'instant",
+    read: false,
+    priority: "important",
+    category: "promotions"
+  });
+
+  if (!appState.vipAuditLogs) appState.vipAuditLogs = [];
+  appState.vipAuditLogs.unshift({
+    id: "log_" + Date.now(),
+    userId: targetUser.id,
+    userName: targetUser.name,
+    action: "REVOKE",
+    details: `Retrait VIP. Motif: ${reason}`,
+    timestamp: new Date().toISOString(),
+    adminId: operatorId || "admin",
+    adminName: "Admin"
+  });
+
+  saveState(appState);
+  res.json({ success: true, user: targetUser });
 });
 
 // Achat de numéro marchand unique et commissions de parrainage associées

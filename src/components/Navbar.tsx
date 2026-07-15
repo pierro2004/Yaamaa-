@@ -490,7 +490,7 @@ export default function Navbar({
               </button>
 
               {showNotification && (
-                <div id="navbar_notif_dropdown" className="absolute right-0 mt-2 w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl animate-fade-in z-50">
+                <div id="navbar_notif_dropdown" className="fixed inset-x-3 top-20 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 w-auto sm:w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl animate-fade-in z-50">
                   <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-gray-900 uppercase tracking-wider">{t.notifications}</span>

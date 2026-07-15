@@ -29,6 +29,7 @@ import YaamaaChatView from "./components/YaamaaChatView";
 import { AudioVideoCallModal } from "./components/AudioVideoCallModal";
 import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
+import AdminVipPromotionsPanel from "./components/AdminVipPromotionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
 import AdminProductBoostsPanel from "./components/AdminProductBoostsPanel";
 import AdminSyncAutomationPanel from "./components/AdminSyncAutomationPanel";
@@ -5441,6 +5442,17 @@ export default function App() {
               </button>
               <button
                 type="button"
+                onClick={() => setAdminSubTab("vip_promotions")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "vip_promotions"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <span className="text-sm">👑</span> Promotions VIP Temporaires
+              </button>
+              <button
+                type="button"
                 onClick={() => setAdminSubTab("supervision")}
                 className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
                   adminSubTab === "supervision"
@@ -7204,6 +7216,16 @@ export default function App() {
             {/* 13. GESTION DES BADGES & ABONNEMENTS MARCHANDS */}
             {adminSubTab === "admin_subscriptions" && (
               <AdminSubscriptionsPanel
+                currentUser={currentUser}
+                currentLanguage={currentLanguage}
+                users={users}
+                onRefreshData={() => syncPlatformData(currentUser?.id)}
+              />
+            )}
+
+            {/* VIP PROMOTIONS TEMPORARY SYSTEM */}
+            {adminSubTab === "vip_promotions" && (
+              <AdminVipPromotionsPanel
                 currentUser={currentUser}
                 currentLanguage={currentLanguage}
                 users={users}
@@ -9025,6 +9047,35 @@ ${shareLink}
         />
       )}
 
+      {/* FLOATING ACTIVE CALL BAR (VISIBLE EVERYWHERE WHEN CALL IS ACTIVE) */}
+      {activeCall && (
+        <div className="fixed bottom-4 right-4 z-50 bg-slate-900 border border-emerald-500/50 shadow-2xl rounded-2xl p-3 flex items-center gap-3 animate-fade-in">
+          <div className="h-3 w-3 rounded-full bg-emerald-500 animate-ping"></div>
+          <div className="text-xs">
+            <p className="font-bold text-white">Appel en cours</p>
+            <p className="text-[10px] text-emerald-400 font-mono">Yaamaa Secure Comms</p>
+          </div>
+          <div className="flex items-center gap-2 ml-2">
+            <button
+              type="button"
+              onClick={() => setIsCallModalOpen(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow cursor-pointer"
+            >
+              Ouvrir
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEndCall(activeCall.id)}
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow flex items-center gap-1 cursor-pointer active:scale-95"
+              title="Raccrocher à tout moment"
+              id="global_floating_hangup_btn"
+            >
+              📞✕ Raccrocher
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* NOTIFICATION CENTER MODAL */}
       {isNotificationCenterOpen && currentUser && (
         <NotificationCenterModal
@@ -9035,6 +9086,8 @@ ${shareLink}
             setCurrentView(v);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
+          onOpenReferrals={() => setIsReferralModalOpen(true)}
+          onOpenWalletSecurity={() => setShowWalletSecurityModal(true)}
         />
       )}
 

@@ -20,7 +20,8 @@ import {
   ChevronRight,
   User as UserIcon,
   Star,
-  Lock
+  Lock,
+  Crown
 } from "lucide-react";
 
 interface UserProfileModalProps {
@@ -51,6 +52,33 @@ export default function UserProfileModal({
   const t = getTranslation(currentLanguage);
 
   const user = usersList.find((u) => u.id === userId);
+
+  // VIP Timer effect
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+  const [isVipExpired, setIsVipExpired] = useState(false);
+
+  useEffect(() => {
+    if (!user?.vipStatus) return;
+    const updateTimer = () => {
+      const now = new Date().getTime();
+      const expiry = new Date(user.vipStatus!.expiresAt).getTime();
+      const diff = expiry - now;
+      if (diff <= 0) {
+        setIsVipExpired(true);
+        setTimeLeft(null);
+      } else {
+        setIsVipExpired(!user.vipStatus!.isActive);
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft({ days, hours, minutes, seconds });
+      }
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [user?.vipStatus]);
 
   const [isProfilePrivate, setIsProfilePrivate] = useState(user?.privacySettings?.isProfilePrivate ?? false);
   const [hideMerchantNumber, setHideMerchantNumber] = useState(user?.privacySettings?.hideMerchantNumber ?? false);
@@ -162,8 +190,8 @@ export default function UserProfileModal({
   };
 
   return (
-    <div id="user_profile_modal_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto">
-      <div id="user_profile_modal_card" className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-8">
+    <div id="user_profile_modal_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/70 backdrop-blur-md p-0 sm:p-4 animate-fade-in overflow-y-auto">
+      <div id="user_profile_modal_card" className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-4xl rounded-none sm:rounded-3xl bg-white shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-0 sm:my-4">
         
         {/* BANNER COVER */}
         <div 
@@ -236,6 +264,48 @@ export default function UserProfileModal({
           <p className="text-xs text-gray-600 leading-relaxed italic bg-gray-50 p-3 rounded-2xl border border-gray-100">
             "{userBio}"
           </p>
+
+          {/* VIP Status & Countdown Banner */}
+          {user.vipStatus && (
+            <div className="mt-3 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500 text-slate-950 rounded-xl shadow-md">
+                  <Crown className="h-5 w-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-amber-700 tracking-wider">Statut VIP Temporaire</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                      user.vipStatus.isActive && !isVipExpired ? 'bg-emerald-500/20 text-emerald-700' : 'bg-rose-500/20 text-rose-700'
+                    }`}>
+                      {user.vipStatus.isActive && !isVipExpired ? 'ACTIF' : 'EXPIRÉ'}
+                    </span>
+                  </div>
+                  {user.vipStatus.isActive && !isVipExpired && timeLeft ? (
+                    <p className="text-xs font-mono font-bold text-gray-900 mt-1">
+                      Temps restant : {timeLeft.days} jours – {String(timeLeft.hours).padStart(2, '0')} heures – {String(timeLeft.minutes).padStart(2, '0')} minutes – {String(timeLeft.seconds).padStart(2, '0')} secondes
+                    </p>
+                  ) : (
+                    <p className="text-xs text-rose-600 font-semibold mt-1">
+                      Votre période VIP est terminée. Pour continuer à recevoir des commissions sur les inscriptions et achats réalisés par vos filleuls, veuillez souscrire à un abonnement Premium.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {(!user.vipStatus.isActive || isVipExpired) && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    window.location.hash = "#subscriptions";
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-md transition shrink-0 cursor-pointer"
+                >
+                  Passer au Premium
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* TABS HEADER BAR */}
