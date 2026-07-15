@@ -2,7 +2,7 @@
   "users": [
     {
       "id": "user_founder",
-      "email": "founder@yaamaa.com",
+      "email": "founder@yamaa.com",
       "password": "password123",
       "phone": "+33612345678",
       "name": "Pierre Le Fondateur",
@@ -12,25 +12,33 @@
       "level": 50,
       "xp": 95000,
       "wallet": {
-        "available": 5000,
+        "available": 5001,
         "pending": 0,
-        "totalEarned": 15400,
-        "referralEarned": 3200
+        "totalEarned": 15401,
+        "referralEarned": 3201
       },
       "country": "France",
       "currency": "EUR",
       "referralCode": "BOSS2026",
       "is2faEnabled": true,
-      "isSuspended": false
+      "isSuspended": false,
+      "merchantNumber": "YA0000000001FR",
+      "merchantPackType": "diamond",
+      "merchantNumberEligible": true,
+      "merchantNumberPurchasedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-06-30T05:32:12.694Z",
+      "giftPoints": 1000,
+      "giftPointsEarned": 0,
+      "language": "fr"
     },
     {
       "id": "user_admin",
-      "email": "celine@yaamaa.com",
+      "email": "celine@yamaa.com",
       "password": "password123",
-      "phone": "+33687654321",
-      "name": "Celine Admin",
-      "username": "CelineAdmin",
-      "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+      "phone": "+221701234567",
+      "name": "Yama Assistance",
+      "username": "YamaAssistance",
+      "avatar": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop",
       "role": "admin",
       "level": 25,
       "xp": 34000,
@@ -44,11 +52,19 @@
       "currency": "EUR",
       "referralCode": "CELINE_A",
       "is2faEnabled": false,
-      "isSuspended": false
+      "isSuspended": false,
+      "merchantNumber": "YA0000000002FR",
+      "merchantPackType": "diamond",
+      "merchantNumberEligible": true,
+      "merchantNumberPurchasedAt": "2026-01-01T00:00:00Z",
+      "createdAt": "2026-06-30T05:32:12.694Z",
+      "giftPoints": 1000,
+      "giftPointsEarned": 0,
+      "language": "fr"
     },
     {
       "id": "user_participant_1",
-      "email": "mamadou@yaamaa.com",
+      "email": "mamadou@yamaa.com",
       "password": "password123",
       "phone": "+221771234567",
       "name": "Mamadou Diop",
@@ -68,11 +84,16 @@
       "referralCode": "SENEGAL221",
       "referredBy": "BOSS2026",
       "is2faEnabled": true,
-      "isSuspended": false
+      "isSuspended": false,
+      "friendIds": [],
+      "createdAt": "2026-06-30T05:32:12.694Z",
+      "giftPoints": 1000,
+      "giftPointsEarned": 0,
+      "language": "fr"
     },
     {
       "id": "user_participant_2",
-      "email": "amelie@yaamaa.com",
+      "email": "amelie@yamaa.com",
       "password": "password123",
       "phone": "+15149999999",
       "name": "Amélie Tremblay",
@@ -91,7 +112,11 @@
       "currency": "CAD",
       "referralCode": "QUEBEC2026",
       "is2faEnabled": false,
-      "isSuspended": false
+      "isSuspended": false,
+      "createdAt": "2026-06-30T05:32:12.694Z",
+      "giftPoints": 1000,
+      "giftPointsEarned": 0,
+      "language": "en"
     },
     {
       "id": "user_advertiser_1",
@@ -114,8 +139,11 @@
       "currency": "USD",
       "referralCode": "USA_PROM",
       "is2faEnabled": true,
-      "isSuspended": false
-    }
+      "isSuspended": false,
+      "createdAt": "2026-06-30T05:32:12.694Z",
+      "giftPoints": 1000,
+      "giftPointsEarned": 0,
+      "language": "en"
   ],
   "campaigns": [
     {
@@ -341,10 +369,202 @@
     "suspendedCurrencies": [],
     "platformFeePercentage": 10,
     "payoutsDistributed": 14520,
-    "totalUsersCount": 15420,
+    "totalUsersCount": 15421,
     "minWithdrawalAmount": 10,
     "baseReward": 0.2,
-    "defaultCommission": 10
+    "defaultCommission": 10,
+    "merchantNumberPrice": 5000,
+    "merchantPremiumPrice": 5000,
+    "merchantGoldPrice": 15000,
+    "merchantDiamondPrice": 35000,
+    "giftPointsConversionRate": 0.01,
+    "virtualGifts": [
+      {
+        "id": "gift_rose",
+        "name": "Rose Éternelle",
+        "emoji": "🌹",
+        "pointsPrice": 10,
+        "description": "Un classique pour exprimer de l'affection",
+        "rarity": "Commun",
+        "category": "Amour",
+        "animation": "petals",
+        "soundEffect": "love_chime",
+        "duration": 5,
+        "isActive": true,
+        "pointsValue": 10
+      },
+      {
+        "id": "gift_heart",
+        "name": "Cœur Pulsant",
+        "emoji": "💖",
+        "pointsPrice": 20,
+        "description": "Un cœur vibrant d'énergie positive",
+        "rarity": "Commun",
+        "category": "Amour",
+        "animation": "light",
+        "soundEffect": "heartbeat",
+        "duration": 4,
+        "isActive": true,
+        "pointsValue": 20
+      },
+      {
+        "id": "gift_fire",
+        "name": "Flamme Fun",
+        "emoji": "🔥",
+        "pointsPrice": 30,
+        "description": "Pour enflammer la conversation !",
+        "rarity": "Commun",
+        "category": "Fête",
+        "animation": "lightning",
+        "soundEffect": "fire_crackle",
+        "duration": 5,
+        "isActive": true,
+        "pointsValue": 30
+      },
+      {
+        "id": "gift_beer",
+        "name": "Bière Fraîche",
+        "emoji": "🍺",
+        "pointsPrice": 50,
+        "description": "Santé à notre amitié !",
+        "rarity": "Rare",
+        "category": "Fête",
+        "animation": "confetti",
+        "soundEffect": "cheers",
+        "duration": 6,
+        "isActive": true,
+        "pointsValue": 50
+      },
+      {
+        "id": "gift_unicorn",
+        "name": "Licorne Magique",
+        "emoji": "🦄",
+        "pointsPrice": 100,
+        "description": "Une créature mystique et enchantée",
+        "rarity": "Épique",
+        "category": "Exclusif",
+        "animation": "galaxy",
+        "soundEffect": "sparkle_magic",
+        "duration": 8,
+        "isActive": true,
+        "pointsValue": 100
+      },
+      {
+        "id": "gift_crown",
+        "name": "Couronne Royale",
+        "emoji": "👑",
+        "pointsPrice": 200,
+        "description": "Pour les rois et reines de Yaamaa",
+        "rarity": "Épique",
+        "category": "Royale",
+        "animation": "light",
+        "soundEffect": "royal_fanfare",
+        "duration": 7,
+        "isActive": true,
+        "pointsValue": 200
+      },
+      {
+        "id": "gift_diamond",
+        "name": "Diamant Brillant",
+        "emoji": "💎",
+        "pointsPrice": 500,
+        "description": "La brillance absolue d'un diamant éternel",
+        "rarity": "Légendaire",
+        "category": "Richesse",
+        "animation": "diamonds",
+        "soundEffect": "diamond_cling",
+        "duration": 8,
+        "isActive": true,
+        "pointsValue": 500
+      },
+      {
+        "id": "gift_rocket",
+        "name": "Fusée Spatiale",
+        "emoji": "🚀",
+        "pointsPrice": 1000,
+        "description": "Vers l'infini et au-delà !",
+        "rarity": "Légendaire",
+        "category": "Gaming",
+        "animation": "rocket",
+        "soundEffect": "rocket_blast",
+        "duration": 10,
+        "isActive": true,
+        "pointsValue": 1000
+      },
+      {
+        "id": "gift_castle",
+        "name": "Château de Rêve",
+        "emoji": "🏰",
+        "pointsPrice": 2000,
+        "description": "Un empire digne de votre soutien",
+        "rarity": "Mythique",
+        "category": "Royale",
+        "animation": "castle",
+        "soundEffect": "epic_orchestra",
+        "duration": 12,
+        "isActive": true,
+        "pointsValue": 2000
+      },
+      {
+        "id": "gift_lion",
+        "name": "Lion de la Teranga",
+        "emoji": "🦁",
+        "pointsPrice": 1500,
+        "description": "Le rugissement majestueux de l'Afrique",
+        "rarity": "Mythique",
+        "category": "Afrique",
+        "animation": "lion",
+        "soundEffect": "lion_roar",
+        "duration": 9,
+        "isActive": true,
+        "pointsValue": 1500
+      },
+      {
+        "id": "gift_dragon",
+        "name": "Dragon Impérial",
+        "emoji": "🐉",
+        "pointsPrice": 3000,
+        "description": "Le souffle ardent de la fortune",
+        "rarity": "Mythique",
+        "category": "Légendaire",
+        "animation": "dragon",
+        "soundEffect": "dragon_breath",
+        "duration": 11,
+        "isActive": true,
+        "pointsValue": 3000
+      },
+      {
+        "id": "gift_phoenix",
+        "name": "Phénix Flamboyant",
+        "emoji": "🐦",
+        "pointsPrice": 5000,
+        "description": "Renaissance de gloire et de puissance",
+        "rarity": "Mythique",
+        "category": "Afrique",
+        "animation": "phoenix",
+        "soundEffect": "phoenix_cry",
+        "duration": 13,
+        "isActive": true,
+        "pointsValue": 5000
+      },
+      {
+        "id": "gift_lamborghini",
+        "name": "Supercar Or",
+        "emoji": "🏎️",
+        "pointsPrice": 4000,
+        "description": "Vitesse, luxe et domination absolue",
+        "rarity": "Mythique",
+        "category": "Richesse",
+        "animation": "car",
+        "soundEffect": "car_engine",
+        "duration": 10,
+        "isActive": true,
+        "pointsValue": 4000
+      }
+    ],
+    "autoSenderName": "Yama Assistance",
+    "autoSenderPhone": "+221701234567",
+    "autoSenderAvatar": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=150&auto=format&fit=crop"
   },
   "shops": [
     {
@@ -459,7 +679,7 @@
       "currency": "XOF",
       "shippingAddress": "Numérique via E-mail, Québec, Canada",
       "phoneNumber": "+15149999999",
-      "email": "amelie@yaamaa.com",
+      "email": "amelie@yamaa.com",
       "paymentMethod": "Cartes bancaires",
       "status": "completed",
       "createdAt": "2026-06-22T08:00:00Z"
@@ -515,5 +735,490 @@
   ],
   "communities": [],
   "socialMessages": [],
-  "friendRequests": []
+  "friendRequests": [],
+  "callSessions": [],
+  "broadcastCampaigns": [],
+  "suppliersDeliverers": [
+    {
+      "id": "sup_1",
+      "userId": "user_participant_1",
+      "type": "supplier",
+      "fullName": "Aissatou Diallo",
+      "profilePhoto": "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=200&auto=format&fit=crop",
+      "companyLogo": "https://images.unsplash.com/photo-1578574577315-3fbeb0ce4ef2?q=80&w=200&auto=format&fit=crop",
+      "phone": "+221773456789",
+      "email": "aissatou.agro@yaamaa.com",
+      "country": "Sénégal",
+      "city": "Dakar",
+      "interventionZone": "Dakar Plateau, Almadies, Mermoz",
+      "professionalAddress": "Rue 10 x Angle Avenue Bourguiba, Dakar",
+      "activityType": "Agro-alimentaire & Produits Locaux Bio",
+      "servicesDescription": "Fourniture en gros et détail de céréales locales (mil, fonio), jus naturels artisanaux et épices de Teranga de qualité supérieure.",
+      "idDocumentUrl": "https://example.com/id_aissatou.pdf",
+      "companyDocumentUrl": "https://example.com/rccm_aissatou.pdf",
+      "availabilityHours": "Lundi au Samedi : 08h00 - 19h00",
+      "rates": "Devis sur mesure selon volume",
+      "spokenLanguages": [
+        "Français",
+        "Wolof",
+        "Anglais"
+      ],
+      "status": "approved",
+      "isVerified": true,
+      "rating": 4.9,
+      "reviewsCount": 34,
+      "missionsCompletedCount": 142,
+      "successRate": 99,
+      "createdAt": "2026-05-10T10:00:00Z"
+    },
+    {
+      "id": "del_1",
+      "userId": "user_participant_2",
+      "type": "deliverer",
+      "fullName": "Moussa Konaté",
+      "profilePhoto": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop",
+      "phone": "+221765432109",
+      "email": "moussa.express@yaamaa.com",
+      "country": "Sénégal",
+      "city": "Dakar",
+      "interventionZone": "Grand Dakar, Pikine, Guédiawaye, Dakar Plateau",
+      "professionalAddress": "Cité Keur Gorgui, Immeuble A, Dakar",
+      "activityType": "Livraison Express Colis & Repas",
+      "servicesDescription": "Service de livraison rapide à moto pour documents, colis e-commerce, repas chauds et courses urgentes dans tout Dakar et sa banlieue.",
+      "idDocumentUrl": "https://example.com/id_moussa.pdf",
+      "drivingLicenseUrl": "https://example.com/permis_moussa.pdf",
+      "transportMethod": "Moto Yamaha 125cc",
+      "vehiclePhotos": [
+        "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=300&auto=format&fit=crop"
+      ],
+      "insuranceDocumentUrl": "https://example.com/assurance_moussa.pdf",
+      "availabilityHours": "7j/7 : 07h00 - 23h00",
+      "rates": "À partir de 1 000 XOF la course",
+      "spokenLanguages": [
+        "Français",
+        "Wolof"
+      ],
+      "status": "approved",
+      "isVerified": true,
+      "rating": 4.8,
+      "reviewsCount": 68,
+      "missionsCompletedCount": 310,
+      "successRate": 98,
+      "createdAt": "2026-05-12T14:00:00Z"
+    }
+  ],
+  "supplierReviews": [
+    {
+      "id": "rev_1",
+      "profileId": "sup_1",
+      "userId": "user_participant_2",
+      "username": "Lili_QC",
+      "userAvatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop",
+      "rating": 5,
+      "comment": "Produits locaux d'une fraîcheur incroyable ! Livraison rapide et service très professionnel.",
+      "createdAt": "2026-06-01T10:00:00Z"
+    }
+  ],
+  "missionRequests": [],
+  "subscriptionPlans": [
+    {
+      "id": "plan_blue",
+      "name": "Plan Basic",
+      "tier": "blue",
+      "badgeLabel": "Bleu Basic",
+      "colorTheme": {
+        "bg": "bg-blue-500/10",
+        "border": "border-blue-500/30",
+        "text": "text-blue-400",
+        "gradient": "from-blue-600 to-sky-400"
+      },
+      "description": "Badge bleu officiel pour les marchands débutants sur la plateforme Yama.",
+      "benefits": [
+        "Badge Bleu vérifié",
+        "Numéro marchand unique à vie",
+        "Support standard 24/7",
+        "Jusqu'à 20 filleuls"
+      ],
+      "initialPrice": 5000,
+      "renewalPrice": 3000,
+      "durationValue": 30,
+      "durationUnit": "days",
+      "maxReferrals": 20,
+      "referralCommission": 2500,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "plan_bronze",
+      "name": "Plan Argent",
+      "tier": "bronze",
+      "badgeLabel": "Bronze Doré",
+      "colorTheme": {
+        "bg": "bg-amber-700/10",
+        "border": "border-amber-700/30",
+        "text": "text-amber-600",
+        "gradient": "from-amber-700 to-yellow-600"
+      },
+      "description": "Badge Bronze Doré pour les marchands en expansion avec des avantages accrus.",
+      "benefits": [
+        "Badge Bronze Doré exclusif",
+        "Numéro marchand prioritaire",
+        "Jusqu'à 50 filleuls",
+        "Visibilité accrue dans l'annuaire"
+      ],
+      "initialPrice": 10000,
+      "renewalPrice": 6000,
+      "durationValue": 30,
+      "durationUnit": "days",
+      "maxReferrals": 50,
+      "referralCommission": 5000,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "plan_gold",
+      "name": "Plan Or",
+      "tier": "gold",
+      "badgeLabel": "Or Premium",
+      "colorTheme": {
+        "bg": "bg-amber-400/10",
+        "border": "border-amber-400/30",
+        "text": "text-amber-400",
+        "gradient": "from-amber-500 to-yellow-300"
+      },
+      "description": "Badge Or prestigieux pour les marchands professionnels confirmés.",
+      "benefits": [
+        "Badge Or étincelant",
+        "Jusqu'à 500 filleuls",
+        "Priorité maximale sur les missions",
+        "Support VIP dédié"
+      ],
+      "initialPrice": 15000,
+      "renewalPrice": 10000,
+      "durationValue": 30,
+      "durationUnit": "days",
+      "maxReferrals": 500,
+      "referralCommission": 7500,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "plan_diamond",
+      "name": "Plan Diamant",
+      "tier": "diamond",
+      "badgeLabel": "Diamant Élite",
+      "colorTheme": {
+        "bg": "bg-cyan-400/10",
+        "border": "border-cyan-400/30",
+        "text": "text-cyan-300",
+        "gradient": "from-cyan-400 via-sky-300 to-indigo-400"
+      },
+      "description": "Le badge le plus prestigieux et luxueux de l'écosystème Yama pour les élites.",
+      "benefits": [
+        "Badge Diamant haute distinction",
+        "Jusqu'à 2 000 filleuls",
+        "Zéro commission sur les parrainages",
+        "Concierge et assistance 24/7 VIP"
+      ],
+      "initialPrice": 35000,
+      "renewalPrice": 25000,
+      "durationValue": 30,
+      "durationUnit": "days",
+      "maxReferrals": 2000,
+      "referralCommission": 17500,
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "userSubscriptions": [],
+  "subscriptionNotifications": [],
+  "supervisionIncidents": [
+    {
+      "id": "inc_1",
+      "component": "Serveur Principal (Cluster A)",
+      "componentKey": "server",
+      "timestamp": "2026-07-15T01:32:12.693Z",
+      "severity": "high",
+      "title": "Pic de charge CPU > 92%",
+      "description": "Le cluster de serveurs principaux a subi une forte augmentation des requêtes simultanées suite à une campagne virale.",
+      "consequences": "Ralentissement temporaire de l'affichage des pages de parrainage et file d'attente API accrue de 45ms.",
+      "logs": [
+        "[INFO] 2026-07-07 04:12:01 - CPU usage normal: 28%",
+        "[WARN] 2026-07-07 04:15:22 - Spike detected: Active threads reached 1,024",
+        "[CRITICAL] 2026-07-07 04:16:05 - CPU load average over 5m: 4.82 (threshold: 3.50)",
+        "[AUTO] 2026-07-07 04:17:00 - Auto-scaling triggered: Spun up 2 additional worker containers."
+      ],
+      "impactedUsersCount": 342,
+      "probableCauses": "Afflux massif de trafic sur les liens de parrainage WhatsApp & Telegram.",
+      "recommendations": "Augmenter la capacité de mise à l'échelle automatique (autoscale max workers à 8).",
+      "correctionSteps": [
+        "Activer le cache Redis sur les redirections de parrainage",
+        "Redistribuer la charge sur la région alternative"
+      ],
+      "isAutoCorrectable": true,
+      "status": "auto_corrected",
+      "resolvedAt": "2026-07-15T01:44:12.693Z"
+    },
+    {
+      "id": "inc_2",
+      "component": "Passerelle de Paiement Mobile Money",
+      "componentKey": "payments",
+      "timestamp": "2026-07-14T17:32:12.693Z",
+      "severity": "critical",
+      "title": "Latence API Orange Money / Wave",
+      "description": "Délai de réponse de la passerelle partenaire supérieur à 8 secondes provoquant des timeouts sur l'achat de numéros marchands.",
+      "consequences": "Échec temporaire de 18 transactions de recharge et blocage de la validation automatique.",
+      "logs": [
+        "[ERROR] 2026-07-06 20:30:10 - HTTP 504 Gateway Timeout from gateway.orange-money.api",
+        "[WARN] 2026-07-06 20:31:00 - Retry attempt 1/3 failed after 8000ms",
+        "[INFO] 2026-07-06 20:32:15 - Fallback gateway secondary routing activated successfully."
+      ],
+      "impactedUsersCount": 18,
+      "probableCauses": "Maintenance technique inopinée de l'opérateur télécom partenaire.",
+      "recommendations": "Basculer systématiquement sur le routage de secours Wave en cas de timeout > 3000ms.",
+      "correctionSteps": [
+        "Vérifier le statut webhook",
+        "Rejouer manuellement les transactions en attente depuis le panneau admin finance"
+      ],
+      "isAutoCorrectable": false,
+      "status": "resolved",
+      "resolvedAt": "2026-07-14T18:02:12.693Z"
+    },
+    {
+      "id": "inc_3",
+      "component": "Service de Messagerie WebSocket & Chat",
+      "componentKey": "messaging",
+      "timestamp": "2026-07-15T05:22:12.693Z",
+      "severity": "medium",
+      "title": "Déconnexions intermittentes du socket temps réel",
+      "description": "Quelques clients connectés en zone rurale ont subi une reconnexion WebSocket en boucle due à des fluctuations de signal 4G.",
+      "consequences": "Retard de 2 à 4 secondes dans la réception des messages de chat communautaire.",
+      "logs": [
+        "[WARN] 2026-07-07 08:30:15 - WebSocket heartbeat timeout for client conn_9981",
+        "[INFO] 2026-07-07 08:30:18 - Automatic reconnection initiated with exponential backoff."
+      ],
+      "impactedUsersCount": 24,
+      "probableCauses": "Qualité de signal réseau mobile instable.",
+      "recommendations": "Optimiser le protocole de battement de cœur (heartbeat interval à 15s).",
+      "correctionSteps": [
+        "Aucune action humaine requise, le mécanisme de reconnexion gère l'état."
+      ],
+      "isAutoCorrectable": true,
+      "status": "active"
+    }
+  ],
+  "supervisionReports": [
+    {
+      "id": "rep_daily_01",
+      "type": "daily",
+      "date": "2026-07-06",
+      "title": "Rapport de Performance Quotidien - 06/07/2026",
+      "performanceSummary": "Excellente stabilité globale. Uptime de 99.94%. Temps de réponse moyen de l'API de 38ms.",
+      "incidentsCount": 2,
+      "resolvedCount": 2,
+      "activeUsersCount": 4210,
+      "growthRate": 4.8,
+      "details": "Volume total de transactions : 1,450,000 XOF. Aucun incident de sécurité signalé. Taux d'engagement de la communauté en hausse de 12%."
+    },
+    {
+      "id": "rep_weekly_01",
+      "type": "weekly",
+      "date": "Semaine 27 (01/07 - 07/07/2026)",
+      "title": "Rapport Hebdomadaire de Supervision & Croissance",
+      "performanceSummary": "Croissance soutenue des inscriptions marchandes (+240 nouveaux numéros). Stabilité parfaite des bases de données répliquées.",
+      "incidentsCount": 5,
+      "resolvedCount": 5,
+      "activeUsersCount": 15420,
+      "growthRate": 15.2,
+      "details": "Les services de cadeaux virtuels et l'assistant IA Yaamaa représentent 45% des interactions de la semaine."
+    }
+  ],
+  "moderationFiles": [
+    {
+      "id": "mod_1",
+      "category": "supplier",
+      "title": "Candidature Fournisseur Électronique Pro",
+      "applicantId": "user_aminata",
+      "applicantUsername": "aminata_tech",
+      "applicantName": "Aminata Diallo",
+      "applicantAvatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop",
+      "createdAt": "2026-07-15T00:32:12.692Z",
+      "status": "pending",
+      "urgency": "urgent",
+      "supportingDocuments": [
+        {
+          "title": "Registre de Commerce (RCCM)",
+          "url": "https://example.com/rccm_aminata.pdf",
+          "type": "pdf"
+        },
+        {
+          "title": "Pièce d'Identité Nationale",
+          "url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+          "type": "image"
+        }
+      ],
+      "applicantInfo": {
+        "companyName": "Dakar Tech & Supplies SARL",
+        "ninea": "009847291",
+        "address": "Avenue Bourguiba, Dakar",
+        "activity": "Import-export de matériel informatique"
+      },
+      "internalComments": [
+        {
+          "id": "comm_1",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "text": "Vérifier la validité du NINEA auprès du service fiscal.",
+          "createdAt": "2026-07-15T03:32:12.692Z"
+        }
+      ],
+      "actionHistory": [
+        {
+          "id": "act_1",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "action": "Création dossier",
+          "oldStatus": "-",
+          "newStatus": "pending",
+          "createdAt": "2026-07-15T00:32:12.692Z"
+        }
+      ]
+    },
+    {
+      "id": "mod_2",
+      "category": "deliverer",
+      "title": "Demande de Partenariat Livreur Express",
+      "applicantId": "user_moussa",
+      "applicantUsername": "moussa_express",
+      "applicantName": "Moussa Ndiaye",
+      "applicantAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "createdAt": "2026-07-14T05:32:12.692Z",
+      "status": "under_review",
+      "urgency": "normal",
+      "assignedAdminId": "user_admin",
+      "assignedAdminUsername": "Superviseur Admin",
+      "supportingDocuments": [
+        {
+          "title": "Permis de Conduire A1",
+          "url": "https://images.unsplash.com/photo-1557804506-669a67965ba0",
+          "type": "image"
+        },
+        {
+          "title": "Assurance Moto",
+          "url": "https://example.com/assurance_moussa.pdf",
+          "type": "pdf"
+        }
+      ],
+      "applicantInfo": {
+        "vehicleType": "Moto Scooter 125cc",
+        "plateNumber": "DK-4829-X",
+        "zone": "Plateau & Almadies, Dakar"
+      },
+      "internalComments": [],
+      "actionHistory": [
+        {
+          "id": "act_2",
+          "adminId": "user_admin",
+          "adminUsername": "Superviseur Admin",
+          "action": "Changement de statut",
+          "oldStatus": "pending",
+          "newStatus": "under_review",
+          "comment": "Examen des pièces d'assurance en cours.",
+          "createdAt": "2026-07-14T17:32:12.692Z"
+        }
+      ]
+    },
+    {
+      "id": "mod_3",
+      "category": "api_integration",
+      "title": "Demande d'Accès API Partenaire Paiement",
+      "applicantId": "user_dev",
+      "applicantUsername": "fintech_lead",
+      "applicantName": "Jean-Marc Kouassi",
+      "applicantAvatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150&auto=format&fit=crop",
+      "createdAt": "2026-07-13T05:32:12.693Z",
+      "status": "more_info_requested",
+      "urgency": "flagged",
+      "supportingDocuments": [
+        {
+          "title": "Architecture Technique OAuth2",
+          "url": "https://example.com/arch_oauth.pdf",
+          "type": "pdf"
+        }
+      ],
+      "applicantInfo": {
+        "appName": "PayGateway West Africa",
+        "webhookUrl": "https://api.paygateway.africa/webhook/yaamaa",
+        "scope": "payments, merchants"
+      },
+      "internalComments": [
+        {
+          "id": "comm_2",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "text": "Demander l'URL de test Sandbox et le certificat SSL de production.",
+          "createdAt": "2026-07-13T23:32:12.693Z"
+        }
+      ],
+      "actionHistory": [
+        {
+          "id": "act_3",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "action": "Demande d'informations",
+          "oldStatus": "pending",
+          "newStatus": "more_info_requested",
+          "comment": "Certificat SSL manquant.",
+          "createdAt": "2026-07-13T23:32:12.693Z"
+        }
+      ]
+    },
+    {
+      "id": "mod_4",
+      "category": "account_verification",
+      "title": "Vérification de Compte Célébrité / Artiste",
+      "applicantId": "user_artist",
+      "applicantUsername": "waly_ballago",
+      "applicantName": "Waly Seck Officiel",
+      "applicantAvatar": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=150&auto=format&fit=crop",
+      "createdAt": "2026-07-12T05:32:12.693Z",
+      "status": "approved",
+      "urgency": "normal",
+      "assignedAdminId": "user_founder",
+      "assignedAdminUsername": "Fondateur",
+      "supportingDocuments": [
+        {
+          "title": "Pièce d'Identité & Contrat de Management",
+          "url": "https://example.com/id_waly.pdf",
+          "type": "pdf"
+        }
+      ],
+      "applicantInfo": {
+        "category": "Artiste / Musicien",
+        "socialProfile": "instagram.com/walyseck"
+      },
+      "internalComments": [
+        {
+          "id": "comm_3",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "text": "Identité vérifiée et validée.",
+          "createdAt": "2026-07-12T17:32:12.693Z"
+        }
+      ],
+      "actionHistory": [
+        {
+          "id": "act_4",
+          "adminId": "user_founder",
+          "adminUsername": "Fondateur",
+          "action": "Approbation",
+          "oldStatus": "pending",
+          "newStatus": "approved",
+          "comment": "Badge Diamant / Vérifié attribué.",
+          "createdAt": "2026-07-12T17:32:12.693Z"
+        }
+      ]
+    }
+  ],
+  "multiVendorOrders": []
 }
