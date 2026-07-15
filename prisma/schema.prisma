@@ -1,0 +1,56 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                   String     @id @default(uuid())
+  email                String     @unique
+  password             String?
+  phone                String?
+  name                 String
+  username             String     @unique
+  avatar               String?    @default("https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop")
+  role                 String     @default("participant")
+  level                Int        @default(1)
+  xp                   Int        @default(0)
+  walletAvailable      Float      @default(0.0)
+  walletPending        Float      @default(0.0)
+  walletTotalEarned    Float      @default(0.0)
+  walletReferralEarned Float      @default(0.0)
+  country              String     @default("France")
+  currency             String     @default("EUR")
+  referralCode         String     @unique
+  referredBy           String?
+  is2faEnabled         Boolean    @default(false)
+  isSuspended          Boolean    @default(false)
+  merchantNumber       String?    @unique
+  createdAt            DateTime   @default(now())
+  sessions             Session[]
+  auditLogs            AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username  String
+  role      String
+  action    String
+  details   String
+  timestamp DateTime @default(now())
+  ip        String?
+}

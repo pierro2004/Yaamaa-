@@ -85,6 +85,15 @@ const supabase = isSupabaseConfigured
     })
   : null;
 
+// Initialize Prisma (Neon PostgreSQL)
+import { prisma } from "./src/lib/prisma.ts";
+const isNeonConfigured = Boolean(
+  process.env.DATABASE_URL &&
+  !process.env.DATABASE_URL.includes("cool-butterfly-123456") &&
+  process.env.DATABASE_URL !== ""
+);
+console.log(`[Database Setup] Neon PostgreSQL Configured: ${isNeonConfigured}`);
+
 const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true" || process.env.NODE_ENV === "production";
 const tmpDir = isVercel ? '/tmp' : process.cwd();
 const STATE_FILE = path.join(tmpDir, "data_state.json");
@@ -1569,6 +1578,24 @@ function createAuditLog(userId: string, username: string, role: any, action: str
     appState.auditLogs = appState.auditLogs.slice(0, 300);
   }
   saveState(appState);
+
+  // Prisma (Neon PostgreSQL) Integration for Audit Logs
+  if (isNeonConfigured) {
+    prisma.auditLog.create({
+      data: {
+        id: newLog.id,
+        userId: newLog.userId,
+        username: newLog.username,
+        role: String(newLog.role),
+        action: newLog.action,
+        details: newLog.details,
+        ip: newLog.ip,
+        timestamp: new Date()
+      }
+    }).catch(err => {
+      console.error("[Prisma] Error saving audit log to Neon database:", err);
+    });
+  }
 }
 
 // Run express setup
@@ -1592,13 +1619,70 @@ app.get("/api/settings", (req, res) => {
 });
 
 // 2. AUTH & USER SIMULATION SETTINGS
-app.get("/api/users", (req, res) => {
+function mapPrismaUserToFrontend(dbUser: any): User {
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    password: dbUser.password || undefined,
+    phone: dbUser.phone || "",
+    name: dbUser.name,
+    username: dbUser.username,
+    avatar: dbUser.avatar || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop",
+    role: dbUser.role,
+    level: dbUser.level,
+    xp: dbUser.xp,
+    wallet: {
+      available: dbUser.walletAvailable,
+      pending: dbUser.walletPending,
+      totalEarned: dbUser.walletTotalEarned,
+      referralEarned: dbUser.walletReferralEarned,
+    },
+    country: dbUser.country,
+    currency: dbUser.currency,
+    referralCode: dbUser.referralCode,
+    referredBy: dbUser.referredBy || undefined,
+    is2faEnabled: dbUser.is2faEnabled,
+    isSuspended: dbUser.isSuspended,
+    merchantNumber: dbUser.merchantNumber || undefined,
+    createdAt: dbUser.createdAt instanceof Date ? dbUser.createdAt.toISOString() : dbUser.createdAt
+  };
+}
+
+app.get("/api/users", async (req, res) => {
+  if (isNeonConfigured) {
+    try {
+      console.log("[Prisma] Fetching all users from Neon PostgreSQL");
+      const dbUsers = await prisma.user.findMany({
+        orderBy: { createdAt: "desc" }
+      });
+      const mappedUsers = dbUsers.map(u => mapPrismaUserToFrontend(u));
+      mappedUsers.forEach(u => ensureAdminMerchantNumber(u));
+      return res.json(mappedUsers);
+    } catch (dbErr: any) {
+      console.error("[Prisma] Error fetching users from Neon, falling back to local state:", dbErr);
+    }
+  }
   appState.users.forEach(u => ensureAdminMerchantNumber(u));
   res.json(appState.users);
 });
 
-app.post("/api/users/current", (req, res) => {
+app.post("/api/users/current", async (req, res) => {
   const { userId } = req.body;
+  if (isNeonConfigured) {
+    try {
+      console.log(`[Prisma] Fetching user ${userId} from Neon PostgreSQL`);
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+      if (dbUser) {
+        const mapped = mapPrismaUserToFrontend(dbUser);
+        ensureAdminMerchantNumber(mapped);
+        return res.json(mapped);
+      }
+    } catch (dbErr: any) {
+      console.error(`[Prisma] Error fetching user ${userId}, falling back to local state:`, dbErr);
+    }
+  }
   const user = appState.users.find(u => u.id === userId);
   if (!user) {
     return res.status(404).json({ error: "Utilisateur introuvable" });
@@ -1728,7 +1812,50 @@ app.post("/api/users/login", async (req, res) => {
     }
   }
 
-  // Find user by email or merchant number
+  // 2. If Neon PostgreSQL is configured, authenticate via Neon first!
+  if (isNeonConfigured) {
+    try {
+      console.log(`[Prisma Login] Attempting login for identifier: ${cleanId}`);
+      const dbUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: { equals: cleanId, mode: "insensitive" } },
+            { username: { equals: cleanId, mode: "insensitive" } },
+            { merchantNumber: { equals: cleanId, mode: "insensitive" } }
+          ]
+        }
+      });
+
+      if (dbUser) {
+        // Validate password
+        const isMatch = bcrypt.compareSync(password, dbUser.password || "") || dbUser.password === password;
+        if (!isMatch) {
+          return res.status(401).json({ error: "Mot de passe invalide." });
+        }
+
+        const mapped = mapPrismaUserToFrontend(dbUser);
+        ensureAdminMerchantNumber(mapped);
+        
+        // Sync to local state to allow standard cross-referencing in other endpoints
+        const localIndex = appState.users.findIndex(u => u.id === mapped.id);
+        if (localIndex !== -1) {
+          appState.users[localIndex] = mapped;
+        } else {
+          appState.users.push(mapped);
+        }
+        saveState(appState);
+
+        createAuditLog(mapped.id, mapped.username, mapped.role, "Connexion réussie", `L'utilisateur @${mapped.username} s'est connecté via Neon PostgreSQL.`, req);
+        return res.json(mapped);
+      } else {
+        console.log(`[Prisma Login] Identifier ${cleanId} not found in Neon database, checking local memory fallback.`);
+      }
+    } catch (dbErr: any) {
+      console.error("[Prisma Login] Error during Neon authentication, falling back to local memory auth:", dbErr);
+    }
+  }
+
+  // Find user by email or merchant number in local state (fallback)
   const user = appState.users.find(u => 
     u.email.toLowerCase() === cleanId || 
     (u.merchantNumber && u.merchantNumber.toLowerCase() === cleanId)
@@ -1791,6 +1918,26 @@ app.post("/api/users/register", async (req, res) => {
   }
 
   const referralCode = "REF_" + finalUsername.substring(0, 4).toUpperCase() + Math.floor(100+Math.random()*900);
+
+  // If Neon PostgreSQL is configured, perform Neon unique checks
+  if (isNeonConfigured) {
+    try {
+      console.log(`[Prisma Register] Checking uniqueness for ${email} / ${finalUsername}`);
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: { equals: email, mode: "insensitive" } },
+            { username: { equals: finalUsername, mode: "insensitive" } }
+          ]
+        }
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: "Cette adresse e-mail ou ce nom d'utilisateur est déjà utilisé dans la base PostgreSQL." });
+      }
+    } catch (dbErr: any) {
+      console.error("[Prisma Register] Error during unique check on Neon PostgreSQL:", dbErr);
+    }
+  }
 
   // 1. If Supabase is configured, use Supabase Auth signUp
   if (isSupabaseConfigured && supabase) {
@@ -1951,6 +2098,41 @@ app.post("/api/users/register", async (req, res) => {
       }
     } catch (dbErr: any) {
       console.error("[Supabase Database] Exception during profile storage:", dbErr);
+    }
+  }
+
+  // 3. Try to store the user in Neon PostgreSQL via Prisma
+  if (isNeonConfigured) {
+    try {
+      console.log(`[Prisma Register] Writing user record for ${newUser.username} in Neon database`);
+      await prisma.user.create({
+        data: {
+          id: newUser.id,
+          email: newUser.email,
+          password: newUser.password || "",
+          phone: newUser.phone || "",
+          name: newUser.name,
+          username: newUser.username,
+          avatar: newUser.avatar,
+          role: newUser.role,
+          level: newUser.level,
+          xp: newUser.xp,
+          walletAvailable: newUser.wallet.available,
+          walletPending: newUser.wallet.pending,
+          walletTotalEarned: newUser.wallet.totalEarned,
+          walletReferralEarned: newUser.wallet.referralEarned,
+          country: newUser.country,
+          currency: newUser.currency,
+          referralCode: newUser.referralCode,
+          referredBy: newUser.referredBy,
+          is2faEnabled: newUser.is2faEnabled,
+          isSuspended: newUser.isSuspended,
+          merchantNumber: newUser.merchantNumber
+        }
+      });
+      console.log(`[Prisma Register] User ${newUser.username} successfully written to Neon!`);
+    } catch (dbErr: any) {
+      console.error("[Prisma Register] Error saving user profile to Neon database:", dbErr);
     }
   }
 
@@ -2796,7 +2978,7 @@ app.post("/api/users/purchase-merchant-number", (req, res) => {
 });
 
 // Update Profile Custom Props
-app.put("/api/users/:id", (req, res) => {
+app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
   const { 
     is2faEnabled, isSuspended, wallet, level, xp, country, currency, role,
@@ -2806,7 +2988,71 @@ app.put("/api/users/:id", (req, res) => {
   const user = appState.users.find(u => u.id === id);
   if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
 
-  // Validate unique username if it has changed
+  // 1. If Neon is configured, perform Neon update
+  if (isNeonConfigured) {
+    try {
+      console.log(`[Prisma Update] Updating user ${id} in Neon database`);
+      
+      // Check username uniqueness in Neon if changing
+      if (username !== undefined) {
+        const cleanUsername = username.trim().toLowerCase();
+        const existingWithUsername = await prisma.user.findFirst({
+          where: {
+            username: { equals: cleanUsername, mode: "insensitive" },
+            NOT: { id: id }
+          }
+        });
+        if (existingWithUsername) {
+          return res.status(400).json({ error: "Ce nom d'utilisateur est déjà pris dans la base de données." });
+        }
+      }
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name.trim();
+      if (email !== undefined) updateData.email = email.trim();
+      if (username !== undefined) updateData.username = username.trim();
+      if (avatar !== undefined) updateData.avatar = avatar.trim();
+      if (phone !== undefined) updateData.phone = phone.trim();
+      if (address !== undefined) updateData.address = address.trim();
+      if (password !== undefined && password.trim() !== "") {
+        updateData.password = bcrypt.hashSync(password.trim(), 10);
+      }
+      if (country !== undefined) updateData.country = country;
+      if (currency !== undefined) updateData.currency = currency;
+      if (is2faEnabled !== undefined) updateData.is2faEnabled = is2faEnabled;
+      if (level !== undefined) updateData.level = level;
+      if (xp !== undefined) updateData.xp = xp;
+      if (role !== undefined) updateData.role = role;
+      if (isSuspended !== undefined) updateData.isSuspended = isSuspended;
+
+      if (wallet !== undefined) {
+        const currentDbUser = await prisma.user.findUnique({ where: { id } });
+        if (currentDbUser) {
+          const newWallet = {
+            available: currentDbUser.walletAvailable,
+            pending: currentDbUser.walletPending,
+            totalEarned: currentDbUser.walletTotalEarned,
+            referralEarned: currentDbUser.walletReferralEarned,
+            ...wallet
+          };
+          updateData.walletAvailable = newWallet.available;
+          updateData.walletPending = newWallet.pending;
+          updateData.walletTotalEarned = newWallet.totalEarned;
+          updateData.walletReferralEarned = newWallet.referralEarned;
+        }
+      }
+
+      await prisma.user.update({
+        where: { id: id },
+        data: updateData
+      });
+      console.log(`[Prisma Update] User ${id} updated successfully in Neon database`);
+    } catch (dbErr: any) {
+      console.error(`[Prisma Update] Error updating user ${id} in Neon database:`, dbErr);
+    }
+  }
+
+  // Validate unique username locally if it has changed
   if (username !== undefined && username !== user.username) {
     const cleanUsername = username.trim().toLowerCase();
     const isTaken = appState.users.some(u => u.username.toLowerCase() === cleanUsername && u.id !== id);
