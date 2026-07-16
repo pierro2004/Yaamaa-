@@ -8,8 +8,15 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let currentDir = process.cwd();
+try {
+  const filename = fileURLToPath(import.meta.url);
+  currentDir = path.dirname(filename);
+} catch (e) {
+  if (typeof __dirname !== "undefined") {
+    currentDir = __dirname;
+  }
+}
 
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -107,9 +114,9 @@ if (isVercel && !fs.existsSync(STATE_FILE)) {
   const possiblePaths = [
     path.join(process.cwd(), "data_state.json"),
     path.join(process.cwd(), "..", "data_state.json"),
-    path.join(__dirname, "data_state.json"),
-    path.join(__dirname, "..", "data_state.json"),
-    path.join(__dirname, "../..", "data_state.json"),
+    path.join(currentDir, "data_state.json"),
+    path.join(currentDir, "..", "data_state.json"),
+    path.join(currentDir, "../..", "data_state.json"),
   ];
 
   let foundPath: string | null = null;
