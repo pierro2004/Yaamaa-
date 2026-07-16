@@ -6,7 +6,11 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import { GoogleGenAI } from "@google/genai";
 import { 
   User, 
@@ -8894,6 +8898,7 @@ app.get("/api/admin/impersonation-logs", (req, res) => {
 async function startServer() {
   // Vite developer mode
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
