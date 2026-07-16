@@ -1,7 +1,11 @@
 {
   "functions": {
     "api/*.ts": {
-      "includeFiles": "data_state.json"
+      "includeFiles": [
+        "data_state.json",
+        "node_modules/.prisma/client/*.node",
+        "prisma/schema.prisma"
+      ]
     }
   },
   "rewrites": [

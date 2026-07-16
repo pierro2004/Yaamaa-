@@ -86,7 +86,7 @@ const supabase = isSupabaseConfigured
   : null;
 
 // Initialize Prisma (Neon PostgreSQL)
-import { prisma } from "./src/lib/prisma.ts";
+import { prisma } from "./src/lib/prisma";
 const isNeonConfigured = Boolean(
   process.env.DATABASE_URL &&
   !process.env.DATABASE_URL.includes("cool-butterfly-123456") &&
