@@ -1,3 +1,5 @@
+api/server.cjs
+api/server.cjs.map
 node_modules/
 build/
 dist/
