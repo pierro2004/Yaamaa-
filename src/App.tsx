@@ -14,7 +14,8 @@ import {
   AuditLog,
   SubscriptionPlan,
   CallRecord,
-  CallType
+  CallType,
+  CurrencyRate
 } from "./types";
 import { ALL_COUNTRIES, getCurrencyForCountry } from "./countries";
 import Navbar from "./components/Navbar";
@@ -31,6 +32,7 @@ import AdminGiftsPanel from "./components/AdminGiftsPanel";
 import AdminSubscriptionsPanel from "./components/AdminSubscriptionsPanel";
 import AdminVipPromotionsPanel from "./components/AdminVipPromotionsPanel";
 import AdminSupervisionPanel from "./components/AdminSupervisionPanel";
+import AdminCurrenciesPanel from "./components/AdminCurrenciesPanel";
 import AdminProductBoostsPanel from "./components/AdminProductBoostsPanel";
 import AdminSyncAutomationPanel from "./components/AdminSyncAutomationPanel";
 import { AdminApiKeysPanel } from "./components/AdminApiKeysPanel";
@@ -132,6 +134,28 @@ const COUNTRIES_LIST = [
 
 import yaamaaLogo from "./assets/images/yaamaa_logo_updated_1783116905472.jpg";
 
+export function getRateClient(fromCur: string, toCur: string, rates: CurrencyRate[], centralCur: string = "USD"): number {
+  if (fromCur === toCur) return 1.0;
+  
+  if (fromCur === centralCur) {
+    const rateObj = (rates || []).find(r => r.devise_source === centralCur && r.devise_destination === toCur && r.statut === "active");
+    return rateObj ? rateObj.taux_conversion : 1.0;
+  } else if (toCur === centralCur) {
+    const rateObj = (rates || []).find(r => r.devise_source === centralCur && r.devise_destination === fromCur && r.statut === "active");
+    return rateObj ? (1.0 / rateObj.taux_conversion) : 1.0;
+  } else {
+    const rateToCentral = getRateClient(fromCur, centralCur, rates, centralCur);
+    const rateFromCentral = getRateClient(centralCur, toCur, rates, centralCur);
+    return rateToCentral * rateFromCentral;
+  }
+}
+
+export function convertAmountClient(amount: number, fromCur: string, toCur: string, rates: CurrencyRate[], centralCur: string = "USD"): number {
+  if (amount === undefined || amount === null) return 0;
+  const rate = getRateClient(fromCur, toCur, rates, centralCur);
+  return parseFloat((amount * rate).toFixed(4));
+}
+
 export default function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<string>("home");
@@ -164,6 +188,21 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<any>(null);
+
+  // Multi-Currency System States
+  const [currencyRates, setCurrencyRates] = useState<CurrencyRate[]>([]);
+  const [currencySettings, setCurrencySettings] = useState<any>({ centralCurrency: "USD" });
+
+  const formatBalanceWithLocal = useCallback((usdAmount: number, userCountry?: string): string => {
+    if (usdAmount === undefined || usdAmount === null) return "0.00 USD";
+    const centralCur = currencySettings?.centralCurrency || "USD";
+    const localCur = getCurrencyForCountry(userCountry || currentUser?.country || "Sénégal");
+    if (localCur === centralCur) {
+      return `${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${centralCur}`;
+    }
+    const converted = convertAmountClient(usdAmount, centralCur, localCur, currencyRates, centralCur);
+    return `${converted.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${localCur} (${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${centralCur})`;
+  }, [currencyRates, currencySettings, currentUser]);
 
   // Auto-sender / Automation Sender Profile State
   const [autoSenderName, setAutoSenderName] = useState("Yama Assistance");
@@ -686,7 +725,8 @@ export default function App() {
     try {
       const [
         settingsRes, usersRes, campaignsRes, submissionsRes, transactionsRes, auditLogsRes,
-        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes, broadcastRes, subPlansRes, productBoostsRes
+        shopsRes, productsRes, ordersRes, disputesRes, promoCampaignsRes, broadcastRes, subPlansRes, productBoostsRes,
+        ratesRes, curSettingsRes
       ] = await Promise.all([
         fetch("/api/settings").then(r => r.ok ? r.json() : {}).catch(() => ({})),
         fetch("/api/users").then(r => r.ok ? r.json() : []).catch(() => []),
@@ -701,7 +741,9 @@ export default function App() {
         fetch("/api/promotions").then(r => r.ok ? r.json() : []).catch(() => []),
         fetch("/api/broadcast-campaigns").then(r => r.ok ? r.json() : []).catch(() => []),
         fetch("/api/subscription-plans").then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch("/api/product-boosts").then(r => r.ok ? r.json() : []).catch(() => [])
+        fetch("/api/product-boosts").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/currencies/rates").then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch("/api/currencies/settings").then(r => r.ok ? r.json() : { centralCurrency: "USD" }).catch(() => ({ centralCurrency: "USD" }))
       ]);
 
       setSystemMetrics(settingsRes || {});
@@ -718,6 +760,8 @@ export default function App() {
       setBroadcastCampaigns(Array.isArray(broadcastRes) ? broadcastRes : []);
       setSubscriptionPlans(Array.isArray(subPlansRes) ? subPlansRes : []);
       setProductBoosts(Array.isArray(productBoostsRes) ? productBoostsRes : []);
+      setCurrencyRates(Array.isArray(ratesRes) ? ratesRes : []);
+      setCurrencySettings(curSettingsRes || { centralCurrency: "USD" });
 
       // Setup pre-loaded admin views variables from DB state
       const sRes = settingsRes as any;
@@ -3537,7 +3581,7 @@ export default function App() {
                 <div>
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mon solde disponible</span>
                   <p className="font-mono text-xs font-extrabold text-emerald-600 -mt-0.5">
-                    {currentUser?.wallet.available.toLocaleString() || "0"} {currentUser?.currency || "EUR"}
+                    {formatBalanceWithLocal(currentUser?.wallet.available || 0)}
                   </p>
                 </div>
               </div>
@@ -4063,7 +4107,7 @@ export default function App() {
                     >
                       <span className="text-xs font-bold text-gray-950 block">💳 Balance Interne Yaamaa</span>
                       <p className="text-[10px] text-gray-400 mt-1">Utiliser les fonds disponibles de votre compte de simulation.</p>
-                      <p className="text-xs font-extrabold text-emerald-600 mt-3">Disponible: {currentUser?.wallet.available} {currentUser?.currency}</p>
+                      <p className="text-xs font-extrabold text-emerald-600 mt-3">Disponible: {formatBalanceWithLocal(currentUser?.wallet.available || 0)}</p>
                     </button>
 
                     <button
@@ -4177,45 +4221,57 @@ export default function App() {
               <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
                 {/* Circle 1: Disponible */}
                 <div className="flex flex-col items-center">
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-indigo-100/80 bg-indigo-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150">
+                  <div 
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-indigo-100/80 bg-indigo-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150 cursor-help"
+                    title={`Équivalent réel stable : ${currentUser?.wallet.available || 0} ${currencySettings?.centralCurrency || "USD"}`}
+                  >
                     <span className="text-[9px] sm:text-[10px] font-black text-indigo-800 uppercase tracking-wider mb-0.5">Disponible</span>
                     <span className="font-mono text-sm sm:text-base font-black text-indigo-950 truncate max-w-[80px]" title={currentUser?.wallet.available.toString()}>
-                      {currentUser?.wallet.available.toLocaleString() || "0"}
+                      {convertAmountClient(currentUser?.wallet.available || 0, currencySettings?.centralCurrency || "USD", getCurrencyForCountry(currentUser?.country || "Sénégal"), currencyRates, currencySettings?.centralCurrency || "USD").toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </span>
-                    <span className="text-[8px] sm:text-[9px] text-[#4e3beb] font-black mt-0.5">{currentUser?.currency}</span>
+                    <span className="text-[8px] sm:text-[9px] text-[#4e3beb] font-black mt-0.5">{getCurrencyForCountry(currentUser?.country || "Sénégal")}</span>
                   </div>
                 </div>
 
                 {/* Circle 2: En attente */}
                 <div className="flex flex-col items-center">
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-amber-100/80 bg-amber-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150">
+                  <div 
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-amber-100/80 bg-amber-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150 cursor-help"
+                    title={`Équivalent réel stable : ${currentUser?.wallet.pending || 0} ${currencySettings?.centralCurrency || "USD"}`}
+                  >
                     <span className="text-[9px] sm:text-[10px] font-black text-amber-800 uppercase tracking-wider mb-0.5">En Attente</span>
                     <span className="font-mono text-sm sm:text-base font-black text-amber-600 truncate max-w-[80px]" title={currentUser?.wallet.pending.toString()}>
-                      {currentUser?.wallet.pending.toLocaleString() || "0"}
+                      {convertAmountClient(currentUser?.wallet.pending || 0, currencySettings?.centralCurrency || "USD", getCurrencyForCountry(currentUser?.country || "Sénégal"), currencyRates, currencySettings?.centralCurrency || "USD").toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </span>
-                    <span className="text-[8px] sm:text-[9px] text-amber-500 font-black mt-0.5">{currentUser?.currency}</span>
+                    <span className="text-[8px] sm:text-[9px] text-amber-500 font-black mt-0.5">{getCurrencyForCountry(currentUser?.country || "Sénégal")}</span>
                   </div>
                 </div>
 
                 {/* Circle 3: Total Gagné */}
                 <div className="flex flex-col items-center">
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-emerald-100/80 bg-emerald-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150">
+                  <div 
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-emerald-100/80 bg-emerald-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150 cursor-help"
+                    title={`Équivalent réel stable : ${currentUser?.wallet.totalEarned || 0} ${currencySettings?.centralCurrency || "USD"}`}
+                  >
                     <span className="text-[9px] sm:text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-0.5">Total Gagné</span>
                     <span className="font-mono text-sm sm:text-base font-black text-emerald-950 truncate max-w-[80px]" title={currentUser?.wallet.totalEarned.toString()}>
-                      {currentUser?.wallet.totalEarned.toLocaleString() || "0"}
+                      {convertAmountClient(currentUser?.wallet.totalEarned || 0, currencySettings?.centralCurrency || "USD", getCurrencyForCountry(currentUser?.country || "Sénégal"), currencyRates, currencySettings?.centralCurrency || "USD").toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </span>
-                    <span className="text-[8px] sm:text-[9px] text-emerald-600 font-black mt-0.5">{currentUser?.currency}</span>
+                    <span className="text-[8px] sm:text-[9px] text-emerald-600 font-black mt-0.5">{getCurrencyForCountry(currentUser?.country || "Sénégal")}</span>
                   </div>
                 </div>
 
                 {/* Circle 4: Gains Parrainage */}
                 <div className="flex flex-col items-center">
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-pink-100/80 bg-pink-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150 relative">
+                  <div 
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-pink-100/80 bg-pink-50/20 flex flex-col items-center justify-center p-2 text-center shadow-sm transition-transform hover:scale-105 duration-150 relative cursor-help"
+                    title={`Équivalent réel stable : ${currentUser?.wallet.referralEarned || 0} ${currencySettings?.centralCurrency || "USD"}`}
+                  >
                     <span className="text-[9px] sm:text-[10px] font-black text-pink-800 uppercase tracking-wider mb-0.5">Parrainage</span>
                     <span className="font-mono text-sm sm:text-base font-black text-pink-600 truncate max-w-[80px]" title={currentUser?.wallet.referralEarned.toString()}>
-                      {currentUser?.wallet.referralEarned.toLocaleString() || "0"}
+                      {convertAmountClient(currentUser?.wallet.referralEarned || 0, currencySettings?.centralCurrency || "USD", getCurrencyForCountry(currentUser?.country || "Sénégal"), currencyRates, currencySettings?.centralCurrency || "USD").toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </span>
-                    <span className="text-[8px] sm:text-[9px] text-pink-500 font-black mt-0.5">{currentUser?.currency}</span>
+                    <span className="text-[8px] sm:text-[9px] text-pink-500 font-black mt-0.5">{getCurrencyForCountry(currentUser?.country || "Sénégal")}</span>
                   </div>
                   {/* Referral Code Copy */}
                   <div className="mt-2 flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-150">
@@ -4231,6 +4287,19 @@ export default function App() {
                       Copier
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Dual-Display Details Summary */}
+              <div className="mt-6 pt-4 border-t border-dashed border-gray-150 flex flex-col sm:flex-row sm:items-center sm:justify-between text-[11px] text-gray-500 gap-2">
+                <div>
+                  <span className="font-bold">Base financière interne stable de Yaamaa :</span>{" "}
+                  <span className="font-mono font-black text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">1.00 {currencySettings?.centralCurrency || "USD"}</span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span>Balance Portefeuille Réelle : <strong className="font-mono text-indigo-600">{currentUser?.wallet.available || 0} {currencySettings?.centralCurrency || "USD"}</strong></span>
+                  <span>•</span>
+                  <span>Solde Disponible Local : <strong className="font-mono text-emerald-600">{convertAmountClient(currentUser?.wallet.available || 0, currencySettings?.centralCurrency || "USD", getCurrencyForCountry(currentUser?.country || "Sénégal"), currencyRates, currencySettings?.centralCurrency || "USD").toLocaleString(undefined, { maximumFractionDigits: 2 })} {getCurrencyForCountry(currentUser?.country || "Sénégal")}</strong></span>
                 </div>
               </div>
             </div>
@@ -4873,11 +4942,11 @@ export default function App() {
                               required
                             />
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-xs font-black text-gray-400">
-                              {currentUser?.currency}
+                              {getCurrencyForCountry(currentUser?.country || "Sénégal")}
                             </div>
                           </div>
                           <p className="text-[10px] text-gray-400 mt-1">
-                            Solde disponible pour retrait immédiat : <strong className="text-indigo-950">{currentUser?.wallet.available.toLocaleString()} {currentUser?.currency}</strong>
+                            Solde disponible pour retrait immédiat : <strong className="text-indigo-950">{formatBalanceWithLocal(currentUser?.wallet.available || 0)}</strong>
                           </p>
                         </div>
 
@@ -5351,6 +5420,18 @@ export default function App() {
               >
                 <Coins className="h-4 w-4" />
                 💸 Retraits & Campagnes ({transactions.filter(t => t.type === "withdraw" && t.status === "pending").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSubTab("currencies")}
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap cursor-pointer ${
+                  adminSubTab === "currencies"
+                    ? "border-amber-600 text-amber-700 bg-amber-50/20"
+                    : "border-transparent text-gray-500 hover:text-gray-950 hover:bg-gray-50/50"
+                }`}
+              >
+                <Globe className="h-4 w-4 text-amber-600 animate-pulse" />
+                💱 Devise & Taux
               </button>
               <button
                 type="button"
@@ -6148,6 +6229,18 @@ export default function App() {
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* TAB CONTENT: GLOBAL MULTI-CURRENCY CONVERSION SYSTEM */}
+            {adminSubTab === "currencies" && (
+              <div id="admin_tab_currencies" className="space-y-8 animate-fade-in">
+                <AdminCurrenciesPanel
+                  currentUser={currentUser}
+                  currentLanguage={currentLanguage}
+                  users={users}
+                  onRefreshData={syncPlatformData}
+                />
               </div>
             )}
 

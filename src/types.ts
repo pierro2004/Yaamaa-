@@ -345,6 +345,7 @@ export interface SystemSettings {
   isWithdrawalFrozen: boolean;
   suspendedCountries: string[];
   suspendedCurrencies: string[];
+  centralCurrency?: string; // e.g. "USD"
   platformFeePercentage: number;
   payoutsDistributed: number;
   totalUsersCount: number;
@@ -1139,6 +1140,37 @@ export interface VipAuditLog {
   timestamp: string;
   adminId: string;
   adminName: string;
+}
+
+export interface CurrencyRate {
+  id: string;
+  devise_source: string;       // e.g. "USD"
+  devise_destination: string;  // e.g. "XOF", "GHS", "NGN", "ZAR", "EUR", "CAD"
+  taux_conversion: number;     // e.g. 600.0
+  date_mise_a_jour: string;    // ISO timestamp
+  statut: "active" | "inactive";
+  modifie_par: string;         // Name of admin
+}
+
+export interface CurrencyRateHistory {
+  id: string;
+  devise_source: string;
+  devise_destination: string;
+  ancien_taux: number;
+  nouveau_taux: number;
+  admin_nom: string;
+  admin_id: string;
+  timestamp: string;
+  type_action: "create" | "update" | "toggle" | "delete";
+}
+
+export interface CurrencyAlert {
+  id: string;
+  type: "rate_change" | "new_currency" | "currency_disabled" | "high_volatility" | "conversion_fail" | "payment_issue";
+  title: string;
+  message: string;
+  timestamp: string;
+  readBy?: string[]; // admin user IDs who read it
 }
 
 

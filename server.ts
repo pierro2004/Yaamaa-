@@ -51,7 +51,10 @@ import {
   CampaignTypeConfig,
   MultiVendorOrder,
   CartItem,
-  VendorSubOrder
+  VendorSubOrder,
+  CurrencyRate,
+  CurrencyRateHistory,
+  CurrencyAlert
 } from "./src/types";
 import { ALL_COUNTRIES } from "./src/countries";
 import bcrypt from "bcryptjs";
@@ -172,6 +175,9 @@ interface AppState {
   contracts?: any[];
   vipAuditLogs?: any[];
   nextMerchantSequence?: number;
+  currencyRates?: CurrencyRate[];
+  currencyHistory?: CurrencyRateHistory[];
+  currencyAlerts?: CurrencyAlert[];
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -1311,6 +1317,45 @@ function getUserMaxReferrals(user: User): number {
   return 20;
 }
 
+const SEED_CURRENCY_RATES: CurrencyRate[] = [
+  { id: "rate_usd_usd", devise_source: "USD", devise_destination: "USD", taux_conversion: 1.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_eur", devise_source: "USD", devise_destination: "EUR", taux_conversion: 0.92, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_xof", devise_source: "USD", devise_destination: "XOF", taux_conversion: 600.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_xaf", devise_source: "USD", devise_destination: "XAF", taux_conversion: 600.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_ghs", devise_source: "USD", devise_destination: "GHS", taux_conversion: 15.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_ngn", devise_source: "USD", devise_destination: "NGN", taux_conversion: 1500.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_zar", devise_source: "USD", devise_destination: "ZAR", taux_conversion: 18.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_cad", devise_source: "USD", devise_destination: "CAD", taux_conversion: 1.35, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_cdf", devise_source: "USD", devise_destination: "CDF", taux_conversion: 2500.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_gnf", devise_source: "USD", devise_destination: "GNF", taux_conversion: 8600.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_rwf", devise_source: "USD", devise_destination: "RWF", taux_conversion: 1300.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_bif", devise_source: "USD", devise_destination: "BIF", taux_conversion: 2800.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_mga", devise_source: "USD", devise_destination: "MGA", taux_conversion: 4500.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" },
+  { id: "rate_usd_mru", devise_source: "USD", devise_destination: "MRU", taux_conversion: 40.0, date_mise_a_jour: new Date().toISOString(), statut: "active", modifie_par: "Système" }
+];
+
+function getConversionRate(fromCur: string, toCur: string): number {
+  if (fromCur === toCur) return 1.0;
+  const centralCur = (appState && appState.settings && appState.settings.centralCurrency) || "USD";
+  const rates = (appState && appState.currencyRates) || SEED_CURRENCY_RATES;
+  
+  if (fromCur === centralCur) {
+    const rateObj = rates.find(r => r.devise_source === centralCur && r.devise_destination === toCur && r.statut === "active");
+    return rateObj ? rateObj.taux_conversion : 1.0;
+  } else if (toCur === centralCur) {
+    const rateObj = rates.find(r => r.devise_source === centralCur && r.devise_destination === fromCur && r.statut === "active");
+    return rateObj ? (1.0 / rateObj.taux_conversion) : 1.0;
+  } else {
+    const rateToCentral = getConversionRate(fromCur, centralCur);
+    const rateFromCentral = getConversionRate(centralCur, toCur);
+    return rateToCentral * rateFromCentral;
+  }
+}
+
+function convertCurrencyAmount(amount: number, fromCur: string, toCur: string): number {
+  const rate = getConversionRate(fromCur, toCur);
+  return parseFloat((amount * rate).toFixed(4));
+}
 
 
 // Helper to load state
@@ -1508,6 +1553,22 @@ function loadState(): AppState {
         state.multiVendorOrders = [];
         updated = true;
       }
+      if (!state.currencyRates) {
+        state.currencyRates = SEED_CURRENCY_RATES;
+        updated = true;
+      }
+      if (!state.currencyHistory) {
+        state.currencyHistory = [];
+        updated = true;
+      }
+      if (!state.currencyAlerts) {
+        state.currencyAlerts = [];
+        updated = true;
+      }
+      if (state.settings && state.settings.centralCurrency === undefined) {
+        state.settings.centralCurrency = "USD";
+        updated = true;
+      }
 
       if (updated) {
         fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
@@ -1525,7 +1586,10 @@ function loadState(): AppState {
     submissions: useDemoSeed ? SEED_SUBMISSIONS : [],
     transactions: useDemoSeed ? SEED_TRANSACTIONS : [],
     auditLogs: useDemoSeed ? SEED_AUDIT_LOGS : [],
-    settings: DEFAULT_SETTINGS,
+    settings: {
+      ...DEFAULT_SETTINGS,
+      centralCurrency: "USD"
+    },
     shops: useDemoSeed ? SEED_SHOPS : [],
     products: useDemoSeed ? SEED_PRODUCTS : [],
     orders: useDemoSeed ? SEED_ORDERS : [],
@@ -1544,7 +1608,10 @@ function loadState(): AppState {
     supervisionIncidents: SEED_SUPERVISION_INCIDENTS,
     supervisionReports: SEED_SUPERVISION_REPORTS,
     moderationFiles: useDemoSeed ? SEED_MODERATION_FILES : [],
-    multiVendorOrders: []
+    multiVendorOrders: [],
+    currencyRates: SEED_CURRENCY_RATES,
+    currencyHistory: [],
+    currencyAlerts: []
   };
   saveState(freshState);
   return freshState;
@@ -3847,6 +3914,260 @@ app.post("/api/admin/wallets/unblock-pin", (req, res) => {
   logPinAudit(user, "Déblocage Portefeuille PIN", "success", "Débloqué par l'administration", req);
   createAuditLog(operatorId || "admin", "Administrateur", "admin", "Déblocage Portefeuille PIN", `Utilisateur ${user.username} débloqué`, req);
   res.json({ success: true, user });
+});
+
+// --- GLOBAL MULTI-CURRENCY CONVERSION SYSTEM ENDPOINTS ---
+
+// 1. GET CURRENCY SETTINGS
+app.get("/api/currencies/settings", (req, res) => {
+  res.json({
+    centralCurrency: appState.settings.centralCurrency || "USD",
+    suspendedCurrencies: appState.settings.suspendedCurrencies || []
+  });
+});
+
+// 2. UPDATE CURRENCY SETTINGS (CENTRAL CURRENCY) - WITH PIN DOUBLE VALIDATION
+app.post("/api/currencies/settings", (req, res) => {
+  const { centralCurrency, adminPin, adminUsername } = req.body;
+  
+  if (!centralCurrency) {
+    return res.status(400).json({ error: "Veuillez spécifier la devise centrale." });
+  }
+  
+  if (adminPin !== "1234") {
+    return res.status(403).json({ error: "Code PIN de double-validation incorrect." });
+  }
+
+  const oldCentral = appState.settings.centralCurrency || "USD";
+  appState.settings.centralCurrency = centralCurrency;
+  
+  const historyEntry: CurrencyRateHistory = {
+    id: "history_" + Date.now(),
+    devise_source: oldCentral,
+    devise_destination: centralCurrency,
+    ancien_taux: 1.0,
+    nouveau_taux: 1.0,
+    admin_nom: adminUsername || "Admin",
+    admin_id: "admin_" + Date.now(),
+    timestamp: new Date().toISOString(),
+    type_action: "update"
+  };
+  
+  if (!appState.currencyHistory) appState.currencyHistory = [];
+  appState.currencyHistory.unshift(historyEntry);
+
+  createAuditLog("admin", adminUsername || "Admin", "admin", "Changement Devise Centrale", `Devise centrale modifiée de ${oldCentral} à ${centralCurrency}`, req);
+  
+  saveState(appState);
+  res.json({ message: `Devise centrale mise à jour à ${centralCurrency} avec succès !`, settings: appState.settings });
+});
+
+// 3. LIST ALL CURRENCY RATES
+app.get("/api/currencies/rates", (req, res) => {
+  if (!appState.currencyRates) {
+    appState.currencyRates = SEED_CURRENCY_RATES;
+  }
+  res.json(appState.currencyRates);
+});
+
+// 4. ADD OR UPDATE CURRENCY RATE
+app.post("/api/currencies/rates", (req, res) => {
+  const { devise_destination, taux_conversion, devise_name, statut, adminPin, adminUsername } = req.body;
+  
+  if (!devise_destination || taux_conversion === undefined) {
+    return res.status(400).json({ error: "Code devise et taux de conversion obligatoires." });
+  }
+
+  if (adminPin !== "1234") {
+    return res.status(403).json({ error: "Code PIN de double-validation incorrect." });
+  }
+
+  if (!appState.currencyRates) {
+    appState.currencyRates = SEED_CURRENCY_RATES;
+  }
+  if (!appState.currencyHistory) {
+    appState.currencyHistory = [];
+  }
+  if (!appState.currencyAlerts) {
+    appState.currencyAlerts = [];
+  }
+
+  const centralCur = appState.settings.centralCurrency || "USD";
+  const existingRate = appState.currencyRates.find(r => r.devise_source === centralCur && r.devise_destination === devise_destination);
+  
+  const now = new Date().toISOString();
+  let actionType: "create" | "update" = "create";
+  let oldTaux = 0;
+  
+  if (existingRate) {
+    actionType = "update";
+    oldTaux = existingRate.taux_conversion;
+    existingRate.taux_conversion = parseFloat(taux_conversion);
+    existingRate.date_mise_a_jour = now;
+    existingRate.modifie_par = adminUsername || "Admin";
+    
+    const pctChange = Math.abs((parseFloat(taux_conversion) - oldTaux) / oldTaux) * 100;
+    if (pctChange > 20) {
+      const alertEntry: CurrencyAlert = {
+        id: "alert_" + Date.now(),
+        type: "high_volatility",
+        title: "⚠️ Volatilité Élevée Détectée",
+        message: `Le taux de conversion pour la devise ${devise_destination} a été modifié de ${oldTaux} à ${taux_conversion}, soit une variation suspecte de ${pctChange.toFixed(2)}%. Cette action a été validée par @${adminUsername || "Admin"}.`,
+        timestamp: now,
+        readBy: []
+      };
+      appState.currencyAlerts.unshift(alertEntry);
+    }
+  } else {
+    const newRateObj: CurrencyRate = {
+      id: "rate_" + devise_destination.toLowerCase(),
+      devise_source: centralCur,
+      devise_destination,
+      taux_conversion: parseFloat(taux_conversion),
+      date_mise_a_jour: now,
+      statut: statut || "active",
+      modifie_par: adminUsername || "Admin"
+    };
+    appState.currencyRates.push(newRateObj);
+    
+    const alertEntry: CurrencyAlert = {
+      id: "alert_" + Date.now(),
+      type: "new_currency",
+      title: "ℹ️ Nouvelle Devise Intégrée",
+      message: `La devise ${devise_destination} (${devise_name || devise_destination}) a été ajoutée au moteur de conversion de Yaamaa au taux de 1 ${centralCur} = ${taux_conversion} par @${adminUsername || "Admin"}.`,
+      timestamp: now,
+      readBy: []
+    };
+    appState.currencyAlerts.unshift(alertEntry);
+  }
+
+  const historyEntry: CurrencyRateHistory = {
+    id: "history_" + Date.now(),
+    devise_source: centralCur,
+    devise_destination,
+    ancien_taux: oldTaux,
+    nouveau_taux: parseFloat(taux_conversion),
+    admin_nom: adminUsername || "Admin",
+    admin_id: "admin_" + Date.now(),
+    timestamp: now,
+    type_action: actionType
+  };
+  appState.currencyHistory.unshift(historyEntry);
+
+  createAuditLog("admin", adminUsername || "Admin", "admin", actionType === "create" ? "Création Devise" : "Mise à jour Taux", `Devise ${devise_destination} mise à jour à ${taux_conversion} (ancien: ${oldTaux})`, req);
+
+  saveState(appState);
+  res.json({ message: `Devise ${devise_destination} configurée au taux de ${taux_conversion} avec succès !`, rates: appState.currencyRates });
+});
+
+// 5. TOGGLE STATUS OF A CURRENCY (ENABLE/DISABLE)
+app.post("/api/currencies/rates/:id/toggle", (req, res) => {
+  const { id } = req.params;
+  const { adminPin, adminUsername } = req.body;
+
+  if (adminPin !== "1234") {
+    return res.status(403).json({ error: "Code PIN de double-validation incorrect." });
+  }
+
+  if (!appState.currencyRates) appState.currencyRates = SEED_CURRENCY_RATES;
+  const rate = appState.currencyRates.find(r => r.id === id);
+  if (!rate) {
+    return res.status(404).json({ error: "Devise non trouvée." });
+  }
+
+  const now = new Date().toISOString();
+  const oldStatus = rate.statut;
+  rate.statut = oldStatus === "active" ? "inactive" : "active";
+  rate.date_mise_a_jour = now;
+  rate.modifie_par = adminUsername || "Admin";
+
+  if (rate.statut === "inactive") {
+    if (!appState.currencyAlerts) appState.currencyAlerts = [];
+    appState.currencyAlerts.unshift({
+      id: "alert_" + Date.now(),
+      type: "currency_disabled",
+      title: "🚫 Devise Suspendue",
+      message: `La monnaie locale ${rate.devise_destination} a été suspendue temporairement des transactions virtuelles par @${adminUsername || "Admin"}.`,
+      timestamp: now,
+      readBy: []
+    });
+  }
+
+  if (!appState.currencyHistory) appState.currencyHistory = [];
+  appState.currencyHistory.unshift({
+    id: "history_" + Date.now(),
+    devise_source: rate.devise_source,
+    devise_destination: rate.devise_destination,
+    ancien_taux: rate.taux_conversion,
+    nouveau_taux: rate.taux_conversion,
+    admin_nom: adminUsername || "Admin",
+    admin_id: "admin_" + Date.now(),
+    timestamp: now,
+    type_action: "toggle"
+  });
+
+  createAuditLog("admin", adminUsername || "Admin", "admin", "Statut Devise Modifié", `Devise ${rate.devise_destination} basculée à ${rate.statut}`, req);
+  saveState(appState);
+
+  res.json({ message: `Le statut de la devise ${rate.devise_destination} est désormais : ${rate.statut === "active" ? "Activé" : "Désactivé"}.` });
+});
+
+// 6. DELETE CURRENCY RATE
+app.delete("/api/currencies/rates/:id", (req, res) => {
+  const { id } = req.params;
+  const { adminPin, adminUsername } = req.body;
+
+  if (adminPin !== "1234") {
+    return res.status(403).json({ error: "Code PIN de double-validation incorrect." });
+  }
+
+  if (!appState.currencyRates) appState.currencyRates = SEED_CURRENCY_RATES;
+  const rateIdx = appState.currencyRates.findIndex(r => r.id === id);
+  if (rateIdx === -1) {
+    return res.status(404).json({ error: "Devise non trouvée." });
+  }
+
+  const rate = appState.currencyRates[rateIdx];
+  const now = new Date().toISOString();
+
+  if (!appState.currencyHistory) appState.currencyHistory = [];
+  appState.currencyHistory.unshift({
+    id: "history_" + Date.now(),
+    devise_source: rate.devise_source,
+    devise_destination: rate.devise_destination,
+    ancien_taux: rate.taux_conversion,
+    nouveau_taux: 0,
+    admin_nom: adminUsername || "Admin",
+    admin_id: "admin_" + Date.now(),
+    timestamp: now,
+    type_action: "delete"
+  });
+
+  appState.currencyRates.splice(rateIdx, 1);
+  createAuditLog("admin", adminUsername || "Admin", "admin", "Suppression Devise", `Devise ${rate.devise_destination} supprimée du moteur de conversion`, req);
+  saveState(appState);
+
+  res.json({ message: `Devise ${rate.devise_destination} supprimée avec succès.` });
+});
+
+// 7. GET CURRENCY RATES CHANGE HISTORY
+app.get("/api/currencies/history", (req, res) => {
+  res.json(appState.currencyHistory || []);
+});
+
+// 8. GET ACTIVE CURRENCY ALERTS
+app.get("/api/admin/currency-alerts", (req, res) => {
+  res.json(appState.currencyAlerts || []);
+});
+
+// 9. READ/DISMISS CURRENCY ALERT
+app.post("/api/admin/currency-alerts/:id/read", (req, res) => {
+  const { id } = req.params;
+  if (appState.currencyAlerts) {
+    appState.currencyAlerts = appState.currencyAlerts.filter(a => a.id !== id);
+    saveState(appState);
+  }
+  res.json({ success: true });
 });
 
 // 5. TRANSACTIONS & WITHDRAWAL SECURITY
